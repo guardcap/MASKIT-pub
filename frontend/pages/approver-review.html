@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MASKIT - 승인자 검토</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="custombar" id="custombar">
+      <div class="sb-head">
+        <div class="sb-title">커스텀</div>
+      </div>
+
+      
+      <div class="group" id="group-inside">
+        <button class="group-toggle" aria-expanded="false">
+          <span>사내</span>
+          <svg class="caret" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><polyline points="8 4 16 12 8 20" /></svg>
+        </button>
+        <ul class="items">
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">인사팀(HR)</span>
+          </li>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">고객지원팀(CS)</span>
+          </li>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">R&D팀</span>
+          </li>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">대외협력팀</span>
+            </li>
+        </ul>
+      </div>
+
+      <div class="group" id="group-outside">
+        <button class="group-toggle" aria-expanded="false">
+          <span>사외</span>
+          <svg class="caret" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><polyline points="8 4 16 12 8 20" /></svg>
+        </button>
+        <ul class="items">
+          <li class="item"><button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">협력 업체</span>
+          </li>
+          <li class="item"><button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">고객사</span>
+          </li>
+
+          <li class="item has-sub" data-sub="gov-purpose">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+              <span class="txt">정부 기관</span>
+          </li>
+
+          <ul class="subdrop" id="gov-purpose" hidden>
+            <li class="subitem">
+              <button class="checkbox off" aria-checked="false" data-check></button>
+              <span class="txt">세무 신고 / 재무 보고</span>
+            </li>
+            <li class="subitem">
+              <button class="checkbox off" aria-checked="false" data-check></button>
+              <span class="txt">노동·고용 관련 보고</span>
+            </li>
+            <li class="subitem">
+              <button class="checkbox off" aria-checked="false" data-check></button>
+              <span class="txt">개인정보·보안 규제 대응</span>
+            </li>
+            <li class="subitem">
+              <button class="checkbox off" aria-checked="false" data-check></button>
+              <span class="txt">정부 지원사업 / 과제 보고</span>
+        </li>
+      </ul>
+    </li>
+  </ul>
+      </div>
+
+      <div class="group">
+        <button class="group-toggle" aria-expanded="false">
+          <span>세부 커스텀 </span>
+          <svg class="caret" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><polyline points="8 4 16 12 8 20" /></svg>
+        </button>
+        <ul class="items">
+          <li class="item"><button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">사내 규칙 우선</span>
+          </li>
+          <li class="item"><button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">국내 법률 우선</span>
+          </li>
+          <li class="item"><button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">GDPR 우선</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="panel-footer">
+        <button class="btn edit">완료</button>
+        <button class="btn" id="maskingBtn">마스킹 완료</button>
+      </div>
+  </aside>
+
+        <header class="top-bar">
+    <div class="top-bar-title">🛡️ MASKIT - 승인자 검토</div>
+    <div class="top-bar-buttons">
+        <button class="top-bar-button" id="approveBtn">
+            <span>승인</span>
+        </button>
+        <button class="top-bar-button" id="rejectBtn">
+            <span>반려</span>
+        </button>
+        <span id="userInfo" style="color: white; margin-left: 2em; font-size: 0.9em;"></span>
+        <button class="top-bar-button" id="logoutBtn" style="background: rgba(255,255,255,0.2); margin-left: 1em;">
+            <span>로그아웃</span>
+        </button>
+    </div>
+</header>
+
+    <section class="panel">
+      <div class="top">
+        <div class="recipients" id="recipients">
+          <button class="more-btn" id="recipToggle" type="button">열기</button>
+        </div>
+        <div class="me">
+          <div class="avatar" aria-hidden="true"></div>
+          <div class="who">
+            <span class="team">대외협력팀 팀장</span>
+            <span class="nick">6kitty</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="grid2">
+          <div class="card">
+            <h4>AI 개요</h4>
+            <p>보내는 주소가 여러 개, 각기 다른 도메인을 가지고 있어 사외 전송으로 인식하였으며 해당 규정에 맞춰 마스킹했습니다. 개인정보 유출 방지 목적의 개별 전송 설정도 적용됩니다.</p>
+          </div>
+          <div class="card">
+            <h4>통계</h4>
+            <div class="legend">
+              <div class="row"><span class="bar c1"></span><span class="t">식별: 7개</span></div>
+              <div class="row"><span class="bar c2"></span><span class="t">마스킹: 2개</span></div>
+              <div class="row"><span class="bar c3"></span><span class="t">검토 필요: 1개</span></div>
+              <div class="row"><span class="bar c4"></span><span class="t">권한: DLP / 데이터 사일로</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="filebar" id="filebar">
+        </div>
+
+      <div class="content">
+      </div>
+    </section>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sb-head">
+        <div class="sb-title">Masking List</div>
+      </div>
+      </aside>
+  </div>
+
+    <div id="modal" class="modal hidden">
+    <div class="modal-content">
+      <p>수신자를 선택하세요.</p>
+      <button id="modalClose">확인</button>
+    </div>
+  </div>
+
+
+  <script src="../script.js"></script>
+  <script>
+    // 페이지 초기화
+    document.addEventListener('DOMContentLoaded', function() {
+      // 로그인 확인
+      const token = localStorage.getItem('auth_token');
+      const user = JSON.parse(localStorage.getItem('user') || 'null');
+
+      if (!token || !user) {
+        window.location.href = '../smtp/login.html';
+        return;
+      }
+
+      // 승인자 역할 확인
+      if (user.role !== 'approver') {
+        alert('승인자만 접근 가능합니다');
+        window.location.href = '../index.html';
+        return;
+      }
+
+      // 사용자 정보 표시
+      document.getElementById('userInfo').textContent = `${user.nickname} (${user.email})`;
+
+      // 로그아웃 버튼
+      document.getElementById('logoutBtn').addEventListener('click', function() {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user');
+        window.location.href = '../smtp/login.html';
+      });
+    });
+  </script>
+</body>
+</html>

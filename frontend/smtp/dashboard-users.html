@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MASKIT - My Dashboard</title>
+    <link rel="stylesheet" href="./common-style.css">
+</head>
+<body>
+    <div class="navbar">
+        <h1> MASKIT - My Dashboard</h1>
+        <div class="user-info">
+            <span id="userName"></span>
+            <button onclick="logout()">로그아웃</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="menu">
+            <button class="active">대시보드</button>
+            <button onclick="location.href='./pages/my-emails.html'"> 내 메일함</button>
+            <button onclick="location.href='./pages/my-statistics.html'"> 내 통계</button>
+            <button onclick="location.href='./pages/my-logs.html'"> 내 로그</button>
+            <button onclick="location.href='./pages/policy-view.html'"> 정책 조회</button>
+            <button onclick="location.href='./pages/entity-view.html'"> 엔티티 조회</button>
+        </div>
+        
+        <div class="info-box">
+            <h3>📌 User 권한 안내</h3>
+            <p>본인이 작성한 메일의 상태를 확인하고, 반려 사유를 확인할 수 있습니다.</p>
+            <p>정책과 엔티티를 조회하여 더 나은 메일을 작성할 수 있습니다.</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>내 전체 메일</h3>
+                <div class="value" id="myTotal">-</div>
+            </div>
+            <div class="stat-card pending">
+                <h3>승인 대기</h3>
+                <div class="value" id="myPending">-</div>
+            </div>
+            <div class="stat-card approved">
+                <h3>승인 완료</h3>
+                <div class="value" id="myApproved">-</div>
+            </div>
+            <div class="stat-card rejected">
+                <h3>반려</h3>
+                <div class="value" id="myRejected">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>이번 달 발송</h3>
+                <div class="value" id="thisMonth">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>평균 승인 시간</h3>
+                <div class="value" id="avgApprovalTime">-</div>
+            </div>
+        </div>
+
+        <div class="write-mail-box">
+            <h3>✉️ 메일 작성</h3>
+            <p>새 메일을 작성하려면 아래 버튼을 클릭하세요</p>
+            <button class="btn-large" onclick="location.href='http://127.0.0.1:5000/'">
+                ✏️ 메일 작성하기
+            </button>
+        </div>
+
+        <div class="recent-emails">
+            <h3>📧 최근 발송한 메일</h3>
+            <div id="recentEmails" class="email-list">
+                <p>메일을 불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://127.0.0.1:8001';
+        const token = localStorage.getItem('token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        
+        if (!token) {
+            window.location.href = '../FE/login.html';
+        }
+        
+        document.getElementById('userName').textContent = user.nickname || user.email;
+        
+        function logout() {
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user');
+            window.location.href = '../FE/login.html';
+        }
+        
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/dashboard/user/stats`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('myTotal').textContent = data.my_total;
+                    document.getElementById('myPending').textContent = data.my_pending;
+                    document.getElementById('myApproved').textContent = data.my_approved;
+                    document.getElementById('myRejected').textContent = data.my_rejected;
+                    document.getElementById('thisMonth').textContent = data.this_month;
+                    document.getElementById('avgApprovalTime').textContent = data.avg_approval_time || 'N/A';
+                }
+            } catch (error) {
+                console.error('통계 로드 실패:', error);
+            }
+        }
+        
+        async function loadRecentEmails() {
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/emails/my-emails?limit=5`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const emails = await response.json();
+                    const container = document.getElementById('recentEmails');
+                    
+                    if (emails.length === 0) {
+                        container.innerHTML = '<p>발송한 메일이 없습니다</p>';
+                        return;
+                    }
+                    
+                    container.innerHTML = emails.map(email => {
+                        const statusClass = `status-${email.status}`;
+                        const statusText = {
+                            'pending': '승인 대기',
+                            'approved': '승인 완료',
+                            'rejected': '반려'
+                        }[email.status];
+                        
+                        return `
+                            <div class="email-item" onclick="location.href='./pages/email-detail.html?id=${email._id}'">
+                                <div class="email-header">
+                                    <div class="email-subject">${email.subject}</div>
+                                    <span class="email-status ${statusClass}">${statusText}</span>
+                                </div>
+                                <div class="email-meta">
+                                    <span>수신: ${email.to_email}</span>
+                                    <span>${new Date(email.created_at).toLocaleString('ko-KR')}</span>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error('메일 로드 실패:', error);
+            }
+        }
+        
+        loadStats();
+        loadRecentEmails();
+    </script>
+</body>
+</html>

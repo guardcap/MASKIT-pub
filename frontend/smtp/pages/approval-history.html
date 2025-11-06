@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MASKIT - 승인 이력</title>
+    <link rel="stylesheet" href="../common-style.css">
+    <style>
+        .filter-tabs {
+            display: flex;
+            gap: 0.5em;
+            margin-bottom: 1.5em;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .filter-tabs button {
+            padding: 0.8em 1.5em;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 1em;
+            color: #666;
+            transition: all 0.3s;
+        }
+        
+        .filter-tabs button.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            font-weight: 600;
+        }
+        
+        .history-table {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead {
+            background: #f8f9fa;
+        }
+        
+        th {
+            padding: 1em;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        td {
+            padding: 1em;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        tbody tr {
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .status-badge {
+            padding: 0.4em 0.8em;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+            display: inline-block;
+        }
+        
+        .status-approved {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-rejected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3em;
+            color: #999;
+        }
+        
+        .reject-reason-preview {
+            color: #666;
+            font-size: 0.9em;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>📋 MASKIT - 승인 이력</h1>
+        <div class="user-info">
+            <span id="userName"></span>
+            <button onclick="logout()">로그아웃</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="menu">
+            <button onclick="location.href='../dashboard-approver.html'">대시보드</button>
+            <button onclick="location.href='pending-approvals.html'">승인 대기</button>
+            <button class="active">승인 이력</button>
+            <button onclick="location.href='team-statistics.html'">팀 통계</button>
+            <button onclick="location.href='team-logs.html'">팀 로그</button>
+        </div>
+        
+        <div class="filter-tabs">
+            <button class="active" onclick="filterHistory('all')">전체</button>
+            <button onclick="filterHistory('approved')">승인 완료</button>
+            <button onclick="filterHistory('rejected')">반려</button>
+        </div>
+        
+        <div class="history-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 10%">상태</th>
+                        <th style="width: 15%">발신자</th>
+                        <th style="width: 15%">수신자</th>
+                        <th style="width: 25%">제목</th>
+                        <th style="width: 15%">처리 일시</th>
+                        <th style="width: 10%">처리자</th>
+                        <th style="width: 10%">비고</th>
+                    </tr>
+                </thead>
+                <tbody id="historyTableBody">
+                    <tr>
+                        <td colspan="7" class="empty-state">이력을 불러오는 중...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://127.0.0.1:8001';
+        const token = localStorage.getItem('token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        let currentFilter = 'all';
+        
+        if (!token) {
+            window.location.href = '../login.html';
+        }
+        
+        document.getElementById('userName').textContent = user.nickname || user.email;
+        
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '../login.html';
+        }
+        
+        function filterHistory(filter) {
+            currentFilter = filter;
+            
+            document.querySelectorAll('.filter-tabs button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            loadHistory(filter);
+        }
+        
+        async function loadHistory(filter = 'all') {
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state">이력을 불러오는 중...</td></tr>';
+            
+            try {
+                let url = `${API_BASE}/api/v1/emails/team/history`;
+                if (filter !== 'all') {
+                    url += `?status_filter=${filter}`;
+                }
+                
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const emails = await response.json();
+                    
+                    if (emails.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">처리 이력이 없습니다</td></tr>';
+                        return;
+                    }
+                    
+                    const statusText = {
+                        'approved': '승인',
+                        'rejected': '반려'
+                    };
+                    
+                    tbody.innerHTML = emails.map(email => {
+                        const reviewDate = email.reviewed_at 
+                            ? new Date(email.reviewed_at).toLocaleString('ko-KR')
+                            : '-';
+                        
+                        const reviewer = email.reviewed_by || '-';
+                        const rejectReason = email.reject_reason 
+                            ? `<div class="reject-reason-preview" title="${email.reject_reason}">${email.reject_reason}</div>`
+                            : '-';
+                        
+                        return `
+                            <tr onclick="viewEmail('${email._id}')">
+                                <td>
+                                    <span class="status-badge status-${email.status}">
+                                        ${statusText[email.status]}
+                                    </span>
+                                </td>
+                                <td>${email.from_email}</td>
+                                <td>${email.to_email}</td>
+                                <td>${email.subject}</td>
+                                <td>${reviewDate}</td>
+                                <td>${reviewer}</td>
+                                <td>${email.status === 'rejected' ? rejectReason : '-'}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">이력을 불러올 수 없습니다</td></tr>';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">오류가 발생했습니다</td></tr>';
+            }
+        }
+        
+        function viewEmail(emailId) {
+            window.location.href = `email-detail.html?id=${emailId}`;
+        }
+        
+        loadHistory('all');
+    </script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "C_laws.schema.json",
+  "title": "C Law/Guideline Chunk",
+  "type": "object",
+  "required": ["schema_version","law_id","title","doc_type","entity_types","paraphrases","effective_date","revised_at","CRITICAL_score","OPEN_score"],
+  "properties": {
+    "schema_version": { "$ref": "common.json#/$defs/SchemaVersion" },
+    "law_id": { "$ref": "common.json#/$defs/ID" },
+    "title": { "type": "string" },
+    "doc_type": { "type": "string", "enum": ["law","guideline"] },
+    "entity_types": { "type": "array", "items": { "type": "string" } },
+    "snippet": { "type": ["string","null"] },
+    "effective_date": { "$ref": "common.json#/$defs/ISODate" },
+    "revised_at": { "$ref": "common.json#/$defs/ISODate" },
+    "citation_url": { "type": ["string","null"], "format": "uri" },
+    "CRITICAL_score": { "$ref": "common.json#/$defs/Score" },
+    "OPEN_score": { "$ref": "common.json#/$defs/Score" }
+  }
+}

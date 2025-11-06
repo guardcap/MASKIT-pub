@@ -1,0 +1,18 @@
+{
+  "name": "enterprise-guardcap-fe",
+  "version": "2.0.0",
+  "description": "Enterprise GuardCAP - DLP & Email Security Solution UI",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "homepage": "./",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "dependencies": {
+    "electron": "^37.3.1",
+    "electron-is-dev": "^2.0.0"
+  }
+}

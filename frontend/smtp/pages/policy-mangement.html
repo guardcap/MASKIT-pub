@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MASKIT - 정책 관리</title>
+    <link rel="stylesheet" href="../common-style.css">
+    <style>
+        .action-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5em;
+        }
+        
+        .search-box {
+            display: flex;
+            gap: 0.5em;
+        }
+        
+        .search-box input {
+            padding: 0.8em;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            width: 300px;
+        }
+        
+        .btn-add {
+            padding: 0.8em 1.5em;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .btn-add:hover {
+            background: #5568d3;
+        }
+        
+        .policy-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.5em;
+        }
+        
+        .policy-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 1.5em;
+            transition: transform 0.2s;
+        }
+        
+        .policy-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        
+        .policy-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 1em;
+        }
+        
+        .policy-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 0.5em;
+        }
+        
+        .policy-type {
+            padding: 0.3em 0.8em;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+        
+        .type-dlp {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .type-approval {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+        
+        .type-masking {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+        
+        .policy-description {
+            color: #666;
+            font-size: 0.95em;
+            margin-bottom: 1em;
+            line-height: 1.6;
+        }
+        
+        .policy-meta {
+            color: #999;
+            font-size: 0.85em;
+            border-top: 1px solid #f0f0f0;
+            padding-top: 1em;
+            margin-bottom: 1em;
+        }
+        
+        .policy-actions {
+            display: flex;
+            gap: 0.5em;
+        }
+        
+        .btn-edit, .btn-delete {
+            padding: 0.6em 1em;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        
+        .btn-edit {
+            background: #667eea;
+            color: white;
+            flex: 1;
+        }
+        
+        .btn-delete {
+            background: #f44336;
+            color: white;
+        }
+        
+        .btn-edit:hover { background: #5568d3; }
+        .btn-delete:hover { background: #da190b; }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3em;
+            color: #999;
+            grid-column: 1 / -1;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 2em;
+            border-radius: 12px;
+            max-width: 600px;
+            width: 90%;
+            margin: 2em;
+        }
+        
+        .modal-content h2 {
+            margin-bottom: 1.5em;
+            color: #333;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5em;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5em;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 0.8em;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: inherit;
+        }
+        
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 0.5em;
+            justify-content: flex-end;
+            margin-top: 2em;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>📜 MASKIT - 정책 관리</h1>
+        <div class="user-info">
+            <span id="userName"></span>
+            <button onclick="logout()">로그아웃</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="menu">
+            <button onclick="location.href='../dashboard-policy.html'">대시보드</button>
+            <button class="active">정책 관리</button>
+            <button onclick="location.href='entity-management.html'">엔티티 관리</button>
+            <button onclick="location.href='dlp-statistics.html'">DLP 통계</button>
+            <button onclick="location.href='decision-logs.html'">승인/반려 로그</button>
+        </div>
+        
+        <div class="action-bar">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="정책 이름 또는 설명으로 검색..." onkeyup="searchPolicies()">
+            </div>
+            <button class="btn-add" onclick="openCreateModal()">
+                ➕ 새 정책 추가
+            </button>
+        </div>
+        
+        <div class="policy-grid" id="policyGrid">
+            <div class="empty-state">정책을 불러오는 중...</div>
+        </div>
+    </div>
+    
+    <!-- 정책 생성/수정 모달 -->
+    <div class="modal" id="policyModal">
+        <div class="modal-content">
+            <h2 id="modalTitle">새 정책 추가</h2>
+            <form id="policyForm">
+                <div class="form-group">
+                    <label for="policyName">정책 이름 *</label>
+                    <input type="text" id="policyName" required placeholder="예: 개인정보 보호 정책">
+                </div>
+                
+                <div class="form-group">
+                    <label for="policyType">정책 유형 *</label>
+                    <select id="policyType" required>
+                        <option value="">선택하세요</option>
+                        <option value="dlp">DLP (Data Loss Prevention)</option>
+                        <option value="approval">승인 정책</option>
+                        <option value="masking">마스킹 정책</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="policyDescription">설명 *</label>
+                    <textarea id="policyDescription" required placeholder="정책에 대한 상세 설명을 입력하세요"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="policyRules">규칙 (JSON 형식)</label>
+                    <textarea id="policyRules" placeholder='{"keywords": ["비밀", "기밀"], "action": "block"}'></textarea>
+                </div>
+                
+                <div class="modal-buttons">
+                    <button type="button" class="btn-delete" onclick="closePolicyModal()">취소</button>
+                    <button type="submit" class="btn-add">저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://127.0.0.1:8001';
+        const token = localStorage.getItem('token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        let allPolicies = [];
+        let editingPolicyId = null;
+        
+        if (!token || user.role !== 'policy_admin') {
+            alert('정책 관리자 권한이 필요합니다');
+            window.location.href = '../login.html';
+        }
+        
+        document.getElementById('userName').textContent = user.nickname || user.email;
+        
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '../login.html';
+        }
+        
+        async function loadPolicies() {
+            const grid = document.getElementById('policyGrid');
+            grid.innerHTML = '<div class="empty-state">정책을 불러오는 중...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/policies`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    allPolicies = await response.json();
+                    displayPolicies(allPolicies);
+                } else {
+                    grid.innerHTML = '<div class="empty-state">❌ 정책을 불러올 수 없습니다</div>';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                grid.innerHTML = '<div class="empty-state">❌ 오류가 발생했습니다</div>';
+            }
+        }
+        
+        function displayPolicies(policies) {
+            const grid = document.getElementById('policyGrid');
+            
+            if (policies.length === 0) {
+                grid.innerHTML = '<div class="empty-state">등록된 정책이 없습니다. 새 정책을 추가해보세요!</div>';
+                return;
+            }
+            
+            const typeNames = {
+                'dlp': 'DLP',
+                'approval': '승인',
+                'masking': '마스킹'
+            };
+            
+            grid.innerHTML = policies.map(policy => {
+                const createdDate = new Date(policy.created_at).toLocaleDateString('ko-KR');
+                
+                return `
+                    <div class="policy-card">
+                        <div class="policy-header">
+                            <div>
+                                <div class="policy-title">${policy.name}</div>
+                                <span class="policy-type type-${policy.type}">${typeNames[policy.type] || policy.type}</span>
+                            </div>
+                        </div>
+                        <div class="policy-description">${policy.description}</div>
+                        <div class="policy-meta">
+                            생성일: ${createdDate}<br>
+                            생성자: ${policy.created_by || 'Unknown'}
+                        </div>
+                        <div class="policy-actions">
+                            <button class="btn-edit" onclick="editPolicy('${policy._id}')">
+                                ✏️ 수정
+                            </button>
+                            <button class="btn-delete" onclick="deletePolicy('${policy._id}', '${policy.name}')">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function searchPolicies() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            
+            if (!query) {
+                displayPolicies(allPolicies);
+                return;
+            }
+            
+            const filtered = allPolicies.filter(policy => 
+                policy.name.toLowerCase().includes(query) ||
+                policy.description.toLowerCase().includes(query)
+            );
+            
+            displayPolicies(filtered);
+        }
+        
+        function openCreateModal() {
+            editingPolicyId = null;
+            document.getElementById('modalTitle').textContent = '새 정책 추가';
+            document.getElementById('policyForm').reset();
+            document.getElementById('policyModal').classList.add('active');
+        }
+        
+        function editPolicy(policyId) {
+            const policy = allPolicies.find(p => p._id === policyId);
+            if (!policy) return;
+            
+            editingPolicyId = policyId;
+            document.getElementById('modalTitle').textContent = '정책 수정';
+            document.getElementById('policyName').value = policy.name;
+            document.getElementById('policyType').value = policy.type;
+            document.getElementById('policyDescription').value = policy.description;
+            document.getElementById('policyRules').value = policy.rules ? JSON.stringify(policy.rules, null, 2) : '';
+            document.getElementById('policyModal').classList.add('active');
+        }
+        
+        function closePolicyModal() {
+            editingPolicyId = null;
+            document.getElementById('policyModal').classList.remove('active');
+            document.getElementById('policyForm').reset();
+        }
+        
+        document.getElementById('policyForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const data = {
+                name: document.getElementById('policyName').value,
+                type: document.getElementById('policyType').value,
+                description: document.getElementById('policyDescription').value,
+                rules: document.getElementById('policyRules').value ? 
+                    JSON.parse(document.getElementById('policyRules').value) : null
+            };
+            
+            try {
+                const url = editingPolicyId 
+                    ? `${API_BASE}/api/v1/policies/${editingPolicyId}`
+                    : `${API_BASE}/api/v1/policies`;
+                
+                const method = editingPolicyId ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    alert(editingPolicyId ? '✅ 정책이 수정되었습니다' : '✅ 정책이 추가되었습니다');
+                    closePolicyModal();
+                    loadPolicies();
+                } else {
+                    const result = await response.json();
+                    alert('❌ 실패: ' + (result.detail || '오류가 발생했습니다'));
+                }
+            } catch (error) {
+                alert('❌ 오류가 발생했습니다');
+                console.error('Error:', error);
+            }
+        });
+        
+        async function deletePolicy(policyId, policyName) {
+            if (!confirm(`"${policyName}" 정책을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/policies/${policyId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    alert('✅ 정책이 삭제되었습니다');
+                    loadPolicies();
+                } else {
+                    const result = await response.json();
+                    alert('❌ 삭제 실패: ' + (result.detail || '오류가 발생했습니다'));
+                }
+            } catch (error) {
+                alert('❌ 오류가 발생했습니다');
+                console.error('Error:', error);
+            }
+        }
+        
+        loadPolicies();
+    </script>
+</body>
+</html>

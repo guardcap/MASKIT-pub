@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "application_guide.schema.json",
+  "title": "Application Guide",
+  "description": "법률/정책과 실제 업무 시나리오를 연결하는 해석 가이드",
+  "type": "object",
+  "required": [
+    "guide_id",
+    "scenario",
+    "context",
+    "interpretation",
+    "actionable_directive",
+    "keywords"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "guide_id": {
+      "type": "string",
+      "description": "가이드 고유 ID",
+      "minLength": 3
+    },
+    "related_law_ids": {
+      "type": "array",
+      "description": "연관된 법률 ID 목록",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "related_policy_ids": {
+      "type": "array",
+      "description": "연관된 사내 규정 ID 목록",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "scenario": {
+      "type": "string",
+      "description": "구체적인 업무 시나리오 설명"
+    },
+    "context": {
+      "type": "object",
+      "description": "시나리오의 맥락 정보",
+      "properties": {
+        "sender_type": {
+          "type": "string",
+          "enum": ["internal", "external_customer", "external_partner", "external_vendor"]
+        },
+        "receiver_type": {
+          "type": "string",
+          "enum": ["internal", "external_customer", "external_partner", "external_vendor"]
+        },
+        "email_purpose": { "type": "string" },
+        "pii_types": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        }
+      }
+    },
+    "interpretation": {
+      "type": "string",
+      "description": "법률/정책의 해석 및 적용 방법"
+    },
+    "actionable_directive": {
+      "type": "string",
+      "description": "구체적인 실행 지침 (마스킹 여부, 방법 등)"
+    },
+    "keywords": {
+      "type": "array",
+      "description": "검색용 키워드",
+      "items": { "type": "string" }
+    },
+    "priority_level": {
+      "type": "string",
+      "enum": ["high", "medium", "low"],
+      "default": "medium",
+      "description": "가이드 우선순위"
+    },
+    "examples": {
+      "type": "array",
+      "description": "구체적 예시",
+      "items": {
+        "type": "object",
+        "properties": {
+          "before": { "type": "string" },
+          "after": { "type": "string" },
+          "reasoning": { "type": "string" }
+        }
+      },
+      "default": []
+    }
+  }
+}

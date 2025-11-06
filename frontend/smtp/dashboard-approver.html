@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MASKIT - Approver</title>
+    <link rel="stylesheet" href="./common-style.css">
+</head>
+<body>
+    <div class="navbar">
+        <h1>✅ MASKIT - Approver</h1>
+        <div class="user-info">
+            <span id="teamBadge" class="badge"></span>
+            <span id="userName"></span>
+            <button onclick="logout()">로그아웃</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="menu">
+            <button class="active">대시보드</button>
+            <button onclick="location.href='../pages/pending-approvals.html'"> 승인 대기 (팀)</button>
+            <button onclick="location.href='../pages/team-statistics.html'"> 팀 통계</button>
+            <button onclick="location.href='../pages/team-logs.html'"> 팀 로그</button>
+            <button onclick="location.href='../pages/policy-view.html'"> 정책 조회</button>
+            <button onclick="location.href='../pages/entity-view.html'"> 엔티티 조회</button>
+        </div>
+        
+        <div class="info-box">
+            <h3>📌 Approver 권한 안내</h3>
+            <p><strong>본인 팀</strong>의 승인 요청 메일을 승인/반려할 수 있습니다.</p>
+            <p>AI 분석 보고서와 정책을 참고하여 결정을 내릴 수 있습니다.</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card pending">
+                <h3>팀 승인 대기</h3>
+                <div class="value" id="teamPending">-</div>
+            </div>
+            <div class="stat-card approved">
+                <h3>팀 승인 완료</h3>
+                <div class="value" id="teamApproved">-</div>
+            </div>
+            <div class="stat-card rejected">
+                <h3>팀 반려</h3>
+                <div class="value" id="teamRejected">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>팀 전체 메일</h3>
+                <div class="value" id="teamTotal">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>오늘 처리</h3>
+                <div class="value" id="todayProcessed">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>평균 처리 시간</h3>
+                <div class="value" id="avgTime">-</div>
+            </div>
+        </div>
+
+        <div class="pending-list">
+            <h3>⏳ 최근 승인 대기 메일</h3>
+            <div id="pendingList" class="email-list">
+                <p>메일을 불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://127.0.0.1:8001';
+        const token = localStorage.getItem('token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        
+        if (!token || user.role !== 'approver') {
+            alert('권한이 없습니다');
+            window.location.href = '../FE/login.html';
+        }
+        
+        document.getElementById('userName').textContent = user.nickname || user.email;
+        document.getElementById('teamBadge').textContent = user.team || '팀 미지정';
+        
+        function logout() {
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user');
+            window.location.href = '../FE/login.html';
+        }
+        
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/dashboard/approver/stats`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('teamPending').textContent = data.team_pending;
+                    document.getElementById('teamApproved').textContent = data.team_approved;
+                    document.getElementById('teamRejected').textContent = data.team_rejected;
+                    document.getElementById('teamTotal').textContent = data.team_total;
+                    document.getElementById('todayProcessed').textContent = data.today_processed;
+                    document.getElementById('avgTime').textContent = data.avg_time || 'N/A';
+                }
+            } catch (error) {
+                console.error('통계 로드 실패:', error);
+            }
+        }
+        
+        async function loadPendingList() {
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/emails/team/pending?limit=5`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const emails = await response.json();
+                    const container = document.getElementById('pendingList');
+                    
+                    if (emails.length === 0) {
+                        container.innerHTML = '<p>승인 대기 중인 메일이 없습니다</p>';
+                        return;
+                    }
+                    
+                    container.innerHTML = emails.map(email => `
+                        <div class="email-item" onclick="location.href='../pages/email-detail.html?id=${email._id}'">
+                            <div class="email-subject">${email.subject}</div>
+                            <div class="email-meta">
+                                <span>발신: ${email.from_email}</span>
+                                <span>수신: ${email.to_email}</span>
+                                <span>${new Date(email.created_at).toLocaleString('ko-KR')}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('메일 로드 실패:', error);
+            }
+        }
+        
+        loadStats();
+        loadPendingList();
+    </script>
+</body>
+</html>
