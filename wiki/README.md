@@ -1,22 +1,35 @@
-# just-the-docs-template
+# Enterprise GuardCAP (MASKIT) - Wiki Documentation
 
-This is a *bare-minimum* template to create a [Jekyll] site that:
+기업용 DLP (Data Loss Prevention) 솔루션 **MASKIT**의 공식 문서입니다.
 
-- uses the [Just the Docs] theme;
-- can be built and published on [GitHub Pages];
-- can be built and previewed locally, and published on other platforms.
 
-More specifically, the created site:
+## 문서 구성
 
-- uses a gem-based approach, i.e. uses a `Gemfile` and loads the `just-the-docs` gem;
-- uses the [GitHub Pages / Actions workflow] to build and publish the site on GitHub Pages.
+이 위키에는 다음과 같은 문서들이 포함되어 있습니다:
 
-To get started with creating a site, simply:
+1. **[Overview](index.md)** - MASKIT 서비스 개요 및 주요 기능
+2. **[설치 및 사용법](2_install.md)** - 시스템 설치 및 역할별 사용 가이드
+3. **[Analyzer](3_analyzer.md)** - PII 분석 엔진 설명
+4. **[기술 스택](4_techstack.md)** - 사용된 기술 스택 및 시스템 아키텍처
+5. **[PII Entities](5_PII_entities.md)** - 탐지 가능한 개인정보 엔티티 목록
+6. **[LLM](6_LLM.md)** - LLM/RAG 기반 정책 관리 시스템
+7. **[Redactor](7_redactor.md)** - 마스킹 및 익명화 엔진
+8. **[FastAPI](8_fastapi.md)** - 백엔드 API 문서
+9. **[User Interface](9_userinterface.md)** - 프론트엔드 UI 가이드
+10. **[Mail Proxy](10_mailproxy.md)** - SMTP 프록시 서버 구조
+11. **[Solution DLP](11_solutionDLP.md)** - DLP 솔루션 통합 가이드
 
-1. click "[use this template]" to create a GitHub repository
-2. go to Settings > Pages > Build and deployment > Source, and select GitHub Actions
+## 빠른 시작
 
-If you want to maintain your docs in the `docs` directory of an existing project repo, see [Hosting your docs from an existing project repo](#hosting-your-docs-from-an-existing-project-repo).
+MASKIT을 처음 사용하시나요? 다음 문서들을 순서대로 읽어보세요:
+
+1. [서비스 개요](index.md) - MASKIT이 무엇인지 이해하기
+2. [설치 및 사용법](2_install.md) - 시스템 설치 및 첫 로그인
+3. [기술 스택](4_techstack.md) - 시스템 아키텍처 이해하기
+
+## 로컬에서 Wiki 실행하기
+
+이 위키를 로컬에서 실행하려면:
 
 After completing the creation of your new site on GitHub, update it as needed:
 
