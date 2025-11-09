@@ -418,8 +418,9 @@
         
         <div class="compose-panel">
             <div class="action-bar">
+                <button class="btn" onclick="goToDashboard()">← 뒤로가기</button>
                 <button class="btn btn-primary" onclick="sendEmail()">▶ 보내기</button>
-                <button class="btn" onclick="saveDraft()">임시 저장</button>
+                <button class="btn" onclick="saveDraft()">💾 임시 저장</button>
             </div>
             
             <form id="mail-form" class="form-content">
@@ -539,9 +540,25 @@
     </div>
 
     <script>
+        // 인증 확인
+        const token = localStorage.getItem('auth_token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+        if (!token || !user) {
+            window.location.href = 'login.html';
+        }
+
+        // 사용자 정보 표시
+        document.getElementById('userName').textContent = user.nickname || user.email;
+
+        // 보내는 사람 이메일 자동 설정
+        if (user.email) {
+            document.getElementById('from_email').value = user.email;
+        }
+
         let selectedFiles = [];
         let recipients = [];
-        
+
         // 받는 사람 관리
         const recipientInput = document.getElementById('recipientInput');
         const recipientContainer = document.getElementById('recipientContainer');
@@ -727,7 +744,7 @@
         }
         
         function goToDashboard() {
-            window.location.href = 'http://127.0.0.1:8001/fe/dashboard-user.html';
+            window.location.href = 'dashboard-user.html';
         }
         
         function logout() {

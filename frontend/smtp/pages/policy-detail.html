@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MASKIT - 정책 상세보기</title>
+    <link rel="stylesheet" href="../common-style.css">
+    <style>
+        .detail-container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5em;
+            padding: 0.8em 1.5em;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 2em;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+
+        .back-button:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .policy-header {
+            background: white;
+            padding: 2em;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 2em;
+        }
+
+        .policy-title {
+            font-size: 2em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.5em;
+        }
+
+        .policy-meta {
+            display: flex;
+            gap: 2em;
+            color: #666;
+            font-size: 0.95em;
+            margin-bottom: 1em;
+            flex-wrap: wrap;
+        }
+
+        .policy-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+        }
+
+        .policy-actions {
+            display: flex;
+            gap: 1em;
+            margin-top: 1.5em;
+        }
+
+        .btn-edit {
+            padding: 0.8em 1.5em;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+
+        .btn-delete {
+            padding: 0.8em 1.5em;
+            background: #f44336;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+
+        .section {
+            background: white;
+            padding: 2em;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 1.5em;
+        }
+
+        .section-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 1em;
+            padding-bottom: 0.5em;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .metadata-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5em;
+        }
+
+        .metadata-item {
+            padding: 1em;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+
+        .metadata-label {
+            font-size: 0.9em;
+            color: #999;
+            margin-bottom: 0.3em;
+        }
+
+        .metadata-value {
+            font-size: 1.1em;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .tags-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5em;
+        }
+
+        .tag {
+            background: #eef2ff;
+            color: #667eea;
+            padding: 0.5em 1em;
+            border-radius: 999px;
+            font-size: 0.9em;
+        }
+
+        .content-text {
+            background: #f9f9f9;
+            padding: 1.5em;
+            border-radius: 8px;
+            line-height: 1.8;
+            color: #333;
+            white-space: pre-wrap;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.4em 0.8em;
+            border-radius: 999px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .badge-pdf { background: #fee; color: #c00; }
+        .badge-image { background: #efe; color: #090; }
+
+        .loading {
+            text-align: center;
+            padding: 4em;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1em;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .empty-value {
+            color: #999;
+            font-style: italic;
+        }
+
+        .list-container {
+            padding-left: 1.5em;
+        }
+
+        .list-container li {
+            margin-bottom: 0.5em;
+            color: #666;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 2em;
+            border-radius: 12px;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 1em;
+            justify-content: center;
+            margin-top: 1.5em;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>📜 MASKIT - 정책 상세</h1>
+        <div class="user-info">
+            <span id="userName"></span>
+            <button onclick="location.href='../dashboard-policy.html'">대시보드</button>
+            <button onclick="logout()">로그아웃</button>
+        </div>
+    </div>
+
+    <div class="container detail-container">
+        <button class="back-button" onclick="goBack()">
+            ← 목록으로 돌아가기
+        </button>
+
+        <div id="loadingContainer" class="loading">
+            <div class="spinner"></div>
+            <p>정책 정보를 불러오는 중...</p>
+        </div>
+
+        <div id="policyContainer" style="display: none;">
+            <!-- 정책 헤더 -->
+            <div class="policy-header">
+                <div class="policy-title" id="policyTitle"></div>
+                <div class="policy-meta" id="policyMeta"></div>
+                <p id="policyDescription"></p>
+
+                <div class="policy-actions">
+                    <button class="btn-delete" onclick="showDeleteModal()">삭제</button>
+                </div>
+            </div>
+
+            <!-- 메타데이터 섹션 -->
+            <div class="section">
+                <h3 class="section-title">📊 정책 정보</h3>
+                <div class="metadata-grid" id="metadataGrid"></div>
+            </div>
+
+            <!-- 요약 섹션 -->
+            <div class="section" id="summarySection" style="display: none;">
+                <h3 class="section-title">📝 요약</h3>
+                <div id="summaryCon tent"></div>
+            </div>
+
+            <!-- 키워드 섹션 -->
+            <div class="section" id="keywordsSection" style="display: none;">
+                <h3 class="section-title">🏷️ 키워드</h3>
+                <div class="tags-container" id="keywordsContainer"></div>
+            </div>
+
+            <!-- 엔티티 타입 섹션 -->
+            <div class="section" id="entityTypesSection" style="display: none;">
+                <h3 class="section-title">🔍 개인정보 유형</h3>
+                <div class="tags-container" id="entityTypesContainer"></div>
+            </div>
+
+            <!-- 시나리오 섹션 -->
+            <div class="section" id="scenariosSection" style="display: none;">
+                <h3 class="section-title">📋 적용 시나리오</h3>
+                <ul class="list-container" id="scenariosContainer"></ul>
+            </div>
+
+            <!-- 실행 지침 섹션 -->
+            <div class="section" id="directivesSection" style="display: none;">
+                <h3 class="section-title">✅ 실행 지침</h3>
+                <ul class="list-container" id="directivesContainer"></ul>
+            </div>
+
+            <!-- 전체 텍스트 섹션 -->
+            <div class="section">
+                <h3 class="section-title">📄 추출된 텍스트</h3>
+                <div class="content-text" id="extractedText"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 삭제 확인 모달 -->
+    <div class="modal" id="deleteModal">
+        <div class="modal-content">
+            <h3>정책 삭제</h3>
+            <p>정말로 이 정책을 삭제하시겠습니까?</p>
+            <p style="color: #999; font-size: 0.9em;">이 작업은 되돌릴 수 없습니다.</p>
+            <div class="modal-buttons">
+                <button class="btn-secondary" onclick="closeDeleteModal()">취소</button>
+                <button class="btn-delete" onclick="confirmDelete()">삭제</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000';
+        const token = localStorage.getItem('auth_token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+        // 권한 확인
+        if (!token || user.role !== 'policy_admin') {
+            alert('정책 관리자 권한이 필요합니다');
+            window.location.href = '../dashboard-policy.html';
+        }
+
+        document.getElementById('userName').textContent = user.nickname || user.email;
+
+        // URL에서 policy_id 가져오기
+        const urlParams = new URLSearchParams(window.location.search);
+        const policyId = urlParams.get('id');
+
+        if (!policyId) {
+            alert('정책 ID가 없습니다');
+            window.location.href = 'policy-list.html';
+        }
+
+        let currentPolicy = null;
+
+        // 정책 상세 정보 로드
+        async function loadPolicyDetail() {
+            try {
+                const response = await fetch(`${API_BASE}/api/policies/${policyId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    currentPolicy = result.data;
+                    displayPolicy(currentPolicy);
+                } else {
+                    throw new Error(result.detail || '정책을 불러오는데 실패했습니다');
+                }
+
+            } catch (error) {
+                console.error('Load error:', error);
+                document.getElementById('loadingContainer').innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">⚠️</div>
+                        <div class="empty-text">정책을 불러오는데 실패했습니다</div>
+                        <p style="color: #999;">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // 정책 정보 표시
+        function displayPolicy(policy) {
+            // 헤더
+            document.getElementById('policyTitle').textContent = policy.title;
+
+            const fileTypeBadge = policy.file_type === '.pdf'
+                ? '<span class="badge badge-pdf">PDF</span>'
+                : '<span class="badge badge-image">이미지</span>';
+
+            document.getElementById('policyMeta').innerHTML = `
+                <div class="policy-meta-item">
+                    <strong>기관:</strong> ${policy.authority}
+                </div>
+                <div class="policy-meta-item">
+                    <strong>파일 타입:</strong> ${fileTypeBadge}
+                </div>
+                <div class="policy-meta-item">
+                    <strong>파일 크기:</strong> ${policy.file_size_mb.toFixed(2)} MB
+                </div>
+                <div class="policy-meta-item">
+                    <strong>처리 방법:</strong> ${policy.processing_method}
+                </div>
+                <div class="policy-meta-item">
+                    <strong>생성일:</strong> ${formatDateTime(policy.created_at)}
+                </div>
+            `;
+
+            if (policy.description) {
+                document.getElementById('policyDescription').textContent = policy.description;
+            } else {
+                document.getElementById('policyDescription').innerHTML = '<span class="empty-value">설명 없음</span>';
+            }
+
+            // 메타데이터 그리드
+            const metadataGrid = document.getElementById('metadataGrid');
+            metadataGrid.innerHTML = `
+                <div class="metadata-item">
+                    <div class="metadata-label">정책 ID</div>
+                    <div class="metadata-value">${policy.policy_id}</div>
+                </div>
+                <div class="metadata-item">
+                    <div class="metadata-label">원본 파일명</div>
+                    <div class="metadata-value">${policy.original_filename}</div>
+                </div>
+                <div class="metadata-item">
+                    <div class="metadata-label">저장된 파일명</div>
+                    <div class="metadata-value">${policy.saved_filename}</div>
+                </div>
+            `;
+
+            // 메타데이터가 있으면 표시
+            if (policy.metadata) {
+                const meta = policy.metadata;
+
+                // 요약
+                if (meta.summary) {
+                    document.getElementById('summarySection').style.display = 'block';
+                    document.getElementById('summaryContent').innerHTML = `<p>${meta.summary}</p>`;
+                }
+
+                // 키워드
+                if (meta.keywords && meta.keywords.length > 0) {
+                    document.getElementById('keywordsSection').style.display = 'block';
+                    document.getElementById('keywordsContainer').innerHTML = meta.keywords
+                        .map(k => `<span class="tag">${k}</span>`)
+                        .join('');
+                }
+
+                // 엔티티 타입
+                if (meta.entity_types && meta.entity_types.length > 0) {
+                    document.getElementById('entityTypesSection').style.display = 'block';
+                    document.getElementById('entityTypesContainer').innerHTML = meta.entity_types
+                        .map(e => `<span class="tag">${e}</span>`)
+                        .join('');
+                }
+
+                // 시나리오
+                if (meta.scenarios && meta.scenarios.length > 0) {
+                    document.getElementById('scenariosSection').style.display = 'block';
+                    document.getElementById('scenariosContainer').innerHTML = meta.scenarios
+                        .map(s => `<li>${s}</li>`)
+                        .join('');
+                }
+
+                // 실행 지침
+                if (meta.directives && meta.directives.length > 0) {
+                    document.getElementById('directivesSection').style.display = 'block';
+                    document.getElementById('directivesContainer').innerHTML = meta.directives
+                        .map(d => `<li>${d}</li>`)
+                        .join('');
+                }
+            }
+
+            // 추출된 텍스트
+            const extractedText = policy.extracted_text || '텍스트가 없습니다';
+            document.getElementById('extractedText').textContent = extractedText;
+
+            // 로딩 숨기고 컨테이너 표시
+            document.getElementById('loadingContainer').style.display = 'none';
+            document.getElementById('policyContainer').style.display = 'block';
+        }
+
+        // 날짜 포맷
+        function formatDateTime(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            return date.toLocaleString('ko-KR');
+        }
+
+        // 삭제 모달 표시
+        function showDeleteModal() {
+            document.getElementById('deleteModal').classList.add('show');
+        }
+
+        // 삭제 모달 닫기
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').classList.remove('show');
+        }
+
+        // 삭제 확인
+        async function confirmDelete() {
+            try {
+                const response = await fetch(`${API_BASE}/api/policies/${policyId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    alert('정책이 삭제되었습니다');
+                    window.location.href = 'policy-list.html';
+                } else {
+                    throw new Error(result.detail || '정책 삭제에 실패했습니다');
+                }
+
+            } catch (error) {
+                console.error('Delete error:', error);
+                alert(error.message || '정책 삭제 중 오류가 발생했습니다');
+                closeDeleteModal();
+            }
+        }
+
+        // 뒤로 가기
+        function goBack() {
+            window.location.href = 'policy-list.html';
+        }
+
+        // 로그아웃
+        function logout() {
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user');
+            window.location.href = '../login.html';
+        }
+
+        // 초기 로드
+        loadPolicyDetail();
+    </script>
+</body>
+</html>
