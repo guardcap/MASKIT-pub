@@ -23,6 +23,12 @@ async def connect_to_mongo():
     # 인덱스 생성
     await async_db.users.create_index([("email", ASCENDING)], unique=True)
     await async_db.emails.create_index([("created_at", ASCENDING)])
+    await async_db.policies.create_index([("policy_id", ASCENDING)], unique=True)
+    await async_db.policies.create_index([("created_at", ASCENDING)])
+    await async_db.policies.create_index([("authority", ASCENDING)])
+    await async_db.entities.create_index([("entity_id", ASCENDING)], unique=True)
+    await async_db.entities.create_index([("category", ASCENDING)])
+    await async_db.entities.create_index([("is_active", ASCENDING)])
 
     # 동기 클라이언트 (SMTP용)
     sync_client = MongoClient(MONGODB_URI)
@@ -40,6 +46,10 @@ async def close_mongo_connection():
 
 def get_database():
     """FastAPI 라우터용 비동기 DB (async/await 사용)"""
+    return async_db
+
+def get_db():
+    """FastAPI Dependency용 - async_db 반환"""
     return async_db
 
 def get_sync_database():

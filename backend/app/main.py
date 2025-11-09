@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.routers import uploads, process, ocr, analyzer, masking_pdf
-from app.smtp.routes import auth as smtp_auth, users as smtp_users
+from app.smtp.routes import auth as smtp_auth, users as smtp_users, policy_management, entity_management
 from app.smtp.database import connect_to_mongo, close_mongo_connection
 import os
 
@@ -46,6 +46,8 @@ app.include_router(masking_pdf.router, prefix="/api/v1/process")
 # ===== SMTP 라우터들 =====
 app.include_router(smtp_auth.router, prefix="/api/v1/smtp", tags=["SMTP Auth"])
 app.include_router(smtp_users.router, prefix="/api/v1/smtp", tags=["SMTP Users"])
+app.include_router(policy_management.router, tags=["Policy Management"])
+app.include_router(entity_management.router, tags=["Entity Management"])
 
 # RAG 라우터는 추후 추가 가능
 # from app.rag import rag_router

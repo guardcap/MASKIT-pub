@@ -68,12 +68,70 @@ class EmailStatus(str, Enum):
     APPROVED = "approved"
     REJECTED = "rejected"
 
+class PolicyMetadata(BaseModel):
+    """정책 메타데이터"""
+    summary: Optional[str] = None
+    keywords: List[str] = []
+    entity_types: List[str] = []
+    scenarios: List[str] = []
+    directives: List[str] = []
+
+class PolicyDocument(BaseModel):
+    """정책 문서 모델"""
+    policy_id: str
+    title: str
+    authority: str  # 발행 기관
+    description: Optional[str] = None
+
+    # 파일 정보
+    original_filename: str
+    saved_filename: str
+    file_type: str  # .pdf, .png, .jpg 등
+    file_size_mb: float
+
+    # 처리 정보
+    processing_method: str  # zerox_ocr, pymupdf, vision_api
+    extracted_text: str
+    metadata: Optional[PolicyMetadata] = None
+
+    # 생성 정보
+    created_by: Optional[str] = None  # 생성자 이메일
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class PolicyResponse(BaseModel):
+    """정책 응답 모델 (전체 텍스트 제외)"""
+    policy_id: str
+    title: str
+    authority: str
+    description: Optional[str] = None
+    file_type: str
+    file_size_mb: float
+    processing_method: str
+    metadata: Optional[PolicyMetadata] = None
+    created_at: datetime
+    updated_at: datetime
+
 class AttachmentInfo(BaseModel):
     """첨부파일 정보"""
     filename: str
     content_type: str
     size: int
     hash: str  # SHA256
+
+class EntityType(BaseModel):
+    """엔티티(개인정보) 유형"""
+    entity_id: str  # 고유 ID (예: "phone", "email", "ssn")
+    name: str  # 표시 이름 (예: "전화번호", "이메일")
+    category: str  # 카테고리 (예: "연락처", "식별정보", "금융정보")
+    description: Optional[str] = None
+    regex_pattern: Optional[str] = None  # 정규식 패턴
+    examples: List[str] = []  # 예시
+    masking_rule: str = "full"  # full, partial, hash
+    sensitivity_level: str = "high"  # low, medium, high, critical
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class EmailRecord(BaseModel):
