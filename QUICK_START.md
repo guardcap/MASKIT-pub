@@ -40,7 +40,7 @@ REACT_APP_API_URL=http://127.0.0.1:8000
 ```bash
 source venv/bin/activate
 cd backend
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### Step 4: Start Frontend

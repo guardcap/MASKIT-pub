@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from app.utils.recognizer_registry import RecognizerRegistry
 from app.utils.ner.NER_engine import NerEngine
 from app.utils.entity import Entity, EntityGroup
@@ -8,13 +8,24 @@ class AnalyzerEngine:
     규칙 기반(RecognizerRegistry) + NER 기반(NerEngine) 결과를
     하나의 EntityGroup으로 통합하여 반환.
     """
-    def __init__(self):
+    def __init__(self, db_client=None):
         print("...AnalyzerEngine 초기화 중...")
-        self.registry = RecognizerRegistry()
+        self.registry = RecognizerRegistry(db_client=db_client)
         self.registry.load_predefined_recognizers()
+
+        # 커스텀 엔티티 로드 (비동기)
+        self.db_client = db_client
+        self.custom_loaded = False
 
         self.nlp_engine = NerEngine()
         print("~AnalyzerEngine 준비 완료~")
+
+    async def load_custom_entities(self):
+        """커스텀 엔티티를 MongoDB에서 로드 (비동기)"""
+        if self.db_client and not self.custom_loaded:
+            await self.registry.load_custom_recognizers()
+            self.custom_loaded = True
+            print("✅ 커스텀 엔티티 로드 완료")
 
     def analyze(self, text: str) -> EntityGroup:
         # 1) 규칙 기반 결과

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MASKIT - 정책 관리</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../style.css">
+  <style>
+    .policy-container {
+      padding: 24px;
+    }
+    .policy-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .policy-header h2 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .policy-actions {
+      display: flex;
+      gap: 12px;
+    }
+    .policy-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    .policy-table th {
+      background: #f8f9fa;
+      padding: 16px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--text);
+      border-bottom: 2px solid var(--line);
+    }
+    .policy-table td {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .policy-table tr:hover {
+      background: #f8f9fa;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .status-active {
+      background: #dcfce7;
+      color: #15803d;
+    }
+    .status-inactive {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .btn-primary:hover {
+      opacity: 0.9;
+    }
+    .btn-secondary {
+      background: white;
+      color: var(--text);
+      border: 1px solid var(--line);
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .btn-secondary:hover {
+      background: #f8f9fa;
+    }
+    .action-btn {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      margin-right: 6px;
+    }
+    .btn-edit {
+      background: #eff6ff;
+      color: #1e40af;
+    }
+    .btn-delete {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="custombar" id="custombar">
+      <div class="sb-head">
+        <div class="sb-title">정책 필터</div>
+      </div>
+
+      <div class="group">
+        <button class="group-toggle" aria-expanded="false">
+          <span>정책 유형</span>
+          <svg class="caret" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><polyline points="8 4 16 12 8 20" /></svg>
+        </button>
+        <ul class="items">
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">DLP 정책</span>
+          </li>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">마스킹 정책</span>
+          </li>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">승인 정책</span>
+          </li>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">보안 정책</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="group">
+        <button class="group-toggle" aria-expanded="false">
+          <span>적용 범위</span>
+          <svg class="caret" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><polyline points="8 4 16 12 8 20" /></svg>
+        </button>
+        <ul class="items">
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">전체 조직</span>
+          </li>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">부서별</span>
+          </li>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">사용자별</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="panel-footer">
+        <button class="btn edit">필터 적용</button>
+      </div>
+    </aside>
+
+    <header class="top-bar">
+      <div class="top-bar-title">🛡️ MASKIT - 정책 관리</div>
+      <div class="top-bar-buttons">
+        <span id="userInfo" style="color: white; font-size: 0.9em;"></span>
+        <button class="top-bar-button" id="logoutBtn" style="background: rgba(255,255,255,0.2); margin-left: 1em;">
+          <span>로그아웃</span>
+        </button>
+      </div>
+    </header>
+
+    <section class="panel">
+      <div class="policy-container">
+        <div class="policy-header">
+          <h2>정책 관리</h2>
+          <div class="policy-actions">
+            <button class="btn-secondary">정책 가져오기</button>
+            <button class="btn-primary" id="createPolicyBtn">새 정책 생성</button>
+          </div>
+        </div>
+
+        <table class="policy-table">
+          <thead>
+            <tr>
+              <th>정책 이름</th>
+              <th>유형</th>
+              <th>적용 범위</th>
+              <th>상태</th>
+              <th>생성일</th>
+              <th>마지막 수정</th>
+              <th>작업</th>
+            </tr>
+          </thead>
+          <tbody id="policyTableBody">
+            <tr>
+              <td>개인정보 보호 정책</td>
+              <td>DLP 정책</td>
+              <td>전체 조직</td>
+              <td><span class="status-badge status-active">활성</span></td>
+              <td>2024-01-15</td>
+              <td>2024-03-20</td>
+              <td>
+                <button class="action-btn btn-edit">편집</button>
+                <button class="action-btn btn-delete">삭제</button>
+              </td>
+            </tr>
+            <tr>
+              <td>금융 정보 마스킹</td>
+              <td>마스킹 정책</td>
+              <td>재무팀</td>
+              <td><span class="status-badge status-active">활성</span></td>
+              <td>2024-02-01</td>
+              <td>2024-03-18</td>
+              <td>
+                <button class="action-btn btn-edit">편집</button>
+                <button class="action-btn btn-delete">삭제</button>
+              </td>
+            </tr>
+            <tr>
+              <td>외부 전송 승인</td>
+              <td>승인 정책</td>
+              <td>전체 조직</td>
+              <td><span class="status-badge status-active">활성</span></td>
+              <td>2024-01-20</td>
+              <td>2024-03-15</td>
+              <td>
+                <button class="action-btn btn-edit">편집</button>
+                <button class="action-btn btn-delete">삭제</button>
+              </td>
+            </tr>
+            <tr>
+              <td>테스트 정책</td>
+              <td>DLP 정책</td>
+              <td>R&D팀</td>
+              <td><span class="status-badge status-inactive">비활성</span></td>
+              <td>2024-03-01</td>
+              <td>2024-03-10</td>
+              <td>
+                <button class="action-btn btn-edit">편집</button>
+                <button class="action-btn btn-delete">삭제</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sb-head">
+        <div class="sb-title">정책 상세 정보</div>
+      </div>
+      <div style="padding: 20px; color: var(--muted);">
+        <p>정책을 선택하면 상세 정보가 표시됩니다.</p>
+      </div>
+    </aside>
+  </div>
+
+  <script src="../script.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const token = localStorage.getItem('auth_token');
+      const user = JSON.parse(localStorage.getItem('user') || 'null');
+
+      if (!token || !user) {
+        window.location.href = '../smtp/login.html';
+        return;
+      }
+
+      document.getElementById('userInfo').textContent = `${user.nickname} (${user.email})`;
+
+      document.getElementById('logoutBtn').addEventListener('click', function() {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user');
+        window.location.href = '../smtp/login.html';
+      });
+
+      document.getElementById('createPolicyBtn').addEventListener('click', function() {
+        alert('정책 생성 기능은 준비 중입니다.');
+      });
+    });
+  </script>
+</body>
+</html>

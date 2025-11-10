@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.smtp.database import connect_to_mongo, close_mongo_connection
-from app.smtp.routes import auth, users
+from app.smtp.routes import auth, users, policy_management, vectordb_management, entity_management
 from app.smtp.smtp_handler import start_smtp_server
 from contextlib import asynccontextmanager
 import os
@@ -63,6 +63,9 @@ if os.path.exists("FE"):
 # 라우터 등록
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(policy_management.router)
+app.include_router(vectordb_management.router)
+app.include_router(entity_management.router)
 
 @app.get("/")
 async def root():

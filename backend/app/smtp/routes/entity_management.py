@@ -3,18 +3,120 @@
 - 엔티티 추가/수정/삭제
 - 엔티티 목록 조회
 - 카테고리별 엔티티 조회
+- Recognizer 모듈 정보 제공
 """
 
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 import hashlib
+import inspect
+from functools import lru_cache
 
 from ..database import get_db
 from ..models import EntityType
 
 router = APIRouter(prefix="/api/entities", tags=["Entity Management"])
+
+# 글로벌 캐시 변수
+_recognizers_cache: Optional[List[Dict[str, Any]]] = None
+
+
+# Recognizer 정보 추출 함수
+def extract_recognizer_info(recognizer_class) -> Dict[str, Any]:
+    """Recognizer 클래스에서 메타정보 추출"""
+    try:
+        instance = recognizer_class()
+
+        # Regex 패턴 추출
+        regex_patterns = []
+        for attr_name in dir(recognizer_class):
+            if 'REGEX' in attr_name.upper() and not attr_name.startswith('_'):
+                pattern = getattr(recognizer_class, attr_name, None)
+                if pattern and isinstance(pattern, str):
+                    regex_patterns.append({
+                        "name": attr_name,
+                        "pattern": pattern
+                    })
+
+        # Keywords 추출
+        keywords = getattr(recognizer_class, 'KEYWORDS', [])
+
+        # Entity type 추출
+        entity_types = []
+        if hasattr(instance, 'supported_entities'):
+            entity_types = instance.supported_entities
+
+        # Name 추출
+        name = getattr(instance, 'name', recognizer_class.__name__)
+
+        return {
+            "name": name,
+            "class_name": recognizer_class.__name__,
+            "entity_types": entity_types,
+            "regex_patterns": regex_patterns,
+            "keywords": keywords,
+            "doc": inspect.getdoc(recognizer_class) or ""
+        }
+    except Exception as e:
+        print(f"Error extracting info from {recognizer_class.__name__}: {e}")
+        return None
+
+
+def load_all_recognizers(use_cache: bool = True) -> List[Dict[str, Any]]:
+    """모든 recognizer 로드 (캐싱 지원)"""
+    global _recognizers_cache
+
+    # 캐시가 있으면 반환
+    if use_cache and _recognizers_cache is not None:
+        print("📦 캐시에서 Recognizer 정보 로드")
+        return _recognizers_cache
+
+    print("🔄 Recognizer 정보를 새로 로드 중...")
+    recognizers = []
+
+    try:
+        from app.utils.recognizer import (
+            EmailRecognizer,
+            GPSRecognizer,
+            IPRecognizer,
+            BankAccountRecognizer,
+            CardNumberRecognizer,
+            DriverLicenseRecognizer,
+            PassportRecognizer,
+            PhoneRecognizer,
+            ResidentIDRecognizer,
+            MACRecognizer
+        )
+
+        recognizer_classes = [
+            EmailRecognizer,
+            GPSRecognizer,
+            IPRecognizer,
+            BankAccountRecognizer,
+            CardNumberRecognizer,
+            DriverLicenseRecognizer,
+            PassportRecognizer,
+            PhoneRecognizer,
+            ResidentIDRecognizer,
+            MACRecognizer
+        ]
+
+        for recognizer_cls in recognizer_classes:
+            info = extract_recognizer_info(recognizer_cls)
+            if info:
+                info['module_path'] = recognizer_cls.__module__
+                recognizers.append(info)
+
+        # 캐시에 저장
+        _recognizers_cache = recognizers
+        print(f"✅ {len(recognizers)}개의 Recognizer 정보 로드 완료 (캐시됨)")
+
+    except Exception as e:
+        print(f"Error loading recognizers: {e}")
+
+    return recognizers
 
 
 # 현재 사용자 확인 (정책 관리자 권한)
@@ -32,6 +134,7 @@ async def create_entity(
     category: str,
     description: str = "",
     regex_pattern: str = "",
+    keywords: str = "",  # 쉼표로 구분된 키워드
     examples: str = "",  # 쉼표로 구분된 예시
     masking_rule: str = "full",
     sensitivity_level: str = "high",
@@ -45,6 +148,9 @@ async def create_entity(
         if existing:
             raise HTTPException(status_code=400, detail="이미 존재하는 엔티티 ID입니다")
 
+        # 키워드 파싱
+        keywords_list = [kw.strip() for kw in keywords.split(",") if kw.strip()]
+
         # 예시 파싱
         examples_list = [ex.strip() for ex in examples.split(",") if ex.strip()]
 
@@ -55,6 +161,7 @@ async def create_entity(
             category=category,
             description=description or None,
             regex_pattern=regex_pattern or None,
+            keywords=keywords_list,
             examples=examples_list,
             masking_rule=masking_rule,
             sensitivity_level=sensitivity_level,
@@ -153,6 +260,45 @@ async def get_categories(db = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"카테고리 조회 실패: {str(e)}")
 
 
+@router.get("/recognizers")
+async def get_recognizers():
+    """Recognizer 모듈 정보 조회"""
+    try:
+        recognizers = load_all_recognizers()
+
+        return JSONResponse({
+            "success": True,
+            "data": {
+                "recognizers": recognizers,
+                "total": len(recognizers)
+            }
+        })
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Recognizer 조회 실패: {str(e)}")
+
+
+@router.get("/recognizers/{entity_type}")
+async def get_recognizer_detail(entity_type: str):
+    """특정 Entity Type의 Recognizer 상세 정보"""
+    try:
+        recognizers = load_all_recognizers()
+
+        for rec in recognizers:
+            if entity_type in rec.get('entity_types', []):
+                return JSONResponse({
+                    "success": True,
+                    "data": rec
+                })
+
+        raise HTTPException(status_code=404, detail="Recognizer를 찾을 수 없습니다")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Recognizer 조회 실패: {str(e)}")
+
+
 @router.get("/{entity_id}")
 async def get_entity_detail(
     entity_id: str,
@@ -185,6 +331,7 @@ async def update_entity(
     category: str = None,
     description: str = None,
     regex_pattern: str = None,
+    keywords: str = None,
     examples: str = None,
     masking_rule: str = None,
     sensitivity_level: str = None,
@@ -210,6 +357,9 @@ async def update_entity(
             update_data["description"] = description
         if regex_pattern is not None:
             update_data["regex_pattern"] = regex_pattern
+        if keywords is not None:
+            keywords_list = [kw.strip() for kw in keywords.split(",") if kw.strip()]
+            update_data["keywords"] = keywords_list
         if examples is not None:
             examples_list = [ex.strip() for ex in examples.split(",") if ex.strip()]
             update_data["examples"] = examples_list
@@ -262,6 +412,20 @@ async def delete_entity(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"엔티티 삭제 실패: {str(e)}")
+
+
+@router.post("/recognizers/cache/clear")
+async def clear_recognizer_cache(
+    current_user = Depends(get_current_policy_admin)
+):
+    """Recognizer 캐시 무효화 (개발/디버깅용)"""
+    global _recognizers_cache
+    _recognizers_cache = None
+
+    return JSONResponse({
+        "success": True,
+        "message": "Recognizer 캐시가 삭제되었습니다. 다음 요청 시 재로드됩니다."
+    })
 
 
 @router.post("/seed")

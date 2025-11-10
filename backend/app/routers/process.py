@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 import os
 import json
@@ -10,6 +10,7 @@ from ..routers.uploads import get_files, UPLOAD_DIR
 from ..routers.ocr_needed import check_ocr_needed, PreflightCheckRequest
 from ..routers.ocr import extract_ocr
 from ..utils.recognizer_engine import recognize_pii_in_text
+from ..smtp.database import get_db
 
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -22,19 +23,20 @@ from typing import List
 router = APIRouter()
 
 @router.post("/documents")
-async def process_documents():
+async def process_documents(db = Depends(get_db)):
     file_list = get_files()
     results = []
-    
+
     for file_item in file_list:
         if file_item.name == "email_body.txt":
             file_path = os.path.join(UPLOAD_DIR, file_item.name)
-            
+
             with open(file_path, "r", encoding="utf-8") as f:
                 email_content = f.read()
 
-            analysis_result = recognize_pii_in_text(email_content)
-            
+            # DB 클라이언트를 전달하여 커스텀 엔티티도 분석
+            analysis_result = await recognize_pii_in_text(email_content, db_client=db)
+
             if isinstance(analysis_result, dict):
                 analysis_result['original_text'] = email_content
 
@@ -49,24 +51,25 @@ async def process_documents():
 
         if ocr_needed_data.get("ocr_needed", False):
             file_path = os.path.join(UPLOAD_DIR, file_item.name)
-            
+
             if not os.path.exists(file_path):
                 results.append({"filename": file_item.name, "status": "Error", "message": "File not found"})
                 continue
-                
+
             with open(file_path, "rb") as f:
                 file_content = f.read()
 
             ocr_result = await extract_ocr(file_content=file_content, file_name=file_item.name)
-            
+
             analysis_text = ""
             if isinstance(ocr_result, str):
                 analysis_text = ocr_result
             elif isinstance(ocr_result, dict):
                 analysis_text = ocr_result.get("full_text", "")
 
-            analysis_result = recognize_pii_in_text(analysis_text, ocr_result)
-            
+            # DB 클라이언트를 전달하여 커스텀 엔티티도 분석
+            analysis_result = await recognize_pii_in_text(analysis_text, ocr_result, db_client=db)
+
             if isinstance(analysis_result, dict):
                 analysis_result['original_text'] = analysis_text
 
@@ -76,7 +79,7 @@ async def process_documents():
                 "ocr_data": ocr_result,
                 "analysis_data": analysis_result
             })
-        
+
         else:
             results.append({
                 "filename": file_item.name,

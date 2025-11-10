@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MASKIT - 엔티티 관리</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../style.css">
+  <style>
+    .entity-container {
+      padding: 24px;
+    }
+    .entity-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .entity-header h2 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .entity-actions {
+      display: flex;
+      gap: 12px;
+    }
+    .search-box {
+      margin-bottom: 20px;
+      display: flex;
+      gap: 12px;
+    }
+    .search-input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .entity-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .entity-card {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+      transition: transform 0.2s;
+    }
+    .entity-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(16,24,40,.1);
+    }
+    .entity-type {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .type-person {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    .type-organization {
+      background: #dcfce7;
+      color: #15803d;
+    }
+    .type-location {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .type-sensitive {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .entity-name {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    .entity-description {
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+    .entity-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+    .entity-count {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .entity-actions-btn {
+      display: flex;
+      gap: 8px;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .btn-primary:hover {
+      opacity: 0.9;
+    }
+    .btn-secondary {
+      background: white;
+      color: var(--text);
+      border: 1px solid var(--line);
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .btn-secondary:hover {
+      background: #f8f9fa;
+    }
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #f8f9fa;
+      color: var(--text);
+    }
+    .icon-btn:hover {
+      background: var(--line);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="custombar" id="custombar">
+      <div class="sb-head">
+        <div class="sb-title">엔티티 필터</div>
+      </div>
+
+      <div class="group">
+        <button class="group-toggle" aria-expanded="false">
+          <span>엔티티 유형</span>
+          <svg class="caret" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><polyline points="8 4 16 12 8 20" /></svg>
+        </button>
+        <ul class="items">
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">개인 정보</span>
+          </li>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">조직 정보</span>
+          </li>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">위치 정보</span>
+          </li>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">민감 정보</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="group">
+        <button class="group-toggle" aria-expanded="false">
+          <span>보호 수준</span>
+          <svg class="caret" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><polyline points="8 4 16 12 8 20" /></svg>
+        </button>
+        <ul class="items">
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">높음</span>
+          </li>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">중간</span>
+          </li>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+            <span class="txt">낮음</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="panel-footer">
+        <button class="btn edit">필터 적용</button>
+      </div>
+    </aside>
+
+    <header class="top-bar">
+      <div class="top-bar-title">🛡️ MASKIT - 엔티티 관리</div>
+      <div class="top-bar-buttons">
+        <span id="userInfo" style="color: white; font-size: 0.9em;"></span>
+        <button class="top-bar-button" id="logoutBtn" style="background: rgba(255,255,255,0.2); margin-left: 1em;">
+          <span>로그아웃</span>
+        </button>
+      </div>
+    </header>
+
+    <section class="panel">
+      <div class="entity-container">
+        <div class="entity-header">
+          <h2>엔티티 관리</h2>
+          <div class="entity-actions">
+            <button class="btn-secondary">엔티티 가져오기</button>
+            <button class="btn-primary" id="createEntityBtn">새 엔티티 생성</button>
+          </div>
+        </div>
+
+        <div class="search-box">
+          <input type="text" class="search-input" placeholder="엔티티 검색..." id="searchInput">
+          <button class="btn-secondary">검색</button>
+        </div>
+
+        <div class="entity-grid" id="entityGrid">
+          <div class="entity-card">
+            <span class="entity-type type-person">개인 정보</span>
+            <div class="entity-name">주민등록번호</div>
+            <div class="entity-description">
+              한국 주민등록번호 패턴을 감지하고 자동으로 마스킹합니다.
+              형식: YYMMDD-NNNNNNN
+            </div>
+            <div class="entity-meta">
+              <span class="entity-count">감지 횟수: 1,234회</span>
+              <div class="entity-actions-btn">
+                <button class="icon-btn" title="편집">✏️</button>
+                <button class="icon-btn" title="삭제">🗑️</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <span class="entity-type type-sensitive">민감 정보</span>
+            <div class="entity-name">신용카드 번호</div>
+            <div class="entity-description">
+              신용카드 번호를 감지하고 마스킹합니다.
+              16자리 숫자 패턴 지원
+            </div>
+            <div class="entity-meta">
+              <span class="entity-count">감지 횟수: 892회</span>
+              <div class="entity-actions-btn">
+                <button class="icon-btn" title="편집">✏️</button>
+                <button class="icon-btn" title="삭제">🗑️</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <span class="entity-type type-person">개인 정보</span>
+            <div class="entity-name">이메일 주소</div>
+            <div class="entity-description">
+              이메일 주소를 감지하고 선택적으로 마스킹합니다.
+              형식: user@domain.com
+            </div>
+            <div class="entity-meta">
+              <span class="entity-count">감지 횟수: 3,456회</span>
+              <div class="entity-actions-btn">
+                <button class="icon-btn" title="편집">✏️</button>
+                <button class="icon-btn" title="삭제">🗑️</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <span class="entity-type type-person">개인 정보</span>
+            <div class="entity-name">전화번호</div>
+            <div class="entity-description">
+              한국 전화번호 패턴을 감지합니다.
+              형식: 010-XXXX-XXXX
+            </div>
+            <div class="entity-meta">
+              <span class="entity-count">감지 횟수: 2,103회</span>
+              <div class="entity-actions-btn">
+                <button class="icon-btn" title="편집">✏️</button>
+                <button class="icon-btn" title="삭제">🗑️</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <span class="entity-type type-organization">조직 정보</span>
+            <div class="entity-name">사업자 등록번호</div>
+            <div class="entity-description">
+              사업자 등록번호를 감지하고 마스킹합니다.
+              형식: XXX-XX-XXXXX
+            </div>
+            <div class="entity-meta">
+              <span class="entity-count">감지 횟수: 567회</span>
+              <div class="entity-actions-btn">
+                <button class="icon-btn" title="편집">✏️</button>
+                <button class="icon-btn" title="삭제">🗑️</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <span class="entity-type type-location">위치 정보</span>
+            <div class="entity-name">주소</div>
+            <div class="entity-description">
+              한국 주소 패턴을 감지합니다.
+              도로명주소 및 지번주소 지원
+            </div>
+            <div class="entity-meta">
+              <span class="entity-count">감지 횟수: 789회</span>
+              <div class="entity-actions-btn">
+                <button class="icon-btn" title="편집">✏️</button>
+                <button class="icon-btn" title="삭제">🗑️</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <span class="entity-type type-sensitive">민감 정보</span>
+            <div class="entity-name">계좌번호</div>
+            <div class="entity-description">
+              은행 계좌번호를 감지하고 마스킹합니다.
+              모든 은행 형식 지원
+            </div>
+            <div class="entity-meta">
+              <span class="entity-count">감지 횟수: 456회</span>
+              <div class="entity-actions-btn">
+                <button class="icon-btn" title="편집">✏️</button>
+                <button class="icon-btn" title="삭제">🗑️</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="entity-card">
+            <span class="entity-type type-person">개인 정보</span>
+            <div class="entity-name">여권번호</div>
+            <div class="entity-description">
+              여권번호를 감지하고 마스킹합니다.
+              형식: MXXXXXXXX
+            </div>
+            <div class="entity-meta">
+              <span class="entity-count">감지 횟수: 234회</span>
+              <div class="entity-actions-btn">
+                <button class="icon-btn" title="편집">✏️</button>
+                <button class="icon-btn" title="삭제">🗑️</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sb-head">
+        <div class="sb-title">엔티티 통계</div>
+      </div>
+      <div style="padding: 20px;">
+        <div style="margin-bottom: 24px;">
+          <h3 style="font-size: 16px; margin-bottom: 12px;">전체 통계</h3>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="padding: 12px; background: #eff6ff; border-radius: 8px;">
+              <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">총 엔티티</div>
+              <div style="font-size: 24px; font-weight: 600; color: #1e40af;">24개</div>
+            </div>
+            <div style="padding: 12px; background: #dcfce7; border-radius: 8px;">
+              <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">총 감지 횟수</div>
+              <div style="font-size: 24px; font-weight: 600; color: #15803d;">9,731회</div>
+            </div>
+            <div style="padding: 12px; background: #fef3c7; border-radius: 8px;">
+              <div style="font-size: 13px; color: var(--muted); margin-bottom: 4px;">이번 달 감지</div>
+              <div style="font-size: 24px; font-weight: 600; color: #92400e;">1,456회</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 style="font-size: 16px; margin-bottom: 12px;">유형별 분포</h3>
+          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 14px;">
+            <div style="display: flex; justify-content: space-between;">
+              <span>개인 정보</span>
+              <span style="font-weight: 600;">45%</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span>민감 정보</span>
+              <span style="font-weight: 600;">30%</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span>조직 정보</span>
+              <span style="font-weight: 600;">15%</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span>위치 정보</span>
+              <span style="font-weight: 600;">10%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="../script.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const token = localStorage.getItem('auth_token');
+      const user = JSON.parse(localStorage.getItem('user') || 'null');
+
+      if (!token || !user) {
+        window.location.href = '../smtp/login.html';
+        return;
+      }
+
+      document.getElementById('userInfo').textContent = `${user.nickname} (${user.email})`;
+
+      document.getElementById('logoutBtn').addEventListener('click', function() {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user');
+        window.location.href = '../smtp/login.html';
+      });
+
+      document.getElementById('createEntityBtn').addEventListener('click', function() {
+        alert('엔티티 생성 기능은 준비 중입니다.');
+      });
+
+      // 검색 기능
+      document.getElementById('searchInput').addEventListener('input', function(e) {
+        const searchTerm = e.target.value.toLowerCase();
+        const cards = document.querySelectorAll('.entity-card');
+
+        cards.forEach(card => {
+          const name = card.querySelector('.entity-name').textContent.toLowerCase();
+          const description = card.querySelector('.entity-description').textContent.toLowerCase();
+
+          if (name.includes(searchTerm) || description.includes(searchTerm)) {
+            card.style.display = 'block';
+          } else {
+            card.style.display = 'none';
+          }
+        });
+      });
+    });
+  </script>
+</body>
+</html>

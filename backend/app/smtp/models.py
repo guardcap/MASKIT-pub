@@ -126,6 +126,7 @@ class EntityType(BaseModel):
     category: str  # 카테고리 (예: "연락처", "식별정보", "금융정보")
     description: Optional[str] = None
     regex_pattern: Optional[str] = None  # 정규식 패턴
+    keywords: List[str] = []  # 키워드 (컨텍스트 분석용)
     examples: List[str] = []  # 예시
     masking_rule: str = "full"  # full, partial, hash
     sensitivity_level: str = "high"  # low, medium, high, critical

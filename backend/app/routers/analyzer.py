@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 from ..utils.recognizer_engine import recognize_pii_in_text
+from ..smtp.database import get_db
 
 router = APIRouter()
 
@@ -28,15 +29,17 @@ class TextAnalysisResponse(BaseModel):
     pii_entities: List[PIIEntity]
 
 @router.post("/analyze/text", response_model=TextAnalysisResponse)
-async def analyze_text(request: TextAnalysisRequest):
+async def analyze_text(request: TextAnalysisRequest, db = Depends(get_db)):
     """
     추출된 텍스트에서 PII를 분석하고 탐지합니다.
     OCR 데이터가 있으면 좌표 정보도 함께 반환합니다.
+    커스텀 엔티티도 MongoDB에서 자동 로드됩니다.
     """
-    # OCR 데이터를 포함하여 텍스트 분석 로직 호출
-    analysis_result = recognize_pii_in_text(
-        request.text_content, 
-        request.ocr_data
+    # OCR 데이터와 DB 클라이언트를 포함하여 텍스트 분석 로직 호출
+    analysis_result = await recognize_pii_in_text(
+        request.text_content,
+        request.ocr_data,
+        db_client=db
     )
-    
+
     return analysis_result

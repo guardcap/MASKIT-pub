@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>MASKIT - 의사결정 로그</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../../style.css">
+  <link rel="stylesheet" href="../style.css">
   <style>
     .logs-container {
       padding: 24px;
@@ -573,14 +573,14 @@
     </aside>
   </div>
 
-  <script src="../../script.js"></script>
+  <script src="../script.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       const token = localStorage.getItem('auth_token');
       const user = JSON.parse(localStorage.getItem('user') || 'null');
 
       if (!token || !user) {
-        window.location.href = '../login.html';
+        window.location.href = '../smtp/login.html';
         return;
       }
 
@@ -589,7 +589,7 @@
       document.getElementById('logoutBtn').addEventListener('click', function() {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('user');
-        window.location.href = '../login.html';
+        window.location.href = '../smtp/login.html';
       });
 
       document.getElementById('refreshBtn').addEventListener('click', function() {

@@ -37,6 +37,10 @@ task_status: Dict[str, Dict] = {}
 CHROMA_DB_DIR = Path("backend/app/data/chromadb")
 CHROMA_DB_DIR.mkdir(parents=True, exist_ok=True)
 
+# JSONL 저장 디렉토리 (RAG staging)
+STAGING_DIR = Path("backend/app/rag/data/staging")
+STAGING_DIR.mkdir(parents=True, exist_ok=True)
+
 # 환경 변수에서 설정값 로드
 PDF_BATCH_SIZE = int(os.getenv("PDF_BATCH_SIZE", "10"))
 PDF_BATCH_DELAY = int(os.getenv("PDF_BATCH_DELAY", "3"))
@@ -317,6 +321,37 @@ class VectorDBManager:
             return False
 
 
+def save_guidelines_to_jsonl(guidelines: list, policy_id: str, policy_title: str) -> bool:
+    """
+    가이드라인을 JSONL 파일로 staging 디렉토리에 저장
+    """
+    try:
+        # 파일명 생성 (정책 제목 기반)
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        safe_title = "".join(c if c.isalnum() or c in (' ', '_', '-') else '_' for c in policy_title)
+        safe_title = safe_title.replace(' ', '_')[:50]
+
+        filename = f"application_guides_{timestamp}_{safe_title}_{policy_id}.jsonl"
+        file_path = STAGING_DIR / filename
+
+        # JSONL 형식으로 저장 (각 가이드라인을 한 줄씩)
+        with open(file_path, "w", encoding="utf-8") as f:
+            for guide in guidelines:
+                json_line = json.dumps(guide, ensure_ascii=False)
+                f.write(json_line + "\n")
+
+        print(f"[INFO] JSONL 파일 저장 완료: {file_path}")
+        print(f"[INFO] {len(guidelines)}개 가이드라인 저장됨")
+
+        return True
+
+    except Exception as e:
+        print(f"[ERROR] JSONL 파일 저장 실패: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 async def process_policy_background(policy_id: str, policy_data: dict, db):
     """
     백그라운드에서 정책 처리
@@ -361,9 +396,20 @@ async def process_policy_background(policy_id: str, policy_data: dict, db):
             task_status[task_id]["completed_at"] = datetime.utcnow().isoformat()
             return
 
-        # 2. MongoDB에 가이드라인 저장 (50% → 70%)
+        # 2. JSONL 파일로 저장 (50% → 60%)
+        task_status[task_id]["progress"] = 55
+        task_status[task_id]["message"] = "JSONL 파일 저장 중..."
+
+        jsonl_saved = save_guidelines_to_jsonl(
+            guidelines,
+            policy_id,
+            policy_data.get("title", "")
+        )
+
         task_status[task_id]["progress"] = 60
-        task_status[task_id]["message"] = "가이드라인 저장 중..."
+
+        # 3. MongoDB에 가이드라인 저장 (60% → 70%)
+        task_status[task_id]["message"] = "MongoDB에 가이드라인 저장 중..."
 
         # 정책에 가이드라인 추가
         await db["policies"].update_one(
@@ -373,7 +419,7 @@ async def process_policy_background(policy_id: str, policy_data: dict, db):
 
         task_status[task_id]["progress"] = 70
 
-        # 3. VectorDB 임베딩 (70% → 95%)
+        # 4. VectorDB 임베딩 (70% → 95%)
         task_status[task_id]["message"] = "VectorDB 임베딩 생성 중..."
 
         vectordb = VectorDBManager()
@@ -381,12 +427,13 @@ async def process_policy_background(policy_id: str, policy_data: dict, db):
 
         task_status[task_id]["progress"] = 95
 
-        # 4. 완료 (100%)
+        # 5. 완료 (100%)
         task_status[task_id]["status"] = "completed"
         task_status[task_id]["progress"] = 100
-        task_status[task_id]["message"] = f"{len(guidelines)}개 가이드라인이 VectorDB에 추가되었습니다"
+        task_status[task_id]["message"] = f"{len(guidelines)}개 가이드라인이 JSONL 및 VectorDB에 추가되었습니다"
         task_status[task_id]["completed_at"] = datetime.utcnow().isoformat()
         task_status[task_id]["guidelines_count"] = len(guidelines)
+        task_status[task_id]["jsonl_saved"] = jsonl_saved
         task_status[task_id]["vectordb_success"] = success
 
     except Exception as e:

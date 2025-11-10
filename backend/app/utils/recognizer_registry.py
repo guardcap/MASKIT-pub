@@ -1,6 +1,7 @@
 from typing import Dict, List, Type
 from app.utils.entity_recognizer import EntityRecognizer
 from app.utils.entity import Entity, EntityGroup
+import re
 
 # 규칙 기반 인식기들 import
 from app.utils.recognizer.email import EmailRecognizer
@@ -14,11 +15,69 @@ from app.utils.recognizer.korean_phone import PhoneRecognizer
 from app.utils.recognizer.korean_residentid import ResidentIDRecognizer
 from app.utils.recognizer.MACaddress import MACRecognizer
 
+
+class DynamicRegexRecognizer(EntityRecognizer):
+    """MongoDB의 커스텀 엔티티를 위한 동적 Recognizer"""
+
+    def __init__(self, entity_id: str, entity_type: str, name: str, regex_pattern: str = None, keywords: List[str] = None):
+        super().__init__(name=f"dynamic_{entity_id}", supported_entities=[entity_type])
+        self.entity_id = entity_id
+        self.entity_type = entity_type
+        self.display_name = name
+        self.regex_pattern = regex_pattern
+        self.keywords = keywords or []
+
+    def analyze(self, text: str) -> EntityGroup:
+        entities: List[Entity] = []
+
+        # Regex 패턴이 있으면 사용
+        if self.regex_pattern:
+            try:
+                for match in re.finditer(self.regex_pattern, text, re.IGNORECASE):
+                    entities.append(Entity(
+                        entity=self.entity_type,
+                        word=match.group(),
+                        start=match.start(),
+                        end=match.end(),
+                        score=1.0
+                    ))
+            except Exception as e:
+                print(f"Regex 오류 ({self.entity_id}): {e}")
+
+        # 키워드 주변 스캔
+        if self.regex_pattern and self.keywords:
+            for keyword in self.keywords:
+                for k_match in re.finditer(keyword, text, re.IGNORECASE):
+                    start_context = max(0, k_match.start() - 50)
+                    end_context = k_match.end() + 50
+                    context = text[start_context:end_context]
+
+                    try:
+                        for match in re.finditer(self.regex_pattern, context, re.IGNORECASE):
+                            abs_start = start_context + match.start()
+                            abs_end = start_context + match.end()
+
+                            # 중복 제거
+                            if not any(e.word == match.group() and e.start == abs_start for e in entities):
+                                entities.append(Entity(
+                                    entity=self.entity_type,
+                                    word=match.group(),
+                                    start=abs_start,
+                                    end=abs_end,
+                                    score=1.0
+                                ))
+                    except Exception as e:
+                        print(f"Keyword Regex 오류 ({self.entity_id}): {e}")
+
+        return EntityGroup(entities)
+
+
 class RecognizerRegistry:
     """모든 EntityRecognizer 객체들을 관리하고 로드"""
 
-    def __init__(self):
+    def __init__(self, db_client=None):
         self.recognizers: Dict[str, EntityRecognizer] = {}
+        self.db_client = db_client
 
     def add_recognizer(self, recognizer: EntityRecognizer):
         if not isinstance(recognizer, EntityRecognizer):
@@ -26,6 +85,7 @@ class RecognizerRegistry:
         self.recognizers[recognizer.name] = recognizer
 
     def load_predefined_recognizers(self):
+        """기본 제공 Recognizer 로드"""
         predefined_recognizer_classes: List[Type[EntityRecognizer]] = [
             EmailRecognizer,
             GPSRecognizer,
@@ -40,6 +100,46 @@ class RecognizerRegistry:
         ]
         for cls in predefined_recognizer_classes:
             self.add_recognizer(cls())
+
+    async def load_custom_recognizers(self):
+        """MongoDB의 커스텀 엔티티를 동적 Recognizer로 로드"""
+        if not self.db_client:
+            print("⚠️  DB 클라이언트가 없어 커스텀 엔티티를 로드할 수 없습니다.")
+            return
+
+        try:
+            # MongoDB에서 활성화된 커스텀 엔티티 조회
+            cursor = self.db_client["entities"].find({"is_active": True})
+            custom_count = 0
+
+            async for entity_doc in cursor:
+                entity_id = entity_doc.get("entity_id")
+                name = entity_doc.get("name")
+                entity_type = entity_doc.get("entity_id", "CUSTOM").upper()
+                regex_pattern = entity_doc.get("regex_pattern")
+                keywords = entity_doc.get("keywords", [])
+
+                # 키워드가 문자열인 경우 리스트로 변환
+                if isinstance(keywords, str):
+                    keywords = [kw.strip() for kw in keywords.split(',') if kw.strip()]
+
+                # 동적 Recognizer 생성 및 추가
+                if regex_pattern:  # Regex가 있는 경우만 추가
+                    recognizer = DynamicRegexRecognizer(
+                        entity_id=entity_id,
+                        entity_type=entity_type,
+                        name=name,
+                        regex_pattern=regex_pattern,
+                        keywords=keywords
+                    )
+                    self.add_recognizer(recognizer)
+                    custom_count += 1
+                    print(f"✅ 커스텀 엔티티 로드: {name} ({entity_type})")
+
+            print(f"📦 총 {custom_count}개의 커스텀 엔티티가 로드되었습니다.")
+
+        except Exception as e:
+            print(f"❌ 커스텀 엔티티 로드 실패: {e}")
 
     def remove_recognizer(self, recognizer_name: str):
         if recognizer_name in self.recognizers:

@@ -143,14 +143,20 @@ def find_text_coordinates_in_ocr(text: str, start_pos: int, end_pos: int, ocr_pa
     return coordinates
 
 
-def recognize_pii_in_text(text_content: str, ocr_data: Optional[Dict] = None):
+async def recognize_pii_in_text(text_content: str, ocr_data: Optional[Dict] = None, db_client=None):
     """
     텍스트 분석을 수행하고 결과를 반환하는 최종 함수
     OCR 데이터가 있으면 PII의 좌표 정보도 함께 반환
+    db_client를 전달하면 MongoDB의 커스텀 엔티티도 사용
     """
-    analyzer = AnalyzerEngine()
+    analyzer = AnalyzerEngine(db_client=db_client)
+
+    # 커스텀 엔티티 로드 (db_client가 있는 경우)
+    if db_client:
+        await analyzer.load_custom_entities()
+
     result = analyzer.analyze(text_content)
-    
+
     # FastAPI가 인식할 수 있는 딕셔너리 형태로 변환
     pii_entities_list = []
     for e in result.entities:
@@ -161,16 +167,16 @@ def recognize_pii_in_text(text_content: str, ocr_data: Optional[Dict] = None):
             "start_char": e.start,
             "end_char": e.end,
         }
-        
+
         # OCR 데이터가 있으면 좌표 정보도 추가
         if ocr_data and "pages" in ocr_data:
             coordinates = find_text_coordinates_in_ocr(
                 text_content, e.start, e.end, ocr_data["pages"]
             )
             entity_dict["coordinates"] = coordinates
-        
+
         pii_entities_list.append(entity_dict)
-    
+
     return {
         "full_text": text_content,
         "pii_entities": pii_entities_list

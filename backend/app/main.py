@@ -2,14 +2,47 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.routers import uploads, process, ocr, analyzer, masking_pdf
-from app.smtp.routes import auth as smtp_auth, users as smtp_users, policy_management, entity_management
+from app.smtp.routes import auth as smtp_auth, users as smtp_users, policy_management, entity_management, vectordb_management
 from app.smtp.database import connect_to_mongo, close_mongo_connection
+from app.smtp.smtp_handler import start_smtp_server
+from contextlib import asynccontextmanager
+import asyncio
 import os
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """앱 생명주기 관리"""
+    # 시작 시
+    print("\n" + "="*60)
+    print("🚀 Enterprise GuardCAP 서버 시작")
+    print("="*60 + "\n")
+
+    # MongoDB 연결
+    await connect_to_mongo()
+    print("[App] ✅ MongoDB 연결 완료\n")
+
+    # SMTP 서버 시작
+    smtp_task = asyncio.create_task(start_smtp_server())
+    await asyncio.sleep(1)
+    print("[App] ✅ SMTP 서버 시작 완료\n")
+
+    yield
+
+    # 종료 시
+    print("\n[App] 종료 중...")
+    smtp_task.cancel()
+    try:
+        await smtp_task
+    except asyncio.CancelledError:
+        pass
+    await close_mongo_connection()
+    print("[App] ✅ 종료 완료")
 
 app = FastAPI(
     title="Enterprise GuardCAP",
     description="통합 DLP 및 메일 보안 솔루션",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan
 )
 
 # CORS(교차 출처 리소스 공유) 설정
@@ -20,17 +53,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# ===== 앱 생명주기 이벤트 =====
-@app.on_event("startup")
-async def startup_event():
-    """앱 시작 시 MongoDB 연결"""
-    await connect_to_mongo()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """앱 종료 시 MongoDB 연결 해제"""
-    await close_mongo_connection()
 
 # uploads 폴더를 정적 파일로 서빙
 if os.path.exists("uploads"):
@@ -48,6 +70,7 @@ app.include_router(smtp_auth.router, prefix="/api/v1/smtp", tags=["SMTP Auth"])
 app.include_router(smtp_users.router, prefix="/api/v1/smtp", tags=["SMTP Users"])
 app.include_router(policy_management.router, tags=["Policy Management"])
 app.include_router(entity_management.router, tags=["Entity Management"])
+app.include_router(vectordb_management.router, tags=["VectorDB Management"])
 
 # RAG 라우터는 추후 추가 가능
 # from app.rag import rag_router
