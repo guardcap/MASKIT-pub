@@ -477,38 +477,77 @@
       emptyState.style.display = 'none';
 
       try {
+        console.log('📡 API 요청 시작:', `${API_BASE}/api/policies/schemas?limit=1000`);
         const response = await fetch(`${API_BASE}/api/policies/schemas?limit=1000`);
         const result = await response.json();
+
+        console.log('📥 API 응답:', result);
 
         if (!result.success) {
           throw new Error(result.message || '데이터 로드 실패');
         }
 
-        // 데이터 구조 변환: schemas를 source_file 별로 그룹화
+        // 데이터 구조 변환: schemas를 source_document 별로 그룹화
         const schemas = result.data.schemas || [];
-        const groupedByFile = {};
+        const groupedByDoc = {};
 
         schemas.forEach(schema => {
-          const file = schema.source_file || 'unknown';
-          if (!groupedByFile[file]) {
-            groupedByFile[file] = {
-              source: file,
-              items: [],
+          const doc = schema.source_document || schema.source_file || 'unknown';
+          if (!groupedByDoc[doc]) {
+            groupedByDoc[doc] = {
+              source_document: doc,
+              authorities: new Set(),
+              jsonl_files: new Set(),
+              guides: [],
               count: 0
             };
           }
-          groupedByFile[file].items.push(schema);
-          groupedByFile[file].count++;
+
+          // 파일명 추가
+          if (schema.source_file) {
+            groupedByDoc[doc].jsonl_files.add(schema.source_file);
+          }
+
+          // 기관 정보 추가
+          if (schema.source_authority) {
+            groupedByDoc[doc].authorities.add(schema.source_authority);
+          }
+
+          // 가이드 데이터 추가
+          groupedByDoc[doc].guides.push({
+            guide_id: schema.guide_id || 'N/A',
+            scenario: schema.scenario || 'N/A',
+            actionable_directive: schema.actionable_directive || 'N/A',
+            keywords: schema.keywords || [],
+            confidence_score: schema.confidence_score || 0,
+            reviewed: schema.reviewed || false,
+            related_law_ids: schema.related_law_ids || []
+          });
+
+          groupedByDoc[doc].count++;
+        });
+
+        // Set을 배열로 변환
+        Object.values(groupedByDoc).forEach(group => {
+          group.authorities = Array.from(group.authorities);
+          group.jsonl_files = Array.from(group.jsonl_files);
         });
 
         allData = {
           total: result.data.total,
-          groups: Object.values(groupedByFile),
+          groups: Object.values(groupedByDoc),
           cached: result.data.cached,
           cache_expires_in: result.data.cache_expires_in
         };
 
+        console.log('📊 변환된 데이터:', {
+          totalSchemas: result.data.total,
+          groupCount: allData.groups.length,
+          firstGroup: allData.groups[0]
+        });
+
         if (!allData.groups || allData.groups.length === 0) {
+          console.warn('⚠️ 데이터 그룹이 없습니다');
           emptyState.style.display = 'block';
           loading.style.display = 'none';
           return;
@@ -521,6 +560,7 @@
         renderGroups(allData.groups);
 
         loading.style.display = 'none';
+        console.log('✅ 데이터 로드 완료');
 
       } catch (error) {
         console.error('데이터 로드 실패:', error);
@@ -551,11 +591,14 @@
     function updateAuthorityFilter(groups) {
       const authorities = new Set();
       groups.forEach(group => {
-        group.authorities.forEach(auth => authorities.add(auth));
+        if (group.authorities && Array.isArray(group.authorities)) {
+          group.authorities.forEach(auth => {
+            if (auth) authorities.add(auth);
+          });
+        }
       });
 
       const filterList = document.getElementById('authorityFilter');
-      const allItem = filterList.querySelector('[data-value="all"]').closest('.item');
 
       // 기존 항목 제거 (전체 제외)
       filterList.querySelectorAll('.item').forEach((item, idx) => {
@@ -578,9 +621,20 @@
       const container = document.getElementById('sourceGroups');
       container.innerHTML = '';
 
+      console.log('🎨 렌더링 시작:', groups.length, '그룹');
+
       const filteredGroups = applyGroupFilters(groups);
 
-      filteredGroups.forEach(group => {
+      console.log('🔍 필터 후:', filteredGroups.length, '그룹');
+
+      if (filteredGroups.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>필터 조건에 맞는 데이터가 없습니다.</p></div>';
+        return;
+      }
+
+      filteredGroups.forEach((group, idx) => {
+        console.log(`  그룹 ${idx + 1}:`, group.source_document, `(${group.count}개 스키마)`);
+
         const groupDiv = document.createElement('div');
         groupDiv.className = 'source-group';
 
