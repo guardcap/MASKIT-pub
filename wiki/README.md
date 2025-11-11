@@ -1,7 +1,48 @@
+---
+layout: default
+title: Wiki Home
+nav_order: 1
+---
+
 # Enterprise GuardCAP (MASKIT) - Wiki Documentation
 
 기업용 DLP (Data Loss Prevention) 솔루션 **MASKIT**의 공식 문서입니다.
 
+## 📁 프로젝트 구조
+
+```
+enterprise-guardcap/
+├── backend/                      # 통합 FastAPI 백엔드 서버
+│   ├── app/
+│   │   ├── main.py              # 메인 FastAPI 앱 (모든 라우트 통합)
+│   │   ├── routers/             # DLP/OCR 라우터
+│   │   ├── smtp/                # SMTP 기능 (routes/, models/, handlers 포함)
+│   │   ├── rag/                 # RAG 시스템 (embeddings, agent, etc)
+│   │   └── utils/               # 공유 유틸리티
+│   ├── requirements.txt          # 통합 Python 의존성
+│   └── README.md
+│
+├── frontend/                     # 통합 웹 인터페이스
+│   ├── script.js                # API_BASE_URL 기반 동적 연결
+│   ├── smtp/                    # SMTP 관련 UI 페이지
+│   ├── pages/                   # 추가 페이지
+│   ├── package.json
+│   └── index.html
+│
+├── wiki/                        # 문서 및 가이드 (이 디렉토리)
+│   ├── 2_install.md
+│   ├── 3_analyzer.md
+│   ├── 5_PII_entities.md
+│   ├── 7_redactor.md
+│   ├── 8_fastapi.md
+│   ├── 10_mailproxy.md
+│   └── README.md (이 파일)
+│
+├── .env                         # 통합 환경 설정 (마스킹됨)
+├── .gitignore                   # Git 무시 파일 (.env 포함)
+├── QUICK_START.md               # 빠른 시작 가이드
+└── README.md                    # 프로젝트 루트 README
+```
 
 ## 문서 구성
 
@@ -18,170 +59,131 @@
 9. **[User Interface](9_userinterface.md)** - 프론트엔드 UI 가이드
 10. **[Mail Proxy](10_mailproxy.md)** - SMTP 프록시 서버 구조
 11. **[Solution DLP](11_solutionDLP.md)** - DLP 솔루션 통합 가이드
+12. **[System Architecture](12_system_architecture.md)** - 시스템 아키텍처 및 데이터 흐름
+13. **[Backend Guide](13_backend_guide.md)** - 백엔드 개발 가이드
+14. **[Frontend Guide](14_frontend_guide.md)** - 프론트엔드 개발 가이드
+
+## ✨ 주요 특징
+
+### 통합 Backend (FastAPI)
+- **단일 포트 (8000)**: 모든 서비스가 하나의 FastAPI 인스턴스로 실행
+- **통합 라우트**:
+  - `/api/v1/process` - DLP 분석
+  - `/api/v1/ocr` - OCR 처리
+  - `/api/v1/smtp` - SMTP 인증 및 사용자 관리
+  - `/api/v1/files` - 파일 관리
+  - `/api/v1/analyzer` - 분석기
+  - `/api/entities` - 엔티티 관리
+  - `/api/vectordb` - 정책 스키마 관리
+- **SMTP 내장**: aiosmtpd를 통한 내장 SMTP 서버
+- **RAG 통합**: LangChain 기반 RAG 시스템
+
+### 통합 Frontend
+- **동적 API 연결**: `API_BASE_URL` 환경 변수 기반
+- **모든 UI 통합**: DLP/SMTP/분석 대시보드
+- **Electron 기반**: 데스크톱 애플리케이션
+- **역할 기반 대시보드**: Root Admin, Policy Admin, Auditor, Approver, User
+
+### 통합 환경 설정
+- **단일 .env 파일**: 모든 서비스 설정 중앙화
+- **.gitignore 마스킹**: 민감한 정보 보호
 
 ## 빠른 시작
 
-MASKIT을 처음 사용하시나요? 다음 문서들을 순서대로 읽어보세요:
+MASKIT을 처음 사용하시나요? 다음 순서로 읽어보세요:
 
-1. [서비스 개요](index.md) - MASKIT이 무엇인지 이해하기
-2. [설치 및 사용법](2_install.md) - 시스템 설치 및 첫 로그인
-3. [기술 스택](4_techstack.md) - 시스템 아키텍처 이해하기
+1. **[QUICK_START.md](../QUICK_START.md)** - 빠른 시작 가이드 (설치 및 실행)
+2. **[서비스 개요](index.md)** - MASKIT이 무엇인지 이해하기
+3. **[설치 및 사용법](2_install.md)** - 시스템 설치 및 첫 로그인
+4. **[기술 스택](4_techstack.md)** - 시스템 아키텍처 이해하기
 
-## 로컬에서 Wiki 실행하기
+## 🔐 환경 변수 구성
 
-이 위키를 로컬에서 실행하려면:
+### 필수 변수
 
-After completing the creation of your new site on GitHub, update it as needed:
+```env
+# Backend
+BACKEND_HOST=0.0.0.0
+BACKEND_PORT=8000
 
-## Replace the content of the template pages
+# Database
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/?retryWrites=true&w=majority
+DATABASE_NAME=maskit
 
-Update the following files to your own content:
+# Security
+SECRET_KEY=your-secret-key-min-32-chars
+DLP_SECRET_KEY=your-dlp-secret-key-min-32-chars
 
-- `index.md` (your new home page)
-- `README.md` (information for those who access your site repo on GitHub)
+# SMTP
+RECEIVE_SERVER_HOST=127.0.0.1
+RECEIVE_SERVER_PORT=2526
+```
 
-## Changing the version of the theme and/or Jekyll
+### 선택적 변수
 
-Simply edit the relevant line(s) in the `Gemfile`.
+```env
+# API 키
+CLOVA_OCR_URL=...
+CLOVA_OCR_SECRET=...
 
-## Adding a plugin
+# 실제 메일 서버 (Gmail, SWU 등)
+# RECEIVE_SERVER_HOST=smtp.gmail.com
+# RECEIVE_SERVER_PORT=587
+# RECEIVE_SERVER_USE_TLS=true
+# RECEIVE_SERVER_USERNAME=...
+# RECEIVE_SERVER_PASSWORD=...
+```
 
-The Just the Docs theme automatically includes the [`jekyll-seo-tag`] plugin.
+## 📦 시스템 요구사항
 
-To add an extra plugin, you need to add it in the `Gemfile` *and* in `_config.yml`. For example, to add [`jekyll-default-layout`]:
+### Backend
+- **Python**: 3.8 이상
+- **주요 의존성**:
+  - FastAPI 0.109.0+
+  - Pydantic 2.5.0+
+  - Motor 3.3.0+ (async MongoDB)
+  - aiosmtpd 1.4.4+ (SMTP 서버)
+  - LangChain 0.1.0+ (RAG)
+  - Torch 2.0.0+ (NLP)
 
-- Add the following to your site's `Gemfile`:
+### Frontend
+- **Node.js**: 14 이상
+- **주요 의존성**:
+  - Electron (데스크톱 앱)
+  - 기본 JavaScript (외부 프레임워크 최소화)
 
-  ```ruby
-  gem "jekyll-default-layout"
-  ```
+### 데이터베이스
+- **MongoDB**: 4.0+ (로컬 또는 클라우드 Atlas)
 
-- And add the following to your site's `_config.yml`:
+### 선택사항
+- **메일 서버**: Gmail, SWU, MailPlug 등 (SMTP 설정)
+- **LLM**: Ollama, OpenAI (RAG용)
 
-  ```yaml
-  plugins:
-    - jekyll-default-layout
-  ```
+## 📚 추가 리소스
 
-Note: If you are using a Jekyll version less than 3.5.0, use the `gems` key instead of `plugins`.
+- **빠른 시작**: `../QUICK_START.md`
+- **설치 가이드**: `2_install.md`
+- **SMTP 상세 가이드**: `10_mailproxy.md`
+- **DLP 분석기 설정**: `3_analyzer.md`
+- **데이터 마스킹**: `7_redactor.md`
+- **PII 정의**: `5_PII_entities.md`
+- **FastAPI 설정**: `8_fastapi.md`
+- **전체 솔루션 개요**: `11_solutionDLP.md`
 
-## Publishing your site on GitHub Pages
+## 🐛 문제 해결
 
-1.  If your created site is `YOUR-USERNAME/YOUR-SITE-NAME`, update `_config.yml` to:
+### 포트 충돌
+특정 포트가 이미 사용 중인 경우, `.env` 파일에서 포트 번호를 변경하세요.
 
-    ```yaml
-    title: YOUR TITLE
-    description: YOUR DESCRIPTION
-    theme: just-the-docs
+### MongoDB 연결 실패
+MongoDB URI가 올바른지 확인하고, 네트워크 연결을 확인하세요.
 
-    url: https://YOUR-USERNAME.github.io/YOUR-SITE-NAME
+### 권한 문제
+필요시 폴더 권한을 확인하세요:
+```bash
+chmod -R 755 ./
+```
 
-    aux_links: # remove if you don't want this link to appear on your pages
-      Template Repository: https://github.com/YOUR-USERNAME/YOUR-SITE-NAME
-    ```
+---
 
-2.  Push your updated `_config.yml` to your site on GitHub.
-
-3.  In your newly created repo on GitHub:
-    - go to the `Settings` tab -> `Pages` -> `Build and deployment`, then select `Source`: `GitHub Actions`.
-    - if there were any failed Actions, go to the `Actions` tab and click on `Re-run jobs`.
-
-## Building and previewing your site locally
-
-Assuming [Jekyll] and [Bundler] are installed on your computer:
-
-1.  Change your working directory to the root directory of your site.
-
-2.  Run `bundle install`.
-
-3.  Run `bundle exec jekyll serve` to build your site and preview it at `localhost:4000`.
-
-    The built site is stored in the directory `_site`.
-
-## Publishing your built site on a different platform
-
-Just upload all the files in the directory `_site`.
-
-## Customization
-
-You're free to customize sites that you create with this template, however you like!
-
-[Browse our documentation][Just the Docs] to learn more about how to use this theme.
-
-## Hosting your docs from an existing project repo
-
-You might want to maintain your docs in an existing project repo. Instead of creating a new repo using the [just-the-docs template](https://github.com/just-the-docs/just-the-docs-template), you can copy the template files into your existing repo and configure the template's Github Actions workflow to build from a `docs` directory. You can clone the template to your local machine or download the `.zip` file to access the files.
-
-### Copy the template files
-
-1.  Create a `.github/workflows` directory at your project root if your repo doesn't already have one. Copy the `pages.yml` file into this directory. GitHub Actions searches this directory for workflow files.
-
-2.  Create a `docs` directory at your project root and copy all remaining template files into this directory.
-
-### Modify the GitHub Actions workflow
-
-The GitHub Actions workflow that builds and deploys your site to Github Pages is defined by the `pages.yml` file. You'll need to edit this file to that so that your build and deploy steps look to your `docs` directory, rather than the project root.
-
-1.  Set the default `working-directory` param for the build job.
-
-    ```yaml
-    build:
-      runs-on: ubuntu-latest
-      defaults:
-        run:
-          working-directory: docs
-    ```
-
-2.  Set the `working-directory` param for the Setup Ruby step.
-
-    ```yaml
-    - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.3'
-          bundler-cache: true
-          cache-version: 0
-          working-directory: '${{ github.workspace }}/docs'
-    ```
-
-3.  Set the path param for the Upload artifact step:
-
-    ```yaml
-    - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs/_site/
-    ```
-
-4.  Modify the trigger so that only changes within the `docs` directory start the workflow. Otherwise, every change to your project (even those that don't affect the docs) would trigger a new site build and deploy.
-
-    ```yaml
-    on:
-      push:
-        branches:
-          - "main"
-        paths:
-          - "docs/**"
-    ```
-
-## Licensing and Attribution
-
-This repository is licensed under the [MIT License]. You are generally free to reuse or extend upon this code as you see fit; just include the original copy of the license (which is preserved when you "make a template"). While it's not necessary, we'd love to hear from you if you do use this template, and how we can improve it for future use!
-
-The deployment GitHub Actions workflow is heavily based on GitHub's mixed-party [starter workflows]. A copy of their MIT License is available in [actions/starter-workflows].
-
-----
-
-[^1]: [It can take up to 10 minutes for changes to your site to publish after you push the changes to GitHub](https://docs.github.com/en/pages/setting-up-a-github-pages-site-with-jekyll/creating-a-github-pages-site-with-jekyll#creating-your-site).
-
-[Jekyll]: https://jekyllrb.com
-[Just the Docs]: https://just-the-docs.github.io/just-the-docs/
-[GitHub Pages]: https://docs.github.com/en/pages
-[GitHub Pages / Actions workflow]: https://github.blog/changelog/2022-07-27-github-pages-custom-github-actions-workflows-beta/
-[Bundler]: https://bundler.io
-[use this template]: https://github.com/just-the-docs/just-the-docs-template/generate
-[`jekyll-default-layout`]: https://github.com/benbalter/jekyll-default-layout
-[`jekyll-seo-tag`]: https://jekyll.github.io/jekyll-seo-tag
-[MIT License]: https://en.wikipedia.org/wiki/MIT_License
-[starter workflows]: https://github.com/actions/starter-workflows/blob/main/pages/jekyll.yml
-[actions/starter-workflows]: https://github.com/actions/starter-workflows/blob/main/LICENSE
+**마지막 업데이트**: 2024년 11월 11일

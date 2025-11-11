@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MASKIT - Auditor</title>
+    <link rel="stylesheet" href="./common-style.css">
+</head>
+<body>
+    <div class="navbar">
+        <h1>🔍 MASKIT - Auditor</h1>
+        <div class="user-info">
+            <span id="userName"></span>
+            <button onclick="logout()">로그아웃</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="menu">
+            <button class="active">대시보드</button>
+            <button onclick="location.href='./all-logs.html'"> 전체 로그</button>
+            <button onclick="location.href='./all-emails.html'"> 전체 메일</button>
+            <button onclick="location.href='./all-statistics.html'"> 전체 통계</button>
+            <button onclick="location.href='./policy-view.html'"> 정책 조회</button>
+            <button onclick="location.href='./entity-view.html'"> 엔티티 조회</button>
+        </div>
+        
+        <div class="info-box">
+            <h3>📌 Auditor 권한 안내</h3>
+            <p>모든 로그, 통계, 메일, 정책을 <strong>읽기 전용</strong>으로 조회할 수 있습니다.</p>
+            <p>시스템의 투명성과 사후 감독을 위한 역할입니다.</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>전체 메일</h3>
+                <div class="value" id="totalEmails">-</div>
+            </div>
+            <div class="stat-card pending">
+                <h3>승인 대기</h3>
+                <div class="value" id="pendingEmails">-</div>
+            </div>
+            <div class="stat-card approved">
+                <h3>승인 완료</h3>
+                <div class="value" id="approvedEmails">-</div>
+            </div>
+            <div class="stat-card rejected">
+                <h3>반려</h3>
+                <div class="value" id="rejectedEmails">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>전체 팀</h3>
+                <div class="value" id="totalTeams">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>전체 사용자</h3>
+                <div class="value" id="totalUsers">-</div>
+            </div>
+        </div>
+
+        <div class="recent-logs">
+            <h3>📋 최근 활동 로그</h3>
+            <div id="recentLogs" class="log-list">
+                <p>로그를 불러오는 중...</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
+        const token = localStorage.getItem('auth_token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+        // 링크를 common-style.css에서 인라인 스타일로 변경 (파일 없음)
+        if (!document.querySelector('link[href*="common-style"]')) {
+            const style = document.createElement('style');
+            style.innerHTML = `
+                .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+                .stat-card.pending .value { color: #ff9800; }
+                .stat-card.approved .value { color: #4caf50; }
+                .stat-card.rejected .value { color: #f44336; }
+                .log-item { padding: 1em; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 1em; }
+                .log-time { color: #667eea; font-weight: bold; }
+                .log-actor { color: #666; margin-left: 1em; }
+                .log-action { color: #999; margin-left: 1em; font-size: 0.9em; }
+            `;
+            document.head.appendChild(style);
+        }
+
+        if (!token || user.role !== 'auditor') {
+            window.location.href = '../index.html';
+        }
+
+        document.getElementById('userName').textContent = user.nickname || user.email;
+
+        function logout() {
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user');
+            window.location.href = 'login.html';
+        }
+        
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/dashboard/auditor/stats`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('totalEmails').textContent = data.total_emails;
+                    document.getElementById('pendingEmails').textContent = data.pending_emails;
+                    document.getElementById('approvedEmails').textContent = data.approved_emails;
+                    document.getElementById('rejectedEmails').textContent = data.rejected_emails;
+                    document.getElementById('totalTeams').textContent = data.total_teams;
+                    document.getElementById('totalUsers').textContent = data.total_users;
+                }
+            } catch (error) {
+                console.error('통계 로드 실패:', error);
+            }
+        }
+        
+        async function loadRecentLogs() {
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/logs/recent?limit=10`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const logs = await response.json();
+                    const logsContainer = document.getElementById('recentLogs');
+                    
+                    if (logs.length === 0) {
+                        logsContainer.innerHTML = '<p>최근 로그가 없습니다</p>';
+                        return;
+                    }
+                    
+                    logsContainer.innerHTML = logs.map(log => `
+                        <div class="log-item">
+                            <span class="log-time">${new Date(log.timestamp).toLocaleString('ko-KR')}</span>
+                            <span class="log-actor">${log.actor_email}</span>
+                            <span class="log-action">${log.action}</span>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('로그 로드 실패:', error);
+            }
+        }
+        
+        loadStats();
+        loadRecentLogs();
+    </script>
+</body>
+</html>

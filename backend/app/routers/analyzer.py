@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 from ..utils.recognizer_engine import recognize_pii_in_text
-from ..smtp.database import get_db
+from ..database.mongodb import get_db
 
 router = APIRouter()
 

@@ -74,7 +74,7 @@
         if (!token || !user) {
           // 토큰 없음 → 로그인 페이지로 이동
           console.log('No auth token found, redirecting to login');
-          window.location.href = 'smtp/login.html';
+          window.location.href = 'pages/login.html';
           return;
         }
 
@@ -90,19 +90,19 @@
 
         switch (role) {
           case 'root_admin':
-            dashboardPath = 'smtp/dashboard-admin.html';
+            dashboardPath = 'pages/dashboard-admin.html';
             break;
           case 'policy_admin':
-            dashboardPath = 'smtp/dashboard-policy.html';
+            dashboardPath = 'pages/dashboard-policy.html';
             break;
           case 'approver':
             dashboardPath = 'pages/approver-review.html';
             break;
           case 'auditor':
-            dashboardPath = 'smtp/dashboard-auditor.html';
+            dashboardPath = 'pages/dashboard-auditor.html';
             break;
           default:
-            dashboardPath = 'smtp/dashboard-user.html';
+            dashboardPath = 'pages/dashboard-user.html';
         }
 
         console.log(`User role: ${role}, redirecting to ${dashboardPath}`);
@@ -112,7 +112,7 @@
         console.error('App initialization error:', error);
         loader.innerHTML = '<div style="color: red; text-align: center;"><div>오류가 발생했습니다.</div><div style="font-size: 12px; margin-top: 10px;">다시 로그인해주세요.</div></div>';
         setTimeout(() => {
-          window.location.href = 'smtp/login.html';
+          window.location.href = 'pages/login.html';
         }, 2000);
       }
     }

@@ -1,13 +1,26 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.routers import uploads, process, ocr, analyzer, masking_pdf
-from app.smtp.routes import auth as smtp_auth, users as smtp_users, policy_management, entity_management, vectordb_management
-from app.smtp.database import connect_to_mongo, close_mongo_connection
-from app.smtp.smtp_handler import start_smtp_server
 from contextlib import asynccontextmanager
 import asyncio
 import os
+
+# DLP 라우터
+from app.routers import uploads, process, ocr, analyzer, masking_pdf
+
+# Auth 및 User 관리
+from app.auth import routes as auth_routes, users as user_routes
+
+# Policy, Entity, VectorDB 관리
+from app.policy import routes as policy_routes
+from app.entity import routes as entity_routes
+from app.vectordb import routes as vectordb_routes
+
+# SMTP 서버
+from app.smtp_server.handler import start_smtp_server
+
+# Database
+from app.database.mongodb import connect_to_mongo, close_mongo_connection
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -65,12 +78,14 @@ app.include_router(ocr.router, prefix="/api/v1/ocr", tags=["OCR"])
 app.include_router(analyzer.router, prefix="/api/v1/analyzer", tags=["Analyzer"])
 app.include_router(masking_pdf.router, prefix="/api/v1/process")
 
-# ===== SMTP 라우터들 =====
-app.include_router(smtp_auth.router, prefix="/api/v1/smtp", tags=["SMTP Auth"])
-app.include_router(smtp_users.router, prefix="/api/v1/smtp", tags=["SMTP Users"])
-app.include_router(policy_management.router, tags=["Policy Management"])
-app.include_router(entity_management.router, tags=["Entity Management"])
-app.include_router(vectordb_management.router, tags=["VectorDB Management"])
+# ===== Auth & User 라우터들 =====
+app.include_router(auth_routes.router, prefix="/api", tags=["Auth"])
+app.include_router(user_routes.router, prefix="/api", tags=["Users"])
+
+# ===== Policy, Entity, VectorDB 라우터들 =====
+app.include_router(policy_routes.router, tags=["Policy Management"])
+app.include_router(entity_routes.router, tags=["Entity Management"])
+app.include_router(vectordb_routes.router, tags=["VectorDB Management"])
 
 # RAG 라우터는 추후 추가 가능
 # from app.rag import rag_router

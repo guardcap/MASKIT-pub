@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MASKIT - System Admin</title>
+    <link rel="stylesheet" href="./common-style.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; }
+        
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1em 2em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .navbar h1 { font-size: 1.5em; }
+        .navbar button {
+            padding: 0.5em 1em;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .container { max-width: 1200px; margin: 2em auto; padding: 0 2em; }
+        
+        .menu {
+            display: flex;
+            gap: 1em;
+            margin-bottom: 2em;
+        }
+        .menu button {
+            padding: 0.8em 1.5em;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        .menu button.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .user-table {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        
+        table { width: 100%; border-collapse: collapse; }
+        thead { background: #f8f9fa; }
+        th {
+            padding: 1em;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        td {
+            padding: 1em;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: #f8f9fa; }
+        
+        .role-badge {
+            padding: 0.3em 0.8em;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        .role-root_admin { background: #e3f2fd; color: #1976d2; }
+        .role-auditor { background: #fff3e0; color: #f57c00; }
+        .role-policy_admin { background: #f3e5f5; color: #7b1fa2; }
+        .role-approver { background: #e8f5e9; color: #388e3c; }
+        .role-user { background: #e0e0e0; color: #616161; }
+        
+        .action-select {
+            padding: 0.5em;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-right: 0.5em;
+        }
+        
+        .btn-delete {
+            padding: 0.5em 1em;
+            background: #f44336;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        .btn-delete:hover { background: #d32f2f; }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3em;
+            color: #999;
+        }
+        
+        .role-description {
+            background: #e8eaf6;
+            border-left: 4px solid #667eea;
+            padding: 1em;
+            margin-bottom: 2em;
+            border-radius: 4px;
+        }
+        .role-description h3 {
+            color: #667eea;
+            margin-bottom: 0.5em;
+        }
+        .role-description ul {
+            margin-left: 1.5em;
+            color: #555;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="navbar">
+        <h1>🛡️ MASKIT - System Admin</h1>
+        <div class="user-info">
+            <span id="userName"></span>
+            <button onclick="logout()">로그아웃</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="menu">
+            <button onclick="location.href='dashboard-root.html'">대시보드</button>
+            <button class="active">사용자 계정 관리</button>
+            <button onclick="location.href='./team-management.html'">팀/조직도 관리</button>
+            <button onclick="location.href='./system-config.html'">시스템 설정 (LLM, API)</button>
+        </div>
+        
+        <div class="role-description">
+            <h3>📋 권한 설명</h3>
+            <ul>
+                <li><strong>ROOT 관리자:</strong> 시스템 설정, 팀/사용자 관리, 모든 권한</li>
+                <li><strong>감사자 (Auditor):</strong> 모든 로그, 통계, 설정 읽기 전용 (사후 감독)</li>
+                <li><strong>정책 관리자 (Policy Admin):</strong> 엔티티, 정책 CRUD, 통계/로그 읽기</li>
+                <li><strong>승인자 (Approver):</strong> 팀 소속 메일 승인/반려, 팀 통계/로그 읽기</li>
+                <li><strong>일반 사용자 (User):</strong> 메일 작성, 본인 통계/로그 읽기</li>
+            </ul>
+        </div>
+        
+        <div class="user-table">
+            <table id="userTable">
+                <thead>
+                    <tr>
+                        <th>이메일</th>
+                        <th>닉네임</th>
+                        <th>부서</th>
+                        <th>팀</th>
+                        <th>권한</th>
+                        <th>가입일</th>
+                        <th>관리</th>
+                    </tr>
+                </thead>
+                <tbody id="userTableBody">
+                    <tr>
+                        <td colspan="7" class="empty-state">사용자 목록을 불러오는 중...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://127.0.0.1:8001';
+        
+        let token, currentUser;
+        try {
+            token = window.localStorage.getItem('token');
+            const userStr = window.localStorage.getItem('user');
+            currentUser = userStr ? JSON.parse(userStr) : {};
+        } catch (e) {
+            console.error('localStorage 읽기 오류:', e);
+            currentUser = {};
+        }
+        
+        if (!token) {
+            alert('로그인이 필요합니다');
+            window.location.href = 'login.html';
+        }
+        
+        if (currentUser.role !== 'root_admin') {
+            alert('ROOT 관리자만 접근할 수 있습니다');
+            window.location.href = 'dashboard-admin.html';
+        }
+        
+        function logout() {
+            window.localStorage.removeItem('auth_token');
+            window.localStorage.removeItem('user');
+            window.location.href = 'login.html';
+        }
+        
+        async function loadUsers() {
+            const tbody = document.getElementById('userTableBody');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/users/`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const users = await response.json();
+                    
+                    if (users.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">등록된 사용자가 없습니다</td></tr>';
+                        return;
+                    }
+                    
+                    const roleNames = {
+                        'root_admin': 'ROOT 관리자',
+                        'auditor': '감사자',
+                        'policy_admin': '정책 관리자',
+                        'approver': '승인자',
+                        'user': '일반 사용자'
+                    };
+                    
+                    tbody.innerHTML = users.map(user => {
+                        const roleText = roleNames[user.role] || user.role;
+                        const date = new Date(user.created_at).toLocaleDateString('ko-KR');
+                        const isCurrentUser = user.email === currentUser.email;
+                        
+                        return `
+                            <tr>
+                                <td>${user.email}</td>
+                                <td>${user.nickname}</td>
+                                <td>${user.department || '-'}</td>
+                                <td>${user.team_name || '-'}</td>
+                                <td>
+                                    <span class="role-badge role-${user.role}">${roleText}</span>
+                                </td>
+                                <td>${date}</td>
+                                <td>
+                                    ${isCurrentUser ? '<span style="color:#999">본인</span>' : `
+                                        <select class="action-select" data-email="${user.email}" onchange="changeRole(event)">
+                                            <option value="">권한 변경</option>
+                                            <option value="root_admin">ROOT 관리자</option>
+                                            <option value="auditor">감사자</option>
+                                            <option value="policy_admin">정책 관리자</option>
+                                            <option value="approver">승인자</option>
+                                            <option value="user">일반 사용자</option>
+                                        </select>
+                                        <button class="btn-delete" onclick="deleteUser('${user.email}')">삭제</button>
+                                    `}
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">사용자 목록을 불러올 수 없습니다</td></tr>';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">오류가 발생했습니다</td></tr>';
+            }
+        }
+        
+        async function changeRole(event) {
+            const selectElement = event.target;
+            const newRole = selectElement.value;
+            const email = selectElement.getAttribute('data-email');
+
+            if (!newRole || !email) return;
+            
+            const roleNames = {
+                'root_admin': 'ROOT 관리자',
+                'auditor': '감사자',
+                'policy_admin': '정책 관리자',
+                'approver': '승인자',
+                'user': '일반 사용자'
+            };
+            
+            if (!confirm(`${email}의 권한을 "${roleNames[newRole]}"(으)로 변경하시겠습니까?`)) {
+                selectElement.value = '';
+                return;
+            }
+            
+            try {
+                const encodedEmail = encodeURIComponent(email);
+                const url = `${API_BASE}/api/v1/users/${encodedEmail}/role?role=${encodeURIComponent(newRole)}`;
+                
+                const response = await fetch(url, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    alert('권한이 변경되었습니다');
+                    await loadUsers();
+                } else {
+                    const data = await response.json();
+                    alert('권한 변경 실패: ' + (data.detail || '오류가 발생했습니다'));
+                }
+            } catch (error) {
+                alert('오류가 발생했습니다: ' + error.message);
+            } finally {
+                selectElement.value = '';
+            }
+        }
+        
+        async function deleteUser(email) {
+            if (!confirm(`${email} 사용자를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) {
+                return;
+            }
+            
+            try {
+                const encodedEmail = encodeURIComponent(email);
+                const response = await fetch(`${API_BASE}/api/v1/users/${encodedEmail}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    alert('사용자가 삭제되었습니다');
+                    await loadUsers();
+                } else {
+                    const data = await response.json();
+                    alert('삭제 실패: ' + (data.detail || '오류가 발생했습니다'));
+                }
+            } catch (error) {
+                alert('오류가 발생했습니다: ' + error.message);
+            }
+        }
+        
+        loadUsers();
+    </script>
+</body>
+</html>

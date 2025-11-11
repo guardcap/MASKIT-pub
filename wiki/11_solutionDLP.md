@@ -1,7 +1,7 @@
 ---
 layout: default
 title: 사내 DLP 솔루션으로서의 활용도
-nav_order: 11
+nav_order: 12
 ---
 
 # 권한 분리 

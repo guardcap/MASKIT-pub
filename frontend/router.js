@@ -21,7 +21,7 @@ function ensureAuthBeforeNavigation() {
 
   if (!token || !user) {
     console.log('No auth token found, redirecting to login');
-    window.location.href = 'smtp/login.html';
+    window.location.href = 'pages/login.html';
     return false;
   }
 
@@ -229,7 +229,7 @@ function isCurrentPage(pageName) {
 function logoutCurrentUser() {
   localStorage.removeItem('auth_token');
   localStorage.removeItem('user');
-  window.location.href = 'smtp/login.html';
+  window.location.href = 'pages/login.html';
 }
 
 /**

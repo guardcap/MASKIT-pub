@@ -10,7 +10,7 @@ from ..routers.uploads import get_files, UPLOAD_DIR
 from ..routers.ocr_needed import check_ocr_needed, PreflightCheckRequest
 from ..routers.ocr import extract_ocr
 from ..utils.recognizer_engine import recognize_pii_in_text
-from ..smtp.database import get_db
+from ..database.mongodb import get_db
 
 import smtplib
 from email.mime.multipart import MIMEMultipart

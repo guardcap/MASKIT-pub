@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MASKIT - 로그인</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .container {
+            background: white;
+            padding: 3em;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 420px;
+        }
+        
+        .logo {
+            text-align: center;
+            margin-bottom: 2em;
+        }
+        
+        .logo h1 {
+            color: #667eea;
+            font-size: 2em;
+            margin-bottom: 0.3em;
+        }
+        
+        .logo p {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5em;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 0.5em;
+            color: #333;
+            font-weight: 600;
+            font-size: 0.95em;
+        }
+        
+        input {
+            width: 100%;
+            padding: 0.9em;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        button {
+            width: 100%;
+            padding: 1em;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .message {
+            margin-top: 1em;
+            padding: 0.8em;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 0.9em;
+            display: none;
+        }
+        
+        .message.error {
+            background: #fee;
+            color: #c33;
+            display: block;
+        }
+        
+        .message.success {
+            background: #efe;
+            color: #3c3;
+            display: block;
+        }
+        
+        .register-link {
+            text-align: center;
+            margin-top: 1.5em;
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .register-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .register-link a:hover {
+            text-decoration: underline;
+        }
+
+        .test-btn {
+            padding: 1em;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .test-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+        }
+
+        .test-btn:active {
+            transform: translateY(0);
+        }
+
+        .test-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>🛡️ MASKIT</h1>
+        </div>
+        
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="email">이메일</label>
+                <input type="email" id="email" name="email" required placeholder="your@email.com">
+            </div>
+            
+            <div class="form-group">
+                <label for="password">비밀번호</label>
+                <input type="password" id="password" name="password" required placeholder="••••••••">
+            </div>
+            
+            <button type="submit" id="loginBtn">로그인</button>
+        </form>
+        
+        <div id="message" class="message"></div>
+        
+        <div class="register-link">
+            계정이 없으신가요? <a href="register.html">회원가입</a><br>
+            <small><a href="../index.html" style="color: #999; font-size: 0.8em;">돌아가기</a></small>
+        </div>
+
+        <!-- 테스트 계정 빠른 로그인 -->
+        <div style="margin-top: 2.5em; padding-top: 2em; border-top: 2px solid #e0e0e0;">
+            <p style="color: #999; font-size: 0.85em; text-align: center; margin-bottom: 1em;">테스트 계정 (개발용)</p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.8em;">
+                <button type="button" class="test-btn" onclick="quickLogin('admin@test.com', 'admin123')" style="background: #667eea; color: white;">
+                    <div style="font-size: 0.9em; font-weight: 600;">시스템관리자</div>
+                    <div style="font-size: 0.75em; opacity: 0.9;">admin@test.com</div>
+                </button>
+                <button type="button" class="test-btn" onclick="quickLogin('policy@test.com', 'policy123')" style="background: #42a5f5; color: white;">
+                    <div style="font-size: 0.9em; font-weight: 600;">정책관리자</div>
+                    <div style="font-size: 0.75em; opacity: 0.9;">policy@test.com</div>
+                </button>
+                <button type="button" class="test-btn" onclick="quickLogin('approver@test.com', 'approver123')" style="background: #764ba2; color: white;">
+                    <div style="font-size: 0.9em; font-weight: 600;">승인자</div>
+                    <div style="font-size: 0.75em; opacity: 0.9;">approver@test.com</div>
+                </button>
+                <button type="button" class="test-btn" onclick="quickLogin('auditor@test.com', 'auditor123')" style="background: #f093fb; color: white;">
+                    <div style="font-size: 0.9em; font-weight: 600;">감사자</div>
+                    <div style="font-size: 0.75em; opacity: 0.9;">auditor@test.com</div>
+                </button>
+                <button type="button" class="test-btn" onclick="quickLogin('user@test.com', 'user123')" style="background: #4facfe; color: white;">
+                    <div style="font-size: 0.9em; font-weight: 600;">일반사용자</div>
+                    <div style="font-size: 0.75em; opacity: 0.9;">user@test.com</div>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // API 기본 URL (환경 변수에서 가져오기)
+        const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
+
+        /**
+         * 빠른 로그인 함수 (테스트 계정)
+         */
+        function quickLogin(email, password) {
+            document.getElementById('email').value = email;
+            document.getElementById('password').value = password;
+
+            // 폼 제출
+            document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const messageDiv = document.getElementById('message');
+            const loginBtn = document.getElementById('loginBtn');
+
+            // 버튼 비활성화
+            loginBtn.disabled = true;
+            loginBtn.textContent = '로그인 중...';
+            messageDiv.className = 'message';
+            messageDiv.style.display = 'none';
+
+            try {
+                console.log('로그인 요청 시작:', email);
+
+                const response = await fetch(`${API_BASE_URL}/api/./auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                console.log('응답 상태:', response.status);
+                const data = await response.json();
+                console.log('응답 데이터:', data);
+
+                if (response.ok) {
+                    // 토큰과 사용자 정보 저장 (auth_token 키 사용)
+                    localStorage.setItem('auth_token', data.access_token);
+
+                    // user 객체 확인 및 저장
+                    if (data.user) {
+                        localStorage.setItem('user', JSON.stringify(data.user));
+                        console.log('저장된 사용자 정보:', data.user);
+                    } else {
+                        console.error('user 정보가 응답에 없습니다:', data);
+                    }
+
+                    messageDiv.className = 'message success';
+                    messageDiv.textContent = '로그인 성공! 이동 중...';
+                    messageDiv.style.display = 'block';
+
+                    // 메인 페이지로 리다이렉트 (인덱스 페이지가 역할에 따라 라우팅함)
+                    setTimeout(() => {
+                        window.location.href = '../index.html';
+                    }, 1000);
+                } else {
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = data.detail || '로그인에 실패했습니다';
+                    messageDiv.style.display = 'block';
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = '로그인';
+                }
+            } catch (error) {
+                console.error('로그인 오류:', error);
+                messageDiv.className = 'message error';
+                messageDiv.textContent = '서버 연결에 실패했습니다';
+                messageDiv.style.display = 'block';
+                loginBtn.disabled = false;
+                loginBtn.textContent = '로그인';
+            }
+        });
+    </script>
+</body>
+</html>
