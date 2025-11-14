@@ -1,0 +1,133 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PII Analysis Request",
+  "description": "VectorDB 검색 및 LLM 마스킹 결정을 위한 입력 데이터",
+  "type": "object",
+  "required": ["email_id", "detected_pii", "context", "metadata"],
+  "properties": {
+    "email_id": {
+      "type": "string",
+      "description": "이메일 고유 식별자"
+    },
+    "email_subject": {
+      "type": "string",
+      "description": "이메일 제목"
+    },
+    "email_body_preview": {
+      "type": "string",
+      "description": "이메일 본문 미리보기 (최대 500자)",
+      "maxLength": 500
+    },
+    "detected_pii": {
+      "type": "array",
+      "description": "자동 탐지된 개인정보 목록",
+      "items": {
+        "$ref": "#/definitions/PIIItem"
+      }
+    },
+    "context": {
+      "$ref": "#/definitions/EmailContext"
+    },
+    "metadata": {
+      "$ref": "#/definitions/EmailMetadata"
+    }
+  },
+  "definitions": {
+    "PIIItem": {
+      "type": "object",
+      "required": ["pii_id", "type", "value", "position"],
+      "properties": {
+        "pii_id": {
+          "type": "string",
+          "description": "PII 고유 식별자 (예: pii_0, pii_1)"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["email", "phone", "jumin", "account", "passport", "driver_license", "credit_card", "address", "name"],
+          "description": "개인정보 유형"
+        },
+        "value": {
+          "type": "string",
+          "description": "탐지된 원본 값"
+        },
+        "position": {
+          "type": "object",
+          "description": "이메일 본문 내 위치 정보",
+          "properties": {
+            "start": {"type": "integer"},
+            "end": {"type": "integer"}
+          }
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "탐지 신뢰도 (0~1)"
+        }
+      }
+    },
+    "EmailContext": {
+      "type": "object",
+      "required": ["sender_type", "receiver_type"],
+      "properties": {
+        "sender_type": {
+          "type": "string",
+          "enum": ["internal", "external", "partner"],
+          "description": "발신자 유형"
+        },
+        "receiver_type": {
+          "type": "string",
+          "enum": ["internal", "external", "partner"],
+          "description": "수신자 유형"
+        },
+        "purpose": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["contract", "marketing", "hr", "finance", "legal", "customer_service", "technical_support", "general"]
+          },
+          "description": "이메일 목적 (다중 선택 가능)"
+        },
+        "department": {
+          "type": "string",
+          "description": "발신 부서"
+        },
+        "regulations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["GDPR", "PIPA", "HIPAA", "PCI-DSS", "내부규정"]
+          },
+          "description": "적용 규정"
+        }
+      }
+    },
+    "EmailMetadata": {
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "이메일 작성 시각 (ISO 8601)"
+        },
+        "has_attachments": {
+          "type": "boolean",
+          "description": "첨부파일 존재 여부"
+        },
+        "attachment_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "첨부파일 개수"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "작성자 사용자 ID"
+        },
+        "ip_address": {
+          "type": "string",
+          "description": "작성자 IP 주소"
+        }
+      }
+    }
+  }
+}

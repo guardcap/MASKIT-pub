@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LLM Prompt Template",
+  "description": "LLM에게 마스킹 결정을 요청할 때 사용하는 프롬프트 템플릿",
+  "type": "object",
+  "required": ["system_prompt", "user_prompt_template", "output_format"],
+  "properties": {
+    "system_prompt": {
+      "type": "string",
+      "description": "시스템 프롬프트 (LLM의 역할 정의)",
+      "default": "You are an expert data privacy compliance assistant. Your task is to analyze emails containing personally identifiable information (PII) and determine appropriate masking strategies based on relevant data protection guidelines, regulations, and company policies.\n\nYou must:\n1. Carefully review the detected PII items\n2. Consider the email context (sender/receiver type, purpose, etc.)\n3. Reference the relevant guidelines provided from the vector database\n4. Make informed decisions about whether each PII should be masked\n5. Specify the appropriate masking method for each PII\n6. Provide clear reasoning for each decision\n\nAlways prioritize data protection and err on the side of caution when uncertain."
+    },
+    "user_prompt_template": {
+      "type": "string",
+      "description": "사용자 프롬프트 템플릿 (변수: {email_subject}, {email_body_preview}, {detected_pii}, {context}, {guidelines})",
+      "default": "# Email Analysis Request\n\n## Email Information\n- **Subject**: {email_subject}\n- **Body Preview**: {email_body_preview}\n\n## Email Context\n- **Sender Type**: {sender_type}\n- **Receiver Type**: {receiver_type}\n- **Purpose**: {purpose}\n- **Applicable Regulations**: {regulations}\n\n## Detected PII\n{detected_pii}\n\n## Relevant Guidelines from VectorDB\n{guidelines}\n\n## Task\nFor each detected PII item, decide:\n1. **should_mask**: Whether masking is required (true/false)\n2. **masking_method**: How to mask (full/partial/hash/none/redact)\n3. **reason**: Clear explanation referencing specific guidelines\n4. **risk_level**: Risk if not masked (critical/high/medium/low)\n5. **confidence**: Your confidence in this decision (0-1)\n\nProvide your response in the following JSON format:\n```json\n{output_format}\n```"
+    },
+    "output_format": {
+      "type": "object",
+      "description": "LLM 응답 형식",
+      "properties": {
+        "decisions": {
+          "type": "object",
+          "description": "PII별 결정 (키: pii_id)",
+          "example": {
+            "pii_0": {
+              "pii_id": "pii_0",
+              "type": "email",
+              "value": "hong@customer.com",
+              "should_mask": true,
+              "masking_method": "partial",
+              "masked_value": "ho***@customer.com",
+              "reason": "외부 고객 이메일을 외부로 전송하는 경우, PIPA 제17조에 따라 최소한의 개인정보만 제공해야 하므로 부분 마스킹 권장",
+              "confidence": 0.95,
+              "guideline_ids": ["GUIDE_PIPA_017"],
+              "risk_level": "medium"
+            }
+          }
+        },
+        "summary": {
+          "type": "string",
+          "example": "외부 전송으로 분류되어, 4개 개인정보 중 3개를 마스킹하도록 권장합니다. 주민등록번호와 계좌번호는 필수 마스킹, 이메일은 부분 마스킹 권장합니다."
+        }
+      }
+    },
+    "few_shot_examples": {
+      "type": "array",
+      "description": "Few-shot learning을 위한 예제",
+      "items": {
+        "type": "object",
+        "properties": {
+          "input": {"type": "object"},
+          "output": {"type": "object"}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Guideline Schema",
+  "description": "VectorDB에 저장되는 가이드라인(법령/규정) 스키마",
+  "type": "object",
+  "required": ["guide_id", "scenario", "actionable_directive", "source_document"],
+  "properties": {
+    "guide_id": {
+      "type": "string",
+      "description": "가이드라인 고유 식별자",
+      "pattern": "^GUIDE_[A-Z0-9_]+$"
+    },
+    "scenario": {
+      "type": "string",
+      "description": "적용 시나리오 (언제 이 가이드라인을 적용하는가)",
+      "minLength": 10
+    },
+    "actionable_directive": {
+      "type": "string",
+      "description": "실행 가능한 지시문 (무엇을 해야 하는가)",
+      "minLength": 10
+    },
+    "source_document": {
+      "type": "string",
+      "description": "출처 문서명 (예: 개인정보보호법, GDPR, 사내규정)"
+    },
+    "source_authority": {
+      "type": "string",
+      "description": "발행 기관 (예: 개인정보보호위원회, EU, 회사)"
+    },
+    "article_number": {
+      "type": "string",
+      "description": "조문 번호 (해당되는 경우)"
+    },
+    "effective_date": {
+      "type": "string",
+      "format": "date",
+      "description": "시행일 (YYYY-MM-DD)"
+    },
+    "revised_at": {
+      "type": "string",
+      "format": "date",
+      "description": "개정일 (YYYY-MM-DD)"
+    },
+    "keywords": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "검색용 키워드"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["internal", "external", "email", "phone", "jumin", "account", "marketing", "contract", "hr", "finance", "critical", "high", "medium", "low"]
+      },
+      "description": "분류 태그"
+    },
+    "pii_types": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["email", "phone", "jumin", "account", "passport", "driver_license", "credit_card", "address", "name", "all"]
+      },
+      "description": "적용되는 개인정보 유형"
+    },
+    "masking_recommendation": {
+      "type": "string",
+      "enum": ["required", "recommended", "optional", "prohibited"],
+      "description": "마스킹 권장 수준"
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low"],
+      "description": "위반 시 위험도"
+    },
+    "penalty": {
+      "type": "string",
+      "description": "위반 시 처벌/제재 내용"
+    },
+    "examples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "case": {"type": "string"},
+          "decision": {"type": "string"}
+        }
+      },
+      "description": "적용 사례"
+    },
+    "related_guide_ids": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "연관된 가이드라인 ID 목록"
+    },
+    "confidence_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "가이드라인 신뢰도 (0~1)"
+    },
+    "reviewed": {
+      "type": "boolean",
+      "description": "검토 완료 여부"
+    },
+    "review_date": {
+      "type": "string",
+      "format": "date",
+      "description": "검토 일자"
+    },
+    "reviewer": {
+      "type": "string",
+      "description": "검토자"
+    }
+  }
+}

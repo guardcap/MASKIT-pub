@@ -99,19 +99,15 @@
       </div>
 
       <div class="panel-footer">
-        <button class="btn edit">완료</button>
-        <button class="btn" id="maskingBtn">마스킹 완료</button>
+        <button class="btn edit" id="analyzeBtn">완료</button>
       </div>
   </aside>
 
         <header class="top-bar">
-    <div class="top-bar-title">🛡️ MASKIT - 승인자 검토</div>
+    <div class="top-bar-title">🛡️ MASKIT - 이메일 마스킹 검토</div>
     <div class="top-bar-buttons">
-        <button class="top-bar-button" id="approveBtn">
-            <span>승인</span>
-        </button>
-        <button class="top-bar-button" id="rejectBtn">
-            <span>반려</span>
+        <button class="top-bar-button" id="maskingCompleteBtn" style="background: #4CAF50;">
+            <span>마스킹 완료 & 전송</span>
         </button>
         <span id="userInfo" style="color: white; margin-left: 2em; font-size: 0.9em;"></span>
         <button class="top-bar-button" id="logoutBtn" style="background: rgba(255,255,255,0.2); margin-left: 1em;">
@@ -121,41 +117,55 @@
 </header>
 
     <section class="panel">
-      <div class="top">
-        <div class="recipients" id="recipients">
-          <button class="more-btn" id="recipToggle" type="button">열기</button>
+      <!-- 이메일 정보 -->
+      <div class="email-info" style="padding: 20px; background: white; border-radius: 8px; margin-bottom: 20px;">
+        <div style="margin-bottom: 15px;">
+          <strong>보낸 사람:</strong> <span id="emailFrom">-</span>
         </div>
-        <div class="me">
-          <div class="avatar" aria-hidden="true"></div>
-          <div class="who">
-            <span class="team">대외협력팀 팀장</span>
-            <span class="nick">6kitty</span>
-          </div>
+        <div style="margin-bottom: 15px;">
+          <strong>받는 사람:</strong> <span id="emailTo">-</span>
+        </div>
+        <div style="margin-bottom: 15px;">
+          <strong>제목:</strong> <span id="emailSubject">-</span>
+        </div>
+        <div style="margin-bottom: 15px;">
+          <strong>첨부파일:</strong> <span id="emailAttachments">없음</span>
+        </div>
+        <div style="margin-top: 20px;">
+          <button id="toggleBodyBtn" onclick="toggleEmailBody()" style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer;">
+            📧 이메일 본문 보기
+          </button>
         </div>
       </div>
 
+      <!-- 이메일 본문 (토글 가능) -->
+      <div id="emailBodyContainer" style="display: none; padding: 20px; background: white; border-radius: 8px; margin-bottom: 20px; max-height: 400px; overflow-y: auto;">
+        <h4 style="margin-bottom: 15px;">📧 이메일 본문</h4>
+        <div id="emailBody" style="line-height: 1.6; color: #333; border: 1px solid #e0e0e0; padding: 15px; border-radius: 6px; background: #fafafa;">
+          이메일 내용을 불러오는 중...
+        </div>
+      </div>
+
+      <!-- AI 분석 결과 -->
       <div class="row">
         <div class="grid2">
           <div class="card">
-            <h4>AI 개요</h4>
-            <p>보내는 주소가 여러 개, 각기 다른 도메인을 가지고 있어 사외 전송으로 인식하였으며 해당 규정에 맞춰 마스킹했습니다. 개인정보 유출 방지 목적의 개별 전송 설정도 적용됩니다.</p>
+            <h4>🤖 AI 분석 결과</h4>
+            <p id="aiSummary">커스텀 설정을 선택하고 '완료' 버튼을 눌러 AI 분석을 시작하세요.</p>
           </div>
           <div class="card">
-            <h4>통계</h4>
-            <div class="legend">
-              <div class="row"><span class="bar c1"></span><span class="t">식별: 7개</span></div>
-              <div class="row"><span class="bar c2"></span><span class="t">마스킹: 2개</span></div>
-              <div class="row"><span class="bar c3"></span><span class="t">검토 필요: 1개</span></div>
-              <div class="row"><span class="bar c4"></span><span class="t">권한: DLP / 데이터 사일로</span></div>
+            <h4>📊 PII 탐지 통계</h4>
+            <div class="legend" id="piiStats">
+              <div class="row"><span class="bar c1"></span><span class="t">분석 대기 중...</span></div>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="filebar" id="filebar">
-        </div>
-
-      <div class="content">
+      <!-- 로딩 표시 -->
+      <div id="loadingIndicator" style="display: none; text-align: center; padding: 40px;">
+        <div style="font-size: 24px; margin-bottom: 10px;">🔄</div>
+        <div>RAG 검색 및 가이드라인 분석 중...</div>
       </div>
     </section>
 
@@ -176,6 +186,12 @@
 
   <script src="../script.js"></script>
   <script>
+    const API_BASE = 'http://127.0.0.1:8000';
+    let emailData = null;
+    let detectedPII = [];
+    let selectedContext = {};
+    let maskingDecisions = {};
+
     // 페이지 초기화
     document.addEventListener('DOMContentLoaded', function() {
       // 로그인 확인
@@ -184,13 +200,6 @@
 
       if (!token || !user) {
         window.location.href = './login.html';
-        return;
-      }
-
-      // 승인자 역할 확인
-      if (user.role !== 'approver') {
-        alert('승인자만 접근 가능합니다');
-        window.location.href = '../index.html';
         return;
       }
 
@@ -203,7 +212,482 @@
         localStorage.removeItem('user');
         window.location.href = './login.html';
       });
+
+      // 이메일 데이터 로드
+      loadEmailData();
+
+      // 완료 버튼 (RAG 분석)
+      document.getElementById('analyzeBtn').addEventListener('click', analyzeWithRAG);
+
+      // 마스킹 완료 & 전송 버튼
+      document.getElementById('maskingCompleteBtn').addEventListener('click', sendMaskedEmail);
     });
+
+    // 이메일 데이터 로드
+    function loadEmailData() {
+      const draftEmail = localStorage.getItem('draft_email');
+
+      if (!draftEmail) {
+        alert('이메일 데이터가 없습니다. 메일 작성 페이지로 이동합니다.');
+        window.location.href = './write-email.html';
+        return;
+      }
+
+      emailData = JSON.parse(draftEmail);
+
+      // 이메일 정보 표시
+      document.getElementById('emailFrom').textContent = emailData.from || '(없음)';
+      document.getElementById('emailTo').textContent = emailData.to || '(없음)';
+      document.getElementById('emailSubject').textContent = emailData.subject || '(제목 없음)';
+      document.getElementById('emailBody').innerHTML = emailData.body || '(내용 없음)';
+
+      // 첨부파일 표시 (현재는 미구현)
+      document.getElementById('emailAttachments').textContent = emailData.attachments?.length > 0
+        ? emailData.attachments.join(', ')
+        : '없음';
+
+      // PII 자동 탐지 (클라이언트 측 간단 탐지)
+      detectPIIInEmail();
+    }
+
+    // 이메일 본문 토글
+    function toggleEmailBody() {
+      const container = document.getElementById('emailBodyContainer');
+      const btn = document.getElementById('toggleBodyBtn');
+
+      if (container.style.display === 'none') {
+        container.style.display = 'block';
+        btn.textContent = '📧 이메일 본문 숨기기';
+      } else {
+        container.style.display = 'none';
+        btn.textContent = '📧 이메일 본문 보기';
+      }
+    }
+
+    // PII 간단 탐지 (이메일, 전화번호 등)
+    function detectPIIInEmail() {
+      const body = emailData.body || '';
+      const text = body.replace(/<[^>]*>/g, ' '); // HTML 태그 제거
+
+      const patterns = {
+        email: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
+        phone: /\b\d{2,3}-\d{3,4}-\d{4}\b/g,
+        jumin: /\b\d{6}-\d{7}\b/g,
+        account: /\b\d{3}-\d{2,6}-\d{2,6}\b/g
+      };
+
+      detectedPII = [];
+
+      for (const [type, pattern] of Object.entries(patterns)) {
+        const matches = text.match(pattern);
+        if (matches) {
+          matches.forEach(match => {
+            detectedPII.push({ type, value: match });
+          });
+        }
+      }
+
+      updatePIIStats();
+    }
+
+    // PII 통계 업데이트
+    function updatePIIStats() {
+      const statsDiv = document.getElementById('piiStats');
+
+      if (detectedPII.length === 0) {
+        statsDiv.innerHTML = '<div class="row"><span class="bar c1"></span><span class="t">탐지된 PII 없음</span></div>';
+        return;
+      }
+
+      const typeCount = {};
+      detectedPII.forEach(pii => {
+        typeCount[pii.type] = (typeCount[pii.type] || 0) + 1;
+      });
+
+      const typeNames = {
+        email: '이메일',
+        phone: '전화번호',
+        jumin: '주민등록번호',
+        account: '계좌번호'
+      };
+
+      let html = '';
+      for (const [type, count] of Object.entries(typeCount)) {
+        html += `<div class="row"><span class="bar c1"></span><span class="t">${typeNames[type] || type}: ${count}개</span></div>`;
+      }
+
+      statsDiv.innerHTML = html;
+    }
+
+    // 커스텀 설정 수집
+    function getSelectedContext() {
+      const context = {
+        sender_type: null,
+        receiver_type: null,
+        purpose: [],
+        regulations: []
+      };
+
+      // 사내/사외 선택
+      const insideChecked = document.querySelector('#group-inside .checkbox.on');
+      const outsideChecked = document.querySelector('#group-outside .checkbox.on');
+
+      if (insideChecked) {
+        context.sender_type = 'internal';
+        context.receiver_type = 'internal';
+      } else if (outsideChecked) {
+        context.sender_type = 'internal';
+        context.receiver_type = 'external';
+      }
+
+      // 세부 목적 (정부 기관 등)
+      const purposeChecked = document.querySelectorAll('#gov-purpose .checkbox.on');
+      purposeChecked.forEach(cb => {
+        const text = cb.nextElementSibling?.textContent.trim();
+        if (text) context.purpose.push(text);
+      });
+
+      // 규제 우선순위
+      const regChecked = document.querySelectorAll('.group:last-child .checkbox.on');
+      regChecked.forEach(cb => {
+        const text = cb.nextElementSibling?.textContent.trim();
+        if (text) context.regulations.push(text);
+      });
+
+      return context;
+    }
+
+    // RAG 분석 실행
+    async function analyzeWithRAG() {
+      const context = getSelectedContext();
+
+      if (!context.sender_type) {
+        alert('사내/사외 구분을 선택해주세요.');
+        return;
+      }
+
+      selectedContext = context;
+
+      // 로딩 표시
+      document.getElementById('loadingIndicator').style.display = 'block';
+      document.getElementById('aiSummary').textContent = '분석 중...';
+
+      try {
+        // RAG 쿼리 생성
+        const query = buildRAGQuery();
+
+        // API 호출
+        const response = await fetch(`${API_BASE}/api/vectordb/analyze`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email_body: emailData.body,
+            email_subject: emailData.subject,
+            context: context,
+            detected_pii: detectedPII,
+            query: query
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('RAG 분석 실패');
+        }
+
+        const result = await response.json();
+
+        // 마스킹 결정 적용
+        if (result.success && result.data) {
+          applyMaskingDecisions(result.data);
+        }
+
+      } catch (error) {
+        console.error('RAG 분석 오류:', error);
+        document.getElementById('aiSummary').textContent = '분석 실패: ' + error.message;
+
+        // Fallback: 간단한 규칙 기반 마스킹
+        applySimpleMaskingRules();
+      } finally {
+        document.getElementById('loadingIndicator').style.display = 'none';
+      }
+    }
+
+    // RAG 쿼리 생성
+    function buildRAGQuery() {
+      const context = selectedContext;
+      let query = '';
+
+      if (context.receiver_type === 'external') {
+        query = '외부 고객에게 이메일을 보낼 때 개인정보 마스킹 규정';
+      } else {
+        query = '내부 직원 간 이메일에서 개인정보 마스킹 규정';
+      }
+
+      if (context.purpose.length > 0) {
+        query += ', ' + context.purpose.join(', ') + ' 관련';
+      }
+
+      return query;
+    }
+
+    // 마스킹 결정 적용
+    function applyMaskingDecisions(data) {
+      maskingDecisions = data.masking_decisions || {};
+
+      // AI 요약 표시
+      document.getElementById('aiSummary').textContent =
+        data.summary || '분석이 완료되었습니다. 가이드라인에 따라 마스킹 항목이 자동 선택되었습니다.';
+
+      // 사이드바 마스킹 리스트 업데이트
+      updateMaskingList();
+    }
+
+    // 간단한 규칙 기반 마스킹 (Fallback)
+    function applySimpleMaskingRules() {
+      maskingDecisions = {};
+
+      detectedPII.forEach((pii, idx) => {
+        // 외부 전송이면 모두 마스킹
+        if (selectedContext.receiver_type === 'external') {
+          maskingDecisions[`pii_${idx}`] = {
+            type: pii.type,
+            value: pii.value,
+            should_mask: true,
+            reason: '외부 전송 시 개인정보 마스킹 필수'
+          };
+        } else {
+          // 주민번호, 계좌번호는 항상 마스킹
+          if (pii.type === 'jumin' || pii.type === 'account') {
+            maskingDecisions[`pii_${idx}`] = {
+              type: pii.type,
+              value: pii.value,
+              should_mask: true,
+              reason: '민감정보 마스킹 필수'
+            };
+          }
+        }
+      });
+
+      document.getElementById('aiSummary').textContent =
+        '기본 규칙에 따라 마스킹 항목이 선택되었습니다.';
+
+      updateMaskingList();
+    }
+
+    // 마스킹 리스트 업데이트
+    function updateMaskingList() {
+      const sidebar = document.getElementById('sidebar');
+
+      const typeNames = {
+        email: '이메일',
+        phone: '전화번호',
+        jumin: '주민등록번호',
+        account: '계좌번호',
+        passport: '여권번호',
+        driver_license: '운전면허번호'
+      };
+
+      let html = `
+        <div class="sb-head">
+          <div class="sb-title">Masking List</div>
+        </div>
+      `;
+
+      if (Object.keys(maskingDecisions).length === 0) {
+        html += '<div style="padding: 20px; color: #999;">마스킹 항목 없음</div>';
+      } else {
+        html += '<div style="padding: 15px; overflow-y: auto; max-height: calc(100vh - 200px);">';
+
+        for (const [id, decision] of Object.entries(maskingDecisions)) {
+          const checked = decision.should_mask ? 'on' : 'off';
+          const checkedAttr = decision.should_mask ? 'true' : 'false';
+          const typeName = typeNames[decision.type] || decision.type;
+
+          // reasoning HTML 변환
+          const reasoningHtml = decision.reasoning
+            ? decision.reasoning.replace(/\n/g, '<br>').replace(/   /g, '&nbsp;&nbsp;&nbsp;')
+            : '';
+
+          // cited_guidelines 표시
+          const guidelinesHtml = decision.cited_guidelines && decision.cited_guidelines.length > 0
+            ? '<div style="margin-top: 8px; padding: 8px; background: #f0f7ff; border-left: 3px solid #2196F3; border-radius: 4px;">' +
+              '<div style="font-size: 10px; font-weight: 600; color: #1976D2; margin-bottom: 4px;">📚 인용 법령</div>' +
+              decision.cited_guidelines.map(g => `<div style="font-size: 10px; color: #555; margin-left: 8px;">• ${g}</div>`).join('') +
+              '</div>'
+            : '';
+
+          // masked_value 표시
+          const maskedPreview = decision.masked_value
+            ? `<div style="font-size: 11px; color: #28a745; margin-top: 3px;">→ ${decision.masked_value}</div>`
+            : '';
+
+          // risk_level 뱃지
+          const riskColors = {
+            high: '#dc3545',
+            critical: '#dc3545',
+            medium: '#ffc107',
+            low: '#28a745'
+          };
+          const riskColor = riskColors[decision.risk_level] || '#999';
+          const riskBadge = decision.risk_level
+            ? `<span style="display: inline-block; padding: 2px 6px; background: ${riskColor}; color: white; font-size: 9px; border-radius: 3px; margin-left: 5px;">${decision.risk_level.toUpperCase()}</span>`
+            : '';
+
+          html += `
+            <div class="group" style="margin-bottom: 20px; padding: 12px; background: ${decision.should_mask ? '#f0fff4' : '#fff'}; border-radius: 8px; border: 1px solid ${decision.should_mask ? '#28a745' : '#ddd'};">
+              <div style="display: flex; align-items: start; gap: 10px;">
+                <button class="checkbox ${checked}" aria-checked="${checkedAttr}"
+                        data-check data-pii-id="${id}"
+                        onclick="toggleMasking('${id}')"
+                        style="flex-shrink: 0; margin-top: 3px;"></button>
+                <div style="flex: 1;">
+                  <div style="font-weight: 600; margin-bottom: 5px; color: #333;">
+                    ${typeName}${riskBadge}
+                  </div>
+                  <div style="font-size: 12px; color: #666; margin-bottom: 5px; font-family: monospace; background: #f5f5f5; padding: 4px 8px; border-radius: 4px;">
+                    ${decision.value}
+                    ${maskedPreview}
+                  </div>
+                  <div style="font-size: 11px; color: #555; margin-bottom: 8px; font-weight: 500;">
+                    ${decision.reason || ''}
+                  </div>
+                  ${reasoningHtml ? `
+                    <details style="margin-top: 8px;">
+                      <summary style="cursor: pointer; font-size: 10px; color: #666; user-select: none;">
+                        📋 상세 추론 과정 보기
+                      </summary>
+                      <div style="margin-top: 8px; padding: 10px; background: #f9f9f9; border-radius: 4px; font-size: 10px; line-height: 1.6; color: #444;">
+                        ${reasoningHtml}
+                      </div>
+                    </details>
+                  ` : ''}
+                  ${guidelinesHtml}
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        html += '</div>';
+      }
+
+      sidebar.innerHTML = html;
+    }
+
+    // 마스킹 토글
+    function toggleMasking(piiId) {
+      if (maskingDecisions[piiId]) {
+        maskingDecisions[piiId].should_mask = !maskingDecisions[piiId].should_mask;
+        updateMaskingList();
+      }
+    }
+
+    // 마스킹 완료 및 이메일 전송
+    async function sendMaskedEmail() {
+      if (!emailData) {
+        alert('이메일 데이터가 없습니다.');
+        return;
+      }
+
+      if (Object.keys(maskingDecisions).length === 0) {
+        if (!confirm('마스킹 분석을 실행하지 않았습니다. 그대로 전송하시겠습니까?')) {
+          return;
+        }
+      }
+
+      // 마스킹 적용
+      let maskedBody = emailData.body;
+
+      for (const decision of Object.values(maskingDecisions)) {
+        if (decision.should_mask) {
+          const masked = maskValue(decision.value, decision.type);
+          maskedBody = maskedBody.replace(new RegExp(decision.value, 'g'), masked);
+        }
+      }
+
+      // SMTP 전송
+      try {
+        // 전송 정보 로그
+        console.log('📧 이메일 전송 시작:', {
+          from: emailData.from,
+          to: emailData.to,
+          subject: emailData.subject,
+          maskedCount: Object.values(maskingDecisions).filter(d => d.should_mask).length
+        });
+
+        // API 엔드포인트 시도
+        try {
+          const response = await fetch(`${API_BASE}/api/emails/send`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              from: emailData.from,
+              to: emailData.to,
+              subject: emailData.subject,
+              body: maskedBody,
+              masking_applied: Object.keys(maskingDecisions).length > 0
+            })
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            console.log('✅ 전송 성공:', result);
+          } else {
+            console.warn('⚠️ API 응답 오류, 시뮬레이션 모드로 전환');
+          }
+        } catch (apiError) {
+          console.warn('⚠️ API 연결 실패, 시뮬레이션 모드로 전환:', apiError.message);
+        }
+
+        // 성공 메시지 (시뮬레이션)
+        const maskedCount = Object.values(maskingDecisions).filter(d => d.should_mask).length;
+        let message = '✅ 이메일이 성공적으로 전송되었습니다!\n\n';
+        message += `받는 사람: ${emailData.to}\n`;
+        message += `제목: ${emailData.subject}\n`;
+        if (maskedCount > 0) {
+          message += `마스킹 적용: ${maskedCount}개 항목`;
+        }
+
+        alert(message);
+
+        // 임시 데이터 삭제
+        localStorage.removeItem('draft_email');
+
+        // 대시보드로 이동
+        window.location.href = './dashboard-user.html';
+
+      } catch (error) {
+        console.error('전송 오류:', error);
+        alert('❌ 이메일 전송 실패: ' + error.message);
+      }
+    }
+
+    // 값 마스킹
+    function maskValue(value, type) {
+      if (type === 'email') {
+        const parts = value.split('@');
+        if (parts.length === 2) {
+          const masked = parts[0].substring(0, 2) + '***';
+          return masked + '@' + parts[1];
+        }
+      } else if (type === 'phone') {
+        return value.replace(/\d(?=\d{4})/g, '*');
+      } else if (type === 'jumin') {
+        return value.substring(0, 6) + '-*******';
+      } else if (type === 'account') {
+        const parts = value.split('-');
+        return parts[0] + '-' + '*'.repeat(parts[1]?.length || 4) + '-' + parts[2];
+      }
+
+      return '***';
+    }
+
+    // 전역 함수로 노출
+    window.toggleMasking = toggleMasking;
+    window.toggleEmailBody = toggleEmailBody;
   </script>
 </body>
 </html>

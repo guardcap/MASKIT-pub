@@ -716,27 +716,23 @@
                 formData.append('attachment', file);
             });
             
-            showStatus('메일 전송 중...', 'loading');
-            
-            try {
-                const response = await fetch('/send', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok) {
-                    showStatus('✅ ' + result.message, 'success');
-                    setTimeout(() => {
-                        window.open('http://127.0.0.1:5501/FE/index.html', '_blank');
-                    }, 1000);
-                } else {
-                    throw new Error(result.error);
-                }
-            } catch (error) {
-                showStatus('❌ 전송 실패: ' + error.message, 'error');
-            }
+            showStatus('이메일 분석 중...', 'loading');
+
+            // 이메일 데이터를 localStorage에 저장 (마스킹 페이지로 전달)
+            const emailData = {
+                from: document.getElementById('from_email')?.value || '',
+                to: recipients.join(', '),
+                subject: document.getElementById('subject')?.value || '',
+                body: document.getElementById('body')?.innerHTML || '',
+                timestamp: new Date().toISOString()
+            };
+
+            localStorage.setItem('draft_email', JSON.stringify(emailData));
+
+            // 마스킹 검토 페이지로 이동
+            setTimeout(() => {
+                window.location.href = './approver-review.html';
+            }, 500);
         }
         
         function saveDraft() {
