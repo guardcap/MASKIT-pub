@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MASKIT - Email DLP System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            min-height: 100vh;
+        }
+
+        /* 상단 네비게이션 바 */
+        .navbar {
+            background: white;
+            backdrop-filter: blur(10px);
+            padding: 1.2em 3em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            border-bottom: 1px solid #e0e0e0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .navbar-logo {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #333;
+            text-decoration: none;
+            letter-spacing: 2px;
+        }
+
+        .navbar-menu {
+            display: flex;
+            gap: 2em;
+            align-items: center;
+        }
+
+        .navbar-menu a {
+            color: #666;
+            text-decoration: none;
+            font-size: 0.95em;
+            font-weight: 500;
+            transition: color 0.3s;
+            padding: 0.5em 1em;
+            border-radius: 6px;
+        }
+
+        .navbar-menu a:hover {
+            color: #333;
+            background: #f5f5f5;
+        }
+
+        .navbar-menu .btn-login {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0.6em 1.5em;
+            border-radius: 8px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .navbar-menu .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        /* 메인 콘텐츠 */
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 2em;
+            padding-top: 80px;
+        }
+
+        .logo-container {
+            text-align: center;
+            margin-bottom: 3em;
+        }
+
+        .logo-title {
+            font-size: 6em;
+            font-weight: bold;
+            margin-bottom: 0.3em;
+            letter-spacing: 5px;
+            color: #333;
+        }
+
+        .subtitle {
+            font-size: 1.3em;
+            color: #666;
+            letter-spacing: 3px;
+            font-weight: 300;
+        }
+
+        .subtitle span {
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        /* 반응형 디자인 */
+        @media (max-width: 768px) {
+            .navbar {
+                padding: 1em 1.5em;
+            }
+
+            .navbar-logo {
+                font-size: 1.4em;
+            }
+
+            .navbar-menu {
+                gap: 1em;
+            }
+
+            .navbar-menu a {
+                font-size: 0.85em;
+                padding: 0.4em 0.8em;
+            }
+
+            .logo-title {
+                font-size: 4em;
+            }
+
+            .subtitle {
+                font-size: 1em;
+                letter-spacing: 2px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .navbar {
+                padding: 0.8em 1em;
+            }
+
+            .navbar-logo {
+                font-size: 1.2em;
+            }
+
+            .navbar-menu {
+                gap: 0.5em;
+            }
+
+            .navbar-menu a span {
+                display: none;
+            }
+
+            .navbar-menu a {
+                padding: 0.5em;
+            }
+
+            .logo-title {
+                font-size: 2.5em;
+            }
+
+            .subtitle {
+                font-size: 0.85em;
+                letter-spacing: 1px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 상단 네비게이션 바 -->
+    <nav class="navbar">
+        <a href="landing.html" class="navbar-logo">MASKIT</a>
+        <div class="navbar-menu">
+            <a href=""><span>.</span>DOCS</a>
+            <a href="https://github.com/guardcap" target="_blank"><span>.</span>GITHUB</a>
+            <a href="login.html" class="btn-login"><span>.</span>LOGIN<span>/</span>REGISTER</a>
+        </div>
+    </nav>
+
+    <!-- 메인 콘텐츠 -->
+    <main class="main-content">
+        <div class="logo-container">
+            <h1 class="logo-title">🛡️ MASKIT</h1>
+            <p class="subtitle">
+                Email <span>D</span>ata <span>L</span>oss <span>P</span>revention System
+            </p>
+        </div>
+    </main>
+</body>
+</html>
