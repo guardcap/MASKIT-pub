@@ -1,78 +1,173 @@
-from fastapi import APIRouter, HTTPException, status, Depends
-from pydantic import BaseModel
-from app.policy.models import UserCreate, UserResponse, Token, LoginRequest, UserRole
-from app.auth.auth_utils import (
-    verify_password,
-    get_password_hash,
-    create_access_token,
-    get_current_user
-)
+"""
+SMTP 메일 전송 및 이메일 관리 API 라우터
+"""
+from fastapi import APIRouter, HTTPException, status, Query
+from typing import Optional
+from datetime import datetime
+from bson import ObjectId
+
 from app.database.mongodb import get_database
-from datetime import datetime, timedelta
+from app.smtp_server.models import EmailSendRequest, EmailSendResponse, EmailListResponse
+from app.smtp_server.client import smtp_client
 
-router = APIRouter(prefix="/auth", tags=["인증"])
+router = APIRouter(prefix="/smtp", tags=["SMTP Email"])
 
-@router.post("/register", response_model=UserResponse)
-async def register(user: UserCreate):
-    """회원가입"""
-    db = get_database()
-    
-    # 이메일 중복 확인
-    existing_user = await db.users.find_one({"email": user.email})
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="이미 존재하는 이메일입니다"
+
+@router.post("/send", response_model=EmailSendResponse)
+async def send_email(email_data: EmailSendRequest):
+    """
+    SMTP를 통해 이메일 전송
+
+    - **from_email**: 발신자 이메일
+    - **to**: 수신자 이메일 (여러 개는 쉼표로 구분)
+    - **subject**: 제목
+    - **body**: 본문 (HTML 지원)
+    - **cc**: 참조 (옵션)
+    - **bcc**: 숨은 참조 (옵션)
+    """
+    try:
+        # SMTP 클라이언트를 통해 메일 전송
+        result = smtp_client.send_email(
+            from_email=email_data.from_email,
+            to=email_data.to,
+            subject=email_data.subject,
+            body=email_data.body,
+            cc=email_data.cc,
+            bcc=email_data.bcc,
+            attachments=email_data.attachments
         )
-    
-    # 첫 번째 사용자는 ROOT_ADMIN으로 설정
-    user_count = await db.users.count_documents({})
-    if user_count == 0:
-        user.role = UserRole.ROOT_ADMIN
-    
-    # 사용자 생성
-    user_dict = user.dict()
-    user_dict["hashed_password"] = get_password_hash(user_dict.pop("password"))
-    user_dict["created_at"] = datetime.utcnow()
-    user_dict["updated_at"] = datetime.utcnow()
-    
-    result = await db.users.insert_one(user_dict)
-    
-    created_user = await db.users.find_one({"_id": result.inserted_id})
-    return UserResponse(**created_user)
 
-@router.post("/login")
-async def login(login_data: LoginRequest):
-    """로그인"""
-    db = get_database()
-    
-    user = await db.users.find_one({"email": login_data.email})
-    if not user or not verify_password(login_data.password, user["hashed_password"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="이메일 또는 비밀번호가 잘못되었습니다",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    access_token = create_access_token(data={"sub": user["email"]})
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
-            "email": user["email"],
-            "nickname": user["nickname"],
-            "department": user.get("department"),
-            "role": user["role"]
+        if not result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=result["message"]
+            )
+
+        # MongoDB에 전송 기록 저장
+        db = get_database()
+        email_record = {
+            "from_email": email_data.from_email,
+            "to_email": email_data.to,
+            "cc": email_data.cc,
+            "bcc": email_data.bcc,
+            "subject": email_data.subject,
+            "original_body": email_data.body,
+            "masked_body": None,
+            "status": "sent",
+            "attachments": email_data.attachments or [],
+            "sent_at": result["sent_at"],
+            "created_at": datetime.utcnow(),
+            "dlp_verified": False,
+            "dlp_token": None
         }
-    }
 
-@router.get("/me", response_model=UserResponse)
-async def get_me(current_user: dict = Depends(get_current_user)):
-    """현재 로그인한 사용자 정보"""
-    return UserResponse(**current_user)
+        insert_result = await db.emails.insert_one(email_record)
 
-@router.post("/logout")
-async def logout():
-    """로그아웃 (클라이언트에서 토큰 삭제 필요)"""
-    return {"message": "로그아웃되었습니다"}
+        return EmailSendResponse(
+            success=True,
+            message=result["message"],
+            email_id=str(insert_result.inserted_id),
+            sent_at=result["sent_at"]
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"메일 전송 중 오류가 발생했습니다: {str(e)}"
+        )
+
+
+@router.get("/emails", response_model=EmailListResponse)
+async def get_emails(
+    page: int = Query(1, ge=1, description="페이지 번호"),
+    page_size: int = Query(20, ge=1, le=100, description="페이지 당 항목 수"),
+    status_filter: Optional[str] = Query(None, description="상태 필터 (sent, approved, rejected)")
+):
+    """
+    이메일 목록 조회
+
+    - **page**: 페이지 번호 (기본: 1)
+    - **page_size**: 페이지 당 항목 수 (기본: 20, 최대: 100)
+    - **status_filter**: 상태 필터 (옵션)
+    """
+    try:
+        db = get_database()
+
+        # 필터 조건
+        query = {}
+        if status_filter:
+            query["status"] = status_filter
+
+        # 전체 개수
+        total = await db.emails.count_documents(query)
+
+        # 페이징된 이메일 목록
+        skip = (page - 1) * page_size
+        emails_cursor = db.emails.find(query).sort("created_at", -1).skip(skip).limit(page_size)
+        emails = await emails_cursor.to_list(length=page_size)
+
+        # ObjectId를 문자열로 변환
+        for email in emails:
+            email["_id"] = str(email["_id"])
+
+        return EmailListResponse(
+            emails=emails,
+            total=total,
+            page=page,
+            page_size=page_size
+        )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"이메일 목록 조회 중 오류가 발생했습니다: {str(e)}"
+        )
+
+
+@router.get("/emails/{email_id}")
+async def get_email(email_id: str):
+    """
+    특정 이메일 상세 조회
+
+    - **email_id**: 이메일 ID
+    """
+    try:
+        db = get_database()
+
+        # ObjectId 변환
+        try:
+            obj_id = ObjectId(email_id)
+        except:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="잘못된 이메일 ID 형식입니다"
+            )
+
+        email = await db.emails.find_one({"_id": obj_id})
+
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="이메일을 찾을 수 없습니다"
+            )
+
+        # ObjectId를 문자열로 변환
+        email["_id"] = str(email["_id"])
+
+        return email
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"이메일 조회 중 오류가 발생했습니다: {str(e)}"
+        )

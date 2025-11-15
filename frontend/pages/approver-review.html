@@ -609,47 +609,61 @@
       // SMTP 전송
       try {
         // 전송 정보 로그
+        const maskedCount = Object.values(maskingDecisions).filter(d => d.should_mask).length;
         console.log('📧 이메일 전송 시작:', {
           from: emailData.from,
           to: emailData.to,
           subject: emailData.subject,
-          maskedCount: Object.values(maskingDecisions).filter(d => d.should_mask).length
+          maskedCount: maskedCount
         });
 
-        // API 엔드포인트 시도
-        try {
-          const response = await fetch(`${API_BASE}/api/emails/send`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              from: emailData.from,
-              to: emailData.to,
-              subject: emailData.subject,
-              body: maskedBody,
-              masking_applied: Object.keys(maskingDecisions).length > 0
-            })
-          });
-
-          if (response.ok) {
-            const result = await response.json();
-            console.log('✅ 전송 성공:', result);
-          } else {
-            console.warn('⚠️ API 응답 오류, 시뮬레이션 모드로 전환');
-          }
-        } catch (apiError) {
-          console.warn('⚠️ API 연결 실패, 시뮬레이션 모드로 전환:', apiError.message);
+        // 로딩 표시
+        const loadingEl = document.getElementById('loadingIndicator');
+        if (loadingEl) {
+          loadingEl.style.display = 'block';
+          loadingEl.innerHTML = '<div style="font-size: 24px; margin-bottom: 10px;">📧</div><div>이메일 전송 중...</div>';
         }
 
-        // 성공 메시지 (시뮬레이션)
-        const maskedCount = Object.values(maskingDecisions).filter(d => d.should_mask).length;
+        // SMTP API로 메일 전송
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch(`${API_BASE}/api/v1/smtp/send`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            from_email: emailData.from,
+            to: emailData.to,
+            subject: emailData.subject,
+            body: maskedBody,
+            cc: null,
+            bcc: null,
+            attachments: null
+          })
+        });
+
+        const result = await response.json();
+
+        // 로딩 숨김
+        if (loadingEl) {
+          loadingEl.style.display = 'none';
+        }
+
+        if (!response.ok) {
+          throw new Error(result.detail || '메일 전송에 실패했습니다.');
+        }
+
+        console.log('✅ 전송 성공:', result);
+
+        // 성공 메시지
         let message = '✅ 이메일이 성공적으로 전송되었습니다!\n\n';
         message += `받는 사람: ${emailData.to}\n`;
         message += `제목: ${emailData.subject}\n`;
         if (maskedCount > 0) {
-          message += `마스킹 적용: ${maskedCount}개 항목`;
+          message += `마스킹 적용: ${maskedCount}개 항목\n`;
         }
+        message += `\n전송 시간: ${new Date(result.sent_at).toLocaleString('ko-KR')}`;
 
         alert(message);
 
@@ -661,6 +675,13 @@
 
       } catch (error) {
         console.error('전송 오류:', error);
+
+        // 로딩 숨김
+        const loadingEl = document.getElementById('loadingIndicator');
+        if (loadingEl) {
+          loadingEl.style.display = 'none';
+        }
+
         alert('❌ 이메일 전송 실패: ' + error.message);
       }
     }
