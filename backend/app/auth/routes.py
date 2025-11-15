@@ -12,6 +12,11 @@ from app.database.mongodb import get_database
 
 router = APIRouter(prefix="/auth", tags=["인증"])
 
+# 한국 시간 헬퍼 함수
+def get_kst_now():
+    """한국 표준시(KST) 반환"""
+    return datetime.utcnow() + timedelta(hours=9)
+
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(user: UserCreate):
     """새 사용자 등록"""
@@ -32,8 +37,8 @@ async def register(user: UserCreate):
     user_dict = user.dict()
     user_dict.pop("password")
     user_dict["hashed_password"] = hashed_password
-    user_dict["created_at"] = datetime.utcnow()
-    user_dict["updated_at"] = datetime.utcnow()
+    user_dict["created_at"] = get_kst_now()
+    user_dict["updated_at"] = get_kst_now()
     
     # 첫 사용자는 ROOT_ADMIN으로 설정
     users_count = await db.users.count_documents({})

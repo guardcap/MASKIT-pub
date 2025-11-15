@@ -10,7 +10,7 @@ FastAPI용 SMTP 핸들러
 import asyncio
 from email import message_from_bytes, policy
 from aiosmtpd.controller import Controller
-from datetime import datetime
+from datetime import datetime,timedelta
 import sys
 import os
 
@@ -20,6 +20,11 @@ from app.database.mongodb import get_sync_database
 # SMTP 서버 포트 설정
 SMTP_SERVER_HOST = '127.0.0.1'
 SMTP_SERVER_PORT = 2526
+
+# 한국 시간 헬퍼 함수
+def get_kst_now():
+    """한국 표준시(KST) 반환"""
+    return datetime.utcnow() + timedelta(hours=9)
 
 
 class FastAPISMTPHandler:
@@ -131,10 +136,10 @@ class FastAPISMTPHandler:
                 "team_name": None,  # TODO: 사용자 정보에서 팀 추출
                 "content_hash": content_hash,
                 "dlp_token": dlp_token,
-                "created_at": datetime.utcnow(),
-                "received_at": datetime.utcnow(),
+                "created_at": get_kst_now(),
+                "received_at": get_kst_now(),
                 "dlp_verified": dlp_verified,
-                "dlp_verified_at": datetime.utcnow() if dlp_verified else None,
+                "dlp_verified_at": get_kst_now() if dlp_verified else None,
                 "dlp_policy_violation": None,
                 "reviewed_at": None,
                 "reviewed_by": None,

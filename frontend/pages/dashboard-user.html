@@ -174,10 +174,13 @@
     
     <div class="container">
         <div class="menu">
-            <button class="active" onclick="loadEmails('all')">전체</button>
-            <button onclick="loadEmails('pending')">승인 대기</button>
-            <button onclick="loadEmails('approved')">승인 완료</button>
-            <button onclick="loadEmails('rejected')">반려</button>
+            <button class="active" onclick="loadEmails('all')">대시보드</button>
+            <button onclick="location.href='my-emails.html'"> 보낸 메일함</button>
+            <button onclick="location.href='./received-emails.html'"> 받은 메일함</button>
+            <button onclick="location.href='my-statistics.html'">내 통계</button>
+            <button onclick="location.href='my-logs.html'">내 로그</button>
+            <button onclick="location.href='policy-view.html'">정책 조회</button>
+            <button onclick="location.href='entity-view.html'">엔티티 조회</button>
         </div>
         
         <div class="email-list" id="emailList">

@@ -29,6 +29,12 @@
             font-size: 1.5em;
         }
         
+        .navbar .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1em;
+        }
+        
         .navbar button {
             padding: 0.5em 1em;
             background: rgba(255,255,255,0.2);
@@ -99,7 +105,7 @@
         
         .email-meta {
             display: grid;
-            grid-template-columns: 100px 1fr;
+            grid-template-columns: 120px 1fr;
             gap: 0.8em;
             margin-bottom: 1em;
         }
@@ -117,9 +123,37 @@
             padding: 1.5em;
             background: #f8f9fa;
             border-radius: 8px;
-            margin: 1.5em 0;
-            white-space: pre-wrap;
-            line-height: 1.6;
+            margin-top: 1em;
+            line-height: 1.8;
+            color: #333;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .body-section {
+            margin-bottom: 1.5em;
+        }
+        
+        .body-section h4 {
+            margin-bottom: 0.8em;
+            color: #555;
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+        }
+        
+        .masked-info {
+            margin-top: 1.5em;
+            padding: 1em;
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            border-radius: 4px;
+        }
+        
+        .masked-info h4 {
+            color: #2e7d32;
+            margin-bottom: 0.5em;
         }
         
         .attachments {
@@ -139,12 +173,6 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-        }
-        
-        .attachment-info {
-            display: flex;
-            align-items: center;
-            gap: 0.5em;
         }
         
         .reject-reason {
@@ -237,8 +265,11 @@
 </head>
 <body>
     <div class="navbar">
-        <h1>🛡️ MASKIT</h1>
-        <button onclick="logout()">로그아웃</button>
+        <h1>🛡️ MASKIT - 보낸메일 상세</h1>
+        <div class="user-info">
+            <span id="userName"></span>
+            <button onclick="logout()">로그아웃</button>
+        </div>
     </div>
     
     <div class="container">
@@ -261,14 +292,14 @@
     </div>
     
     <script>
-        const API_BASE = 'http://127.0.0.1:8001';
-        const token = localStorage.getItem('token');
+        const API_BASE = 'http://127.0.0.1:8000';
+        const token = localStorage.getItem('auth_token');
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         const urlParams = new URLSearchParams(window.location.search);
         const emailId = urlParams.get('id');
         
         if (!token) {
-            window.location.href = 'login.html';
+            window.location.href = './login.html';
         }
         
         if (!emailId) {
@@ -276,21 +307,23 @@
             history.back();
         }
         
+        document.getElementById('userName').textContent = user.nickname || user.email;
+        
         function logout() {
             localStorage.removeItem('auth_token');
             localStorage.removeItem('user');
-            window.location.href = 'login.html';
+            window.location.href = './login.html';
         }
         
         function goBack() {
-            history.back();
+            window.location.href = './my-emails.html';
         }
         
         async function loadEmailDetail() {
             const container = document.getElementById('emailDetail');
             
             try {
-                const response = await fetch(`${API_BASE}/api/v1/emails/${emailId}`, {
+                const response = await fetch(`${API_BASE}/api/v1/emails/email/${emailId}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -309,31 +342,54 @@
         }
         
         function renderEmail(email) {
-            const container = document.getElementById('emailDetail');
-            
-            const statusClass = `status-${email.status}`;
-            const statusText = {
-                'pending': '승인 대기',
-                'approved': '승인 완료',
-                'rejected': '반려'
-            }[email.status];
-            
-            const createDate = new Date(email.created_at).toLocaleString('ko-KR');
-            const reviewDate = email.reviewed_at ? new Date(email.reviewed_at).toLocaleString('ko-KR') : '-';
-            
-            const attachmentsHtml = email.attachments && email.attachments.length > 0 ? `
-                <div class="attachments">
-                    <h3>📎 첨부파일 (${email.attachments.length}개)</h3>
-                    ${email.attachments.map(att => `
-                        <div class="attachment-item">
-                            <div class="attachment-info">
-                                <span>📄 ${att.filename}</span>
-                                <span style="color: #999; font-size: 0.9em;">(${formatBytes(att.size)})</span>
+        const container = document.getElementById('emailDetail');
+        
+        const statusClass = `status-${email.status}`;
+        const statusText = {
+            'pending': '승인 대기',
+            'approved': '승인 완료',
+            'rejected': '반려'
+        }[email.status];
+        
+        const createDate = new Date(email.created_at).toLocaleString('ko-KR');
+        const sentDate = email.sent_at ? new Date(email.sent_at).toLocaleString('ko-KR') : '-';
+        const reviewDate = email.reviewed_at ? new Date(email.reviewed_at).toLocaleString('ko-KR') : '-';
+        
+        // ✅ 첨부파일 렌더링 (다운로드 버튼 포함)
+        const attachmentsHtml = email.attachments && email.attachments.length > 0 ? `
+        
+            <div class="attachments">
+                <h3>📎 첨부파일 (${email.attachments.length}개)</h3>
+                ${email.attachments.map(att => {
+                    // file_id가 있는 경우 (실제 파일)
+                    if (att.file_id) {
+                        return `
+                            <div class="attachment-item" style="display: flex; justify-content: space-between; align-items: center; padding: 1em; margin-bottom: 0.5em; background: #f8f9fa; border-radius: 8px;">
+                                <div class="attachment-info">
+                                    <span>📄 ${att.filename}</span>
+                                    <span style="color: #999; font-size: 0.9em; margin-left: 0.5em;">(${formatBytes(att.size || 0)})</span>
+                                </div>
+                                <button 
+                                    onclick="downloadAttachment('${email._id || email.id}', '${att.file_id}', '${att.filename}')"
+                                    style="padding: 0.5em 1em; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                    ⬇ 다운로드
+                                </button>
                             </div>
-                        </div>
-                    `).join('')}
-                </div>
-            ` : '';
+                        `;
+                    } else {
+                        // file_id가 없는 경우 (파일명만)
+                        return `
+                            <div class="attachment-item" style="padding: 1em; margin-bottom: 0.5em; background: #f8f9fa; border-radius: 8px;">
+                                <div class="attachment-info">
+                                    <span>📄 ${att.filename || att}</span>
+                                    <span style="color: #999; font-size: 0.9em; margin-left: 0.5em;">(파일 없음)</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }).join('')}
+            </div>
+        ` : '';
             
             const rejectReasonHtml = email.reject_reason ? `
                 <div class="reject-reason">
@@ -342,7 +398,36 @@
                 </div>
             ` : '';
             
-            const isAdmin = user.role === 'admin' || user.role === 'root_admin';
+            const maskedInfoHtml = email.masking_applied ? `
+                <div class="masked-info">
+                    <h4>🔒 개인정보 마스킹 적용됨</h4>
+                    <p>이 메일은 개인정보 보호를 위해 민감정보가 마스킹 처리되어 전송되었습니다.</p>
+                </div>
+            ` : '';
+            
+            // 본문 자동 표시 (토글 버튼 제거)
+            let bodyHtml = '';
+            if (email.masking_applied && email.masked_body) {
+                bodyHtml = `
+                    <div class="body-section">
+                        <h4>원본 본문</h4>
+                        <div class="email-body">${email.original_body}</div>
+                    </div>
+                    <div class="body-section">
+                        <h4>🔒 마스킹된 본문 (실제 전송된 내용)</h4>
+                        <div class="email-body">${email.masked_body}</div>
+                    </div>
+                `;
+            } else {
+                bodyHtml = `
+                    <div class="body-section">
+                        <h4>본문</h4>
+                        <div class="email-body">${email.original_body}</div>
+                    </div>
+                `;
+            }
+            
+            const isAdmin = user.role === 'root_admin' || user.role === 'approver' || user.role === 'auditor';
             const isPending = email.status === 'pending';
             const actionsHtml = isAdmin && isPending ? `
                 <div class="actions">
@@ -367,6 +452,9 @@
                     <div class="meta-label">작성일:</div>
                     <div class="meta-value">${createDate}</div>
                     
+                    <div class="meta-label">발송일:</div>
+                    <div class="meta-value">${sentDate}</div>
+                    
                     ${email.reviewed_by ? `
                         <div class="meta-label">처리자:</div>
                         <div class="meta-value">${email.reviewed_by}</div>
@@ -377,18 +465,59 @@
                 </div>
                 
                 <h3>본문</h3>
-                <div class="email-body">${email.original_body}</div>
+                <div class="email-body">${email.original_body || email.masked_body}</div>
                 
                 ${attachmentsHtml}
                 ${rejectReasonHtml}
                 ${actionsHtml}
             `;
         }
-        
+
+        // ✅ 첨부파일 다운로드 함수 추가
+        async function downloadAttachment(emailId, fileId, filename) {
+            try {
+                console.log('다운로드 시작:', { emailId, fileId, filename });
+                
+                // API 호출
+                const response = await fetch(`${API_BASE}/api/v1/emails/email/${emailId}/attachments/${fileId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || '다운로드 실패');
+                }
+                
+                // Blob으로 변환
+                const blob = await response.blob();
+                
+                // 다운로드 링크 생성
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                
+                // 정리
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                console.log('✅ 다운로드 완료:', filename);
+                
+            } catch (error) {
+                console.error('❌ 다운로드 오류:', error);
+                alert(`첨부파일 다운로드 실패: ${error.message}`);
+            }
+        }
+
         function formatBytes(bytes) {
-            if (bytes === 0) return '0 Bytes';
+            if (!bytes || bytes === 0) return '0 B';
             const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const sizes = ['B', 'KB', 'MB', 'GB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
         }
@@ -435,13 +564,15 @@
             }
             
             try {
+                const formData = new FormData();
+                formData.append('reason', reason);
+                
                 const response = await fetch(`${API_BASE}/api/v1/emails/${emailId}/reject`, {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
+                        'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({ reason })
+                    body: formData
                 });
                 
                 if (response.ok) {

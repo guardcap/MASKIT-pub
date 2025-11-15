@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MASKIT - 내 메일함</title>
+    <title>MASKIT - 받은 메일함</title>
     <link rel="stylesheet" href="common-style.css">
     <style>
         .filter-tabs {
@@ -72,27 +72,9 @@
             background: #f8f9fa;
         }
         
-        .status-badge {
-            padding: 0.4em 0.8em;
-            border-radius: 20px;
-            font-size: 0.85em;
-            font-weight: bold;
-            display: inline-block;
-        }
-        
-        .status-pending {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        .status-approved {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .status-rejected {
-            background: #f8d7da;
-            color: #721c24;
+        tbody tr.unread {
+            background: #f0f4ff;
+            font-weight: 600;
         }
         
         .empty-state {
@@ -105,11 +87,20 @@
             color: #667eea;
             margin-left: 0.5em;
         }
+        
+        .unread-badge {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #667eea;
+            border-radius: 50%;
+            margin-right: 0.5em;
+        }
     </style>
 </head>
 <body>
     <div class="navbar">
-        <h1>📧 MASKIT - 내 메일함</h1>
+        <h1>📥 MASKIT - 받은 메일함</h1>
         <div class="user-info">
             <span id="userName"></span>
             <button onclick="logout()">로그아웃</button>
@@ -119,30 +110,28 @@
     <div class="container">
         <div class="menu">
             <button onclick="location.href='dashboard-user.html'">대시보드</button>
-            <button class="active">보낸 메일함</button>
-            <button onclick="location.href='received-emails.html'">받은 메일함</button>
+            <button onclick="location.href='my-emails.html'">보낸 메일함</button>
+            <button class="active">받은 메일함</button>
             <button onclick="location.href='my-statistics.html'">내 통계</button>
             <button onclick="location.href='my-logs.html'">내 로그</button>
             <button onclick="location.href='policy-view.html'">정책 조회</button>
             <button onclick="location.href='entity-view.html'">엔티티 조회</button>
         </div>
         
-        
         <div class="filter-tabs">
-            <button class="active" onclick="filterEmails('all')">전체</button>
-            <button onclick="filterEmails('pending')">승인 대기</button>
-            <button onclick="filterEmails('approved')">승인 완료</button>
-            <button onclick="filterEmails('rejected')">반려</button>
+            <button class="active" data-filter="all" onclick="filterEmails('all')">전체</button>
+            <button data-filter="unread" onclick="filterEmails('unread')">읽지 않음</button>
+            <button data-filter="read" onclick="filterEmails('read')">읽음</button>
         </div>
         
         <div class="email-table">
             <table>
                 <thead>
                     <tr>
-                        <th style="width: 10%">상태</th>
-                        <th style="width: 25%">받는 사람</th>
-                        <th style="width: 35%">제목</th>
-                        <th style="width: 20%">발송 일시</th>
+                        <th style="width: 5%"></th>
+                        <th style="width: 20%">보낸 사람</th>
+                        <th style="width: 40%">제목</th>
+                        <th style="width: 20%">수신 일시</th>
                         <th style="width: 10%">첨부</th>
                     </tr>
                 </thead>
@@ -179,8 +168,10 @@
             // 탭 활성화
             document.querySelectorAll('.filter-tabs button').forEach(btn => {
                 btn.classList.remove('active');
+                if (btn.dataset.filter === filter) {
+                    btn.classList.add('active');
+                }
             });
-            event.target.classList.add('active');
             
             loadEmails(filter);
         }
@@ -190,7 +181,7 @@
             tbody.innerHTML = '<tr><td colspan="5" class="empty-state">메일을 불러오는 중...</td></tr>';
             
             try {
-                let url = `${API_BASE}/api/v1/emails/my-emails`;
+                let url = `${API_BASE}/api/v1/emails/received-emails`;
                 if (filter !== 'all') {
                     url += `?status_filter=${filter}`;
                 }
@@ -203,28 +194,21 @@
                     const emails = await response.json();
                     
                     if (emails.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">메일이 없습니다</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">받은 메일이 없습니다</td></tr>';
                         return;
                     }
                     
-                    const statusText = {
-                        'pending': '승인 대기',
-                        'approved': '승인 완료',
-                        'rejected': '반려'
-                    };
-                    
                     tbody.innerHTML = emails.map(email => {
-                        const date = new Date(email.created_at).toLocaleString('ko-KR');
+                        const date = new Date(email.sent_at || email.created_at).toLocaleString('ko-KR'); 
                         const attachmentCount = email.attachments?.length || 0;
+                        const isUnread = !email.read_at; 
                         
                         return `
-                            <tr onclick="viewEmail('${email._id}')">
-                                <td>
-                                    <span class="status-badge status-${email.status}">
-                                        ${statusText[email.status]}
-                                    </span>
+                            <tr onclick="viewEmail('${email.id}')" class="${isUnread ? 'unread' : ''}">
+                                <td style="text-align: center;">
+                                    ${isUnread ? '<span class="unread-badge"></span>' : ''}
                                 </td>
-                                <td>${email.to_email}</td>
+                                <td>${email.from_email}</td>
                                 <td>
                                     ${email.subject}
                                     ${attachmentCount > 0 ? `<span class="attachment-icon">📎 ${attachmentCount}</span>` : ''}
@@ -237,6 +221,7 @@
                         `;
                     }).join('');
                 } else {
+                    console.error('Error loading emails:', response.status);
                     tbody.innerHTML = '<tr><td colspan="5" class="empty-state">메일을 불러올 수 없습니다</td></tr>';
                 }
             } catch (error) {
@@ -245,8 +230,9 @@
             }
         }
         
-        function viewEmail(emailId) {
-            window.location.href = `email-detail.html?id=${emailId}`;
+        async function viewEmail(id) {
+            // 먼저 페이지 이동
+            window.location.href = `received-email-detail.html?id=${id}`;
         }
         
         loadEmails('all');

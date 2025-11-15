@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MASKIT - 이메일 상세</title>
+    <link rel="stylesheet" href="common-style.css">
+    <style>
+        .email-detail {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        
+        .email-header {
+            padding: 2em;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .email-subject {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 1em;
+        }
+        
+        .email-meta {
+            display: grid;
+            gap: 0.8em;
+            margin-bottom: 1em;
+        }
+        
+        .meta-row {
+            display: flex;
+            gap: 1em;
+        }
+        
+        .meta-label {
+            font-weight: 600;
+            color: #666;
+            min-width: 100px;
+        }
+        
+        .meta-value {
+            color: #333;
+        }
+        
+        .email-body-container {
+            padding: 2em;
+            line-height: 1.8;
+        }
+
+        .back-button {
+            padding: 0.8em 1.5em;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 1.5em;
+        }
+        
+        .email-body {
+            color: #333;
+            white-space: pre-wrap;
+        }
+        
+        .attachments {
+            padding: 2em;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .attachment-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1em;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 0.8em;
+            transition: all 0.2s;
+        }
+        
+        .attachment-item:hover {
+            background: #e8f0fe;
+            border-color: #667eea;
+        }
+        
+        .attachment-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+        }
+        
+        .download-btn {
+            padding: 0.6em 1.2em;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background 0.2s;
+        }
+        
+        .download-btn:hover {
+            background: #5568d3;
+        }
+        
+        .download-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .loading, .error {
+            text-align: center;
+            padding: 3em;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>📥 MASKIT - 받은 메일함</h1>
+        <div class="user-info">
+            <span id="userName"></span>
+            <button onclick="logout()">로그아웃</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="menu">
+            <button onclick="location.href='dashboard-user.html'">대시보드</button>
+            <button onclick="location.href='my-emails.html'">보낸 메일함</button>
+            <button class="active" onclick="location.href='received-emails.html'">받은 메일함</button>
+            <button onclick="location.href='my-statistics.html'">내 통계</button>
+            <button onclick="location.href='my-logs.html'">내 로그</button>
+            <button onclick="location.href='policy-view.html'">정책 조회</button>
+            <button onclick="location.href='entity-view.html'">엔티티 조회</button>
+        </div>
+        
+        <button class="back-button" onclick="goBack()">← 뒤로 가기</button>
+        <div id="emailDetail" class="email-detail">
+            <div class="loading">이메일을 불러오는 중...</div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000';
+        const token = localStorage.getItem('auth_token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        
+        if (!token) {
+            window.location.href = 'login.html';
+        }
+        
+        document.getElementById('userName').textContent = user.nickname || user.email;
+        
+        function logout() {
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user');
+            window.location.href = 'login.html';
+        }
+        
+        function goBack() {
+            window.location.href = './received-emails.html';
+        }
+        
+        // URL에서 이메일 ID 가져오기
+        const urlParams = new URLSearchParams(window.location.search);
+        const emailId = urlParams.get('id');
+        
+        if (!emailId) {
+            document.getElementById('emailDetail').innerHTML = '<div class="error">이메일 ID가 없습니다</div>';
+        } else {
+            loadEmailDetail(emailId);
+        }
+        
+        async function loadEmailDetail(emailId) {
+            const container = document.getElementById('emailDetail');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/emails/email/${emailId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('이메일을 불러올 수 없습니다');
+                }
+                
+                const email = await response.json();
+                
+                // 이메일 렌더링
+                const sentDate = email.sent_at 
+                    ? new Date(email.sent_at).toLocaleString('ko-KR')
+                    : new Date(email.created_at).toLocaleString('ko-KR');
+                
+                const attachmentCount = email.attachments?.length || 0;
+                
+                // ✅ 첨부파일 렌더링 (다운로드 버튼 포함)
+                const attachmentsHtml = attachmentCount > 0 
+                    ? `<div class="attachments">
+                        <h3>📎 첨부파일 (${attachmentCount}개)</h3>
+                        ${email.attachments.map(att => {
+                            // file_id가 있는 경우 (실제 파일)
+                            if (att.file_id) {
+                                return `
+                                    <div class="attachment-item">
+                                        <div class="attachment-info">
+                                            <span>📄 ${att.filename}</span>
+                                            <span style="color: #999; font-size: 0.9em;">(${formatBytes(att.size || 0)})</span>
+                                        </div>
+                                        <button 
+                                            class="download-btn"
+                                            onclick="downloadAttachment('${email._id || email.id}', '${att.file_id}', '${att.filename}')">
+                                            ⬇ 다운로드
+                                        </button>
+                                    </div>
+                                `;
+                            } else {
+                                // file_id가 없는 경우 (파일명만)
+                                return `
+                                    <div class="attachment-item">
+                                        <div class="attachment-info">
+                                            <span>📄 ${att.filename || att}</span>
+                                            <span style="color: #999; font-size: 0.9em;">(파일 없음)</span>
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        }).join('')}
+                    </div>`
+                    : '';
+                
+                // 마스킹 정보 표시
+                const maskingInfoHtml = email.masking_decisions && Object.keys(email.masking_decisions).length > 0
+                    ? `<div style="padding: 1.5em 2em; background: #f0f4ff; border-top: 1px solid #e0e0e0;">
+                        <h3 style="margin-bottom: 1em; color: #667eea;">🛡️ 마스킹 정보</h3>
+                        <p style="color: #666; font-size: 14px;">
+                            ${Object.keys(email.masking_decisions).length}개 항목이 마스킹 처리되었습니다
+                        </p>
+                    </div>`
+                    : '';
+                
+                container.innerHTML = `
+                    <div class="email-header">
+                        <div class="email-subject">${email.subject}</div>
+                        <div class="email-meta">
+                            <div class="meta-row">
+                                <span class="meta-label">보낸 사람</span>
+                                <span class="meta-value">${email.from_email}</span>
+                            </div>
+                            <div class="meta-row">
+                                <span class="meta-label">받은 시간</span>
+                                <span class="meta-value">${sentDate}</span>
+                            </div>
+                            ${attachmentCount > 0 ? `
+                            <div class="meta-row">
+                                <span class="meta-label">첨부파일</span>
+                                <span class="meta-value">📎 ${attachmentCount}개</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    
+                    <div class="email-body-container">
+                        <div class="email-body">${email.masked_body || email.original_body}</div>
+                    </div>
+                    
+                    ${attachmentsHtml}
+                    ${maskingInfoHtml}
+                `;
+                
+            } catch (error) {
+                console.error('이메일 로드 오류:', error);
+                container.innerHTML = `<div class="error">이메일을 불러올 수 없습니다: ${error.message}</div>`;
+            }
+        }
+        
+        // ✅ 첨부파일 다운로드 함수
+        async function downloadAttachment(emailId, fileId, filename) {
+            try {
+                console.log('다운로드 시작:', { emailId, fileId, filename });
+                
+                // API 호출
+                const response = await fetch(`${API_BASE}/api/v1/emails/email/${emailId}/attachments/${fileId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || '다운로드 실패');
+                }
+                
+                // Blob으로 변환
+                const blob = await response.blob();
+                
+                // 다운로드 링크 생성
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                
+                // 정리
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                console.log('✅ 다운로드 완료:', filename);
+                
+            } catch (error) {
+                console.error('❌ 다운로드 오류:', error);
+                alert(`첨부파일 다운로드 실패: ${error.message}`);
+            }
+        }
+        
+        // ✅ 파일 크기 포맷 함수
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>

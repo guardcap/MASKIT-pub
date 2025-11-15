@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
-from datetime import datetime
+from datetime import datetime,timedelta
 from app.policy.models import UserResponse, UserUpdate, UserRole
 from app.auth.auth_utils import (
     get_current_root_admin,
@@ -11,6 +11,10 @@ from app.auth.auth_utils import (
 from app.database.mongodb import get_database
 
 router = APIRouter(prefix="/users", tags=["사용자 관리"])
+# 한국 시간 헬퍼 함수
+def get_kst_now():
+    """한국 표준시(KST) 반환"""
+    return datetime.utcnow() + timedelta(hours=9)
 
 @router.get("/", response_model=List[UserResponse])
 async def list_users(current_user: dict = Depends(get_current_admin_or_approver)):
@@ -88,7 +92,7 @@ async def update_user(
     if "password" in update_data and update_data["password"]:
         update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
     
-    update_data["updated_at"] = datetime.utcnow()
+    update_data["updated_at"] = get_kst_now()
     
     await db.users.update_one(
         {"email": email},
@@ -155,7 +159,7 @@ async def update_user_role(
     
     await db.users.update_one(
         {"email": email},
-        {"$set": {"role": role, "updated_at": datetime.utcnow()}}
+        {"$set": {"role": role, "updated_at": get_kst_now()}}
     )
     
     updated_user = await db.users.find_one({"email": email})

@@ -7,6 +7,8 @@ import os
 
 # DLP 라우터
 from app.routers import uploads, process, ocr, analyzer, masking_pdf
+from app.routers import emails as email_routes
+
 
 # Auth 및 User 관리
 from app.auth import routes as auth_routes, users as user_routes
@@ -78,6 +80,7 @@ app.include_router(process.router, prefix="/api/v1/process", tags=["Process"])
 app.include_router(ocr.router, prefix="/api/v1/ocr", tags=["OCR"])
 app.include_router(analyzer.router, prefix="/api/v1/analyzer", tags=["Analyzer"])
 app.include_router(masking_pdf.router, prefix="/api/v1/process")
+app.include_router(email_routes.router, tags=["Emails"])
 
 # ===== Auth & User 라우터들 =====
 app.include_router(auth_routes.router, prefix="/api", tags=["Auth"])

@@ -14,7 +14,6 @@
         <div class="sb-title">커스텀</div>
       </div>
 
-      
       <div class="group" id="group-inside">
         <button class="group-toggle" aria-expanded="false">
           <span>사내</span>
@@ -36,7 +35,7 @@
           <li class="item">
             <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
             <span class="txt">대외협력팀</span>
-            </li>
+          </li>
         </ul>
       </div>
 
@@ -46,18 +45,18 @@
           <svg class="caret" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><polyline points="8 4 16 12 8 20" /></svg>
         </button>
         <ul class="items">
-          <li class="item"><button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
             <span class="txt">협력 업체</span>
           </li>
-          <li class="item"><button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
             <span class="txt">고객사</span>
           </li>
-
           <li class="item has-sub" data-sub="gov-purpose">
             <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
-              <span class="txt">정부 기관</span>
+            <span class="txt">정부 기관</span>
           </li>
-
           <ul class="subdrop" id="gov-purpose" hidden>
             <li class="subitem">
               <button class="checkbox off" aria-checked="false" data-check></button>
@@ -74,25 +73,27 @@
             <li class="subitem">
               <button class="checkbox off" aria-checked="false" data-check></button>
               <span class="txt">정부 지원사업 / 과제 보고</span>
-        </li>
-      </ul>
-    </li>
-  </ul>
+            </li>
+          </ul>
+        </ul>
       </div>
 
       <div class="group">
         <button class="group-toggle" aria-expanded="false">
-          <span>세부 커스텀 </span>
+          <span>세부 커스텀</span>
           <svg class="caret" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><polyline points="8 4 16 12 8 20" /></svg>
         </button>
         <ul class="items">
-          <li class="item"><button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
             <span class="txt">사내 규칙 우선</span>
           </li>
-          <li class="item"><button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
             <span class="txt">국내 법률 우선</span>
           </li>
-          <li class="item"><button class="checkbox off" aria-checked="false" title="선택" data-check></button>
+          <li class="item">
+            <button class="checkbox off" aria-checked="false" title="선택" data-check></button>
             <span class="txt">GDPR 우선</span>
           </li>
         </ul>
@@ -101,20 +102,20 @@
       <div class="panel-footer">
         <button class="btn edit" id="analyzeBtn">완료</button>
       </div>
-  </aside>
+    </aside>
 
-        <header class="top-bar">
-    <div class="top-bar-title">🛡️ MASKIT - 이메일 마스킹 검토</div>
-    <div class="top-bar-buttons">
+    <header class="top-bar">
+      <div class="top-bar-title">🛡️ MASKIT - 이메일 마스킹 검토</div>
+      <div class="top-bar-buttons">
         <button class="top-bar-button" id="maskingCompleteBtn" style="background: #4CAF50;">
-            <span>마스킹 완료 & 전송</span>
+          <span>마스킹 완료 & 전송</span>
         </button>
         <span id="userInfo" style="color: white; margin-left: 2em; font-size: 0.9em;"></span>
         <button class="top-bar-button" id="logoutBtn" style="background: rgba(255,255,255,0.2); margin-left: 1em;">
-            <span>로그아웃</span>
+          <span>로그아웃</span>
         </button>
-    </div>
-</header>
+      </div>
+    </header>
 
     <section class="panel">
       <!-- 이메일 정보 -->
@@ -173,16 +174,15 @@
       <div class="sb-head">
         <div class="sb-title">Masking List</div>
       </div>
-      </aside>
+    </aside>
   </div>
 
-    <div id="modal" class="modal hidden">
+  <div id="modal" class="modal hidden">
     <div class="modal-content">
       <p>수신자를 선택하세요.</p>
       <button id="modalClose">확인</button>
     </div>
   </div>
-
 
   <script src="../script.js"></script>
   <script>
@@ -194,7 +194,6 @@
 
     // 페이지 초기화
     document.addEventListener('DOMContentLoaded', function() {
-      // 로그인 확인
       const token = localStorage.getItem('auth_token');
       const user = JSON.parse(localStorage.getItem('user') || 'null');
 
@@ -203,23 +202,16 @@
         return;
       }
 
-      // 사용자 정보 표시
       document.getElementById('userInfo').textContent = `${user.nickname} (${user.email})`;
 
-      // 로그아웃 버튼
       document.getElementById('logoutBtn').addEventListener('click', function() {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('user');
         window.location.href = './login.html';
       });
 
-      // 이메일 데이터 로드
       loadEmailData();
-
-      // 완료 버튼 (RAG 분석)
       document.getElementById('analyzeBtn').addEventListener('click', analyzeWithRAG);
-
-      // 마스킹 완료 & 전송 버튼
       document.getElementById('maskingCompleteBtn').addEventListener('click', sendMaskedEmail);
     });
 
@@ -235,22 +227,24 @@
 
       emailData = JSON.parse(draftEmail);
 
-      // 이메일 정보 표시
       document.getElementById('emailFrom').textContent = emailData.from || '(없음)';
       document.getElementById('emailTo').textContent = emailData.to || '(없음)';
       document.getElementById('emailSubject').textContent = emailData.subject || '(제목 없음)';
       document.getElementById('emailBody').innerHTML = emailData.body || '(내용 없음)';
 
-      // 첨부파일 표시 (현재는 미구현)
-      document.getElementById('emailAttachments').textContent = emailData.attachments?.length > 0
-        ? emailData.attachments.join(', ')
-        : '없음';
+      // ✅ 첨부파일 표시 (파일명 리스트)
+      if (emailData.attachments && emailData.attachments.length > 0) {
+        const fileNames = emailData.attachments.map(att => 
+          typeof att === 'object' ? att.filename : att
+        );
+        document.getElementById('emailAttachments').textContent = fileNames.join(', ');
+      } else {
+        document.getElementById('emailAttachments').textContent = '없음';
+      }
 
-      // PII 자동 탐지 (클라이언트 측 간단 탐지)
       detectPIIInEmail();
     }
 
-    // 이메일 본문 토글
     function toggleEmailBody() {
       const container = document.getElementById('emailBodyContainer');
       const btn = document.getElementById('toggleBodyBtn');
@@ -264,10 +258,9 @@
       }
     }
 
-    // PII 간단 탐지 (이메일, 전화번호 등)
     function detectPIIInEmail() {
       const body = emailData.body || '';
-      const text = body.replace(/<[^>]*>/g, ' '); // HTML 태그 제거
+      const text = body.replace(/<[^>]*>/g, ' ');
 
       const patterns = {
         email: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
@@ -290,7 +283,6 @@
       updatePIIStats();
     }
 
-    // PII 통계 업데이트
     function updatePIIStats() {
       const statsDiv = document.getElementById('piiStats');
 
@@ -319,7 +311,6 @@
       statsDiv.innerHTML = html;
     }
 
-    // 커스텀 설정 수집
     function getSelectedContext() {
       const context = {
         sender_type: null,
@@ -328,7 +319,6 @@
         regulations: []
       };
 
-      // 사내/사외 선택
       const insideChecked = document.querySelector('#group-inside .checkbox.on');
       const outsideChecked = document.querySelector('#group-outside .checkbox.on');
 
@@ -340,14 +330,12 @@
         context.receiver_type = 'external';
       }
 
-      // 세부 목적 (정부 기관 등)
       const purposeChecked = document.querySelectorAll('#gov-purpose .checkbox.on');
       purposeChecked.forEach(cb => {
         const text = cb.nextElementSibling?.textContent.trim();
         if (text) context.purpose.push(text);
       });
 
-      // 규제 우선순위
       const regChecked = document.querySelectorAll('.group:last-child .checkbox.on');
       regChecked.forEach(cb => {
         const text = cb.nextElementSibling?.textContent.trim();
@@ -357,7 +345,6 @@
       return context;
     }
 
-    // RAG 분석 실행
     async function analyzeWithRAG() {
       const context = getSelectedContext();
 
@@ -368,15 +355,12 @@
 
       selectedContext = context;
 
-      // 로딩 표시
       document.getElementById('loadingIndicator').style.display = 'block';
       document.getElementById('aiSummary').textContent = '분석 중...';
 
       try {
-        // RAG 쿼리 생성
         const query = buildRAGQuery();
 
-        // API 호출
         const response = await fetch(`${API_BASE}/api/vectordb/analyze`, {
           method: 'POST',
           headers: {
@@ -397,7 +381,6 @@
 
         const result = await response.json();
 
-        // 마스킹 결정 적용
         if (result.success && result.data) {
           applyMaskingDecisions(result.data);
         }
@@ -405,15 +388,12 @@
       } catch (error) {
         console.error('RAG 분석 오류:', error);
         document.getElementById('aiSummary').textContent = '분석 실패: ' + error.message;
-
-        // Fallback: 간단한 규칙 기반 마스킹
         applySimpleMaskingRules();
       } finally {
         document.getElementById('loadingIndicator').style.display = 'none';
       }
     }
 
-    // RAG 쿼리 생성
     function buildRAGQuery() {
       const context = selectedContext;
       let query = '';
@@ -431,24 +411,19 @@
       return query;
     }
 
-    // 마스킹 결정 적용
     function applyMaskingDecisions(data) {
       maskingDecisions = data.masking_decisions || {};
 
-      // AI 요약 표시
       document.getElementById('aiSummary').textContent =
         data.summary || '분석이 완료되었습니다. 가이드라인에 따라 마스킹 항목이 자동 선택되었습니다.';
 
-      // 사이드바 마스킹 리스트 업데이트
       updateMaskingList();
     }
 
-    // 간단한 규칙 기반 마스킹 (Fallback)
     function applySimpleMaskingRules() {
       maskingDecisions = {};
 
       detectedPII.forEach((pii, idx) => {
-        // 외부 전송이면 모두 마스킹
         if (selectedContext.receiver_type === 'external') {
           maskingDecisions[`pii_${idx}`] = {
             type: pii.type,
@@ -457,7 +432,6 @@
             reason: '외부 전송 시 개인정보 마스킹 필수'
           };
         } else {
-          // 주민번호, 계좌번호는 항상 마스킹
           if (pii.type === 'jumin' || pii.type === 'account') {
             maskingDecisions[`pii_${idx}`] = {
               type: pii.type,
@@ -475,7 +449,6 @@
       updateMaskingList();
     }
 
-    // 마스킹 리스트 업데이트
     function updateMaskingList() {
       const sidebar = document.getElementById('sidebar');
 
@@ -504,12 +477,10 @@
           const checkedAttr = decision.should_mask ? 'true' : 'false';
           const typeName = typeNames[decision.type] || decision.type;
 
-          // reasoning HTML 변환
           const reasoningHtml = decision.reasoning
             ? decision.reasoning.replace(/\n/g, '<br>').replace(/   /g, '&nbsp;&nbsp;&nbsp;')
             : '';
 
-          // cited_guidelines 표시
           const guidelinesHtml = decision.cited_guidelines && decision.cited_guidelines.length > 0
             ? '<div style="margin-top: 8px; padding: 8px; background: #f0f7ff; border-left: 3px solid #2196F3; border-radius: 4px;">' +
               '<div style="font-size: 10px; font-weight: 600; color: #1976D2; margin-bottom: 4px;">📚 인용 법령</div>' +
@@ -517,12 +488,10 @@
               '</div>'
             : '';
 
-          // masked_value 표시
           const maskedPreview = decision.masked_value
             ? `<div style="font-size: 11px; color: #28a745; margin-top: 3px;">→ ${decision.masked_value}</div>`
             : '';
 
-          // risk_level 뱃지
           const riskColors = {
             high: '#dc3545',
             critical: '#dc3545',
@@ -575,7 +544,6 @@
       sidebar.innerHTML = html;
     }
 
-    // 마스킹 토글
     function toggleMasking(piiId) {
       if (maskingDecisions[piiId]) {
         maskingDecisions[piiId].should_mask = !maskingDecisions[piiId].should_mask;
@@ -583,7 +551,7 @@
       }
     }
 
-    // 마스킹 완료 및 이메일 전송
+    // ===== 마스킹 완료 및 이메일 전송 (통합: DB 저장 + SMTP 전송) =====
     async function sendMaskedEmail() {
       if (!emailData) {
         alert('이메일 데이터가 없습니다.');
@@ -606,15 +574,16 @@
         }
       }
 
-      // SMTP 전송
       try {
-        // 전송 정보 로그
+        const token = localStorage.getItem('auth_token');
         const maskedCount = Object.values(maskingDecisions).filter(d => d.should_mask).length;
+
         console.log('📧 이메일 전송 시작:', {
           from: emailData.from,
           to: emailData.to,
           subject: emailData.subject,
-          maskedCount: maskedCount
+          maskedCount: maskedCount,
+          attachments: emailData.attachments?.length || 0
         });
 
         // 로딩 표시
@@ -624,9 +593,33 @@
           loadingEl.innerHTML = '<div style="font-size: 24px; margin-bottom: 10px;">📧</div><div>이메일 전송 중...</div>';
         }
 
-        // SMTP API로 메일 전송
-        const token = localStorage.getItem('auth_token');
-        const response = await fetch(`${API_BASE}/api/v1/smtp/send`, {
+        // ===== 1단계: DB에 이메일 저장 (승인 완료 상태로) =====
+        const dbResponse = await fetch(`${API_BASE}/api/v1/emails/send-approved`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            from_email: emailData.from,
+            to: emailData.to,
+            subject: emailData.subject,
+            body: maskedBody,
+            attachments: emailData.attachments || [],
+            masking_decisions: maskingDecisions
+          })
+        });
+
+        if (!dbResponse.ok) {
+          const error = await dbResponse.json();
+          throw new Error(error.detail || 'DB 저장 실패');
+        }
+
+        const dbResult = await dbResponse.json();
+        console.log('✅ DB 저장 성공:', dbResult);
+
+        // ===== 2단계: SMTP로 실제 이메일 전송 =====
+        const smtpResponse = await fetch(`${API_BASE}/api/v1/smtp/send`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -643,18 +636,20 @@
           })
         });
 
-        const result = await response.json();
+        const smtpResult = await smtpResponse.json();
 
         // 로딩 숨김
         if (loadingEl) {
           loadingEl.style.display = 'none';
         }
 
-        if (!response.ok) {
-          throw new Error(result.detail || '메일 전송에 실패했습니다.');
+        if (!smtpResponse.ok) {
+          console.warn('⚠️ SMTP 전송 실패 (DB에는 저장됨):', smtpResult);
+          // SMTP 실패해도 DB에는 저장되었으므로 경고만 표시
+          alert('⚠️ 이메일이 DB에 저장되었으나 실제 전송에 실패했습니다.\n' + (smtpResult.detail || ''));
+        } else {
+          console.log('✅ SMTP 전송 성공:', smtpResult);
         }
-
-        console.log('✅ 전송 성공:', result);
 
         // 성공 메시지
         let message = '✅ 이메일이 성공적으로 전송되었습니다!\n\n';
@@ -663,7 +658,9 @@
         if (maskedCount > 0) {
           message += `마스킹 적용: ${maskedCount}개 항목\n`;
         }
-        message += `\n전송 시간: ${new Date(result.sent_at).toLocaleString('ko-KR')}`;
+        if (smtpResult.sent_at) {
+          message += `\n전송 시간: ${new Date(smtpResult.sent_at).toLocaleString('ko-KR')}`;
+        }
 
         alert(message);
 
@@ -686,7 +683,6 @@
       }
     }
 
-    // 값 마스킹
     function maskValue(value, type) {
       if (type === 'email') {
         const parts = value.split('@');
