@@ -1,128 +1,16 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Enterprise GuardCAP - 로딩 중</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #f5f5f5;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-    }
-
-    .loader {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 20px;
-    }
-
-    .spinner {
-      width: 40px;
-      height: 40px;
-      border: 3px solid #e0e0e0;
-      border-top-color: #2563eb;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    .loader-text {
-      font-size: 14px;
-      color: #666;
-    }
-
-    #app-container {
-      display: none;
-    }
-  </style>
-</head>
-<body>
-  <div class="loader" id="loader">
-    <div class="spinner"></div>
-    <div class="loader-text">인증 확인 중...</div>
-  </div>
-
-  <div id="app-container"></div>
-
-  <script src="auth.js"></script>
-  <script src="router.js"></script>
-  <script>
-    // 앱 초기화
-    async function initializeApp() {
-      const loader = document.getElementById('loader');
-      const appContainer = document.getElementById('app-container');
-
-      try {
-        // 토큰 확인
-        const token = localStorage.getItem('auth_token');
-        const user = JSON.parse(localStorage.getItem('user') || 'null');
-
-        if (!token || !user) {
-          // 토큰 없음 → 로그인 페이지로 이동
-          console.log('No auth token found, redirecting to login');
-          window.location.href = 'pages/login.html';
-          return;
-        }
-
-        // 토큰 검증: 로컬 토큰 존재만 확인 (백엔드 검증은 dashboard에서 수행)
-        // 주의: 백엔드 검증 호출 시 일부 엔드포인트가 인증 요구로 인해 실패할 수 있으므로 생략
-
-        // 토큰 있음 → 사용자 역할에 따라 대시보드로 라우팅
-        loader.style.display = 'none';
-        appContainer.style.display = 'block';
-
-        const role = user.role || 'user';
-        let dashboardPath = '';
-
-        switch (role) {
-          case 'root_admin':
-            dashboardPath = 'pages/dashboard-admin.html';
-            break;
-          case 'policy_admin':
-            dashboardPath = 'pages/dashboard-policy.html';
-            break;
-          case 'approver':
-            dashboardPath = 'pages/approver-review.html';
-            break;
-          case 'auditor':
-            dashboardPath = 'pages/dashboard-auditor.html';
-            break;
-          default:
-            dashboardPath = 'pages/dashboard-user.html';
-        }
-
-        console.log(`User role: ${role}, redirecting to ${dashboardPath}`);
-        window.location.href = dashboardPath;
-
-      } catch (error) {
-        console.error('App initialization error:', error);
-        loader.innerHTML = '<div style="color: red; text-align: center;"><div>오류가 발생했습니다.</div><div style="font-size: 12px; margin-top: 10px;">다시 로그인해주세요.</div></div>';
-        setTimeout(() => {
-          window.location.href = 'pages/login.html';
-        }, 2000);
-      }
-    }
-
-    // 페이지 로드 시 앱 초기화
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initializeApp);
-    } else {
-      initializeApp();
-    }
-  </script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MASKIT - 이메일 마스킹 시스템</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

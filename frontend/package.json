@@ -4,15 +4,37 @@
   "description": "Enterprise GuardCAP - DLP & Email Security Solution UI",
   "license": "ISC",
   "author": "",
-  "type": "commonjs",
-  "main": "index.js",
-  "homepage": "./",
+  "type": "module",
   "scripts": {
-    "start": "electron .",
-    "dev": "electron . --dev"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "electron": "electron .",
+    "electron:dev": "electron . --dev"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-slot": "^1.2.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "electron": "^37.3.1",
-    "electron-is-dev": "^2.0.0"
+    "electron-is-dev": "^2.0.0",
+    "lucide-react": "^0.553.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwind-merge": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "autoprefixer": "^10.4.22",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.18",
+    "tailwindcss-animate": "^1.0.7",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.2"
   }
 }
