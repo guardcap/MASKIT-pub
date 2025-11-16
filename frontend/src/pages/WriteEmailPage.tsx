@@ -33,14 +33,7 @@ interface EmailData {
   to: string[]
   subject: string
   body: string
-  attachments: AttachmentInfo[]
-}
-
-interface AttachmentInfo {
-  file_id: string
-  filename: string
-  size: number
-  content_type: string
+  attachments: File[]
 }
 
 export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }) => {
@@ -49,14 +42,28 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
   const [recipientInput, setRecipientInput] = useState('')
   const [subject, setSubject] = useState('')
   const [bodyHtml, setBodyHtml] = useState('')
-  const [attachments, setAttachments] = useState<AttachmentInfo[]>([])
-  const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set())
+  const [attachments, setAttachments] = useState<File[]>([])
 
   const editorRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // 설정에서 기본 이메일 로드
+  // 로그인한 사용자의 이메일 자동 로드
   useEffect(() => {
+    // 먼저 로그인한 사용자 정보에서 이메일 가져오기
+    const userStr = localStorage.getItem('user')
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr)
+        if (user.email) {
+          setFromEmail(user.email)
+          return
+        }
+      } catch (error) {
+        console.error('Failed to load user info:', error)
+      }
+    }
+
+    // 사용자 정보가 없으면 이메일 설정에서 가져오기 (fallback)
     const savedEmailSettings = localStorage.getItem('email_settings')
     if (savedEmailSettings) {
       try {
@@ -100,55 +107,29 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
     editorRef.current?.focus()
   }
 
-  // 파일 업로드
-  const handleFileSelect = async (files: FileList | null) => {
+  // 파일 선택 핸들러 (즉시 상태에 저장)
+  const handleFileSelect = (files: FileList | null) => {
     if (!files || files.length === 0) return
 
+    const newFiles: File[] = []
+    
     for (const file of Array.from(files)) {
-      // 중복 체크
-      if (attachments.some(a => a.filename === file.name)) {
+      // 중복 체크 (파일명과 크기로)
+      if (attachments.some(a => a.name === file.name && a.size === file.size)) {
         toast.error(`이미 추가된 파일입니다: ${file.name}`)
         continue
       }
+      newFiles.push(file)
+    }
 
-      // 업로드 시작
-      const uploadId = `${file.name}-${Date.now()}`
-      setUploadingFiles(prev => new Set(prev).add(uploadId))
-
-      toast.loading(`${file.name} 업로드 중...`, { id: uploadId })
-
-      try {
-        const formData = new FormData()
-        formData.append('file', file)
-
-        const response = await fetch(`${API_BASE_URL}/api/v1/emails/upload-attachment`, {
-          method: 'POST',
-          body: formData,
-        })
-
-        if (!response.ok) {
-          throw new Error('파일 업로드 실패')
-        }
-
-        const result = await response.json()
-
-        setAttachments(prev => [...prev, result])
-        toast.success(`${file.name} 업로드 완료`, { id: uploadId })
-      } catch (error) {
-        console.error('Upload error:', error)
-        toast.error(`${file.name} 업로드 실패`, { id: uploadId })
-      } finally {
-        setUploadingFiles(prev => {
-          const next = new Set(prev)
-          next.delete(uploadId)
-          return next
-        })
-      }
+    if (newFiles.length > 0) {
+      setAttachments(prev => [...prev, ...newFiles])
+      toast.success(`${newFiles.length}개 파일 추가됨`)
     }
   }
 
-  const removeAttachment = (fileId: string) => {
-    setAttachments(attachments.filter(a => a.file_id !== fileId))
+  const removeAttachment = (index: number) => {
+    setAttachments(attachments.filter((_, i) => i !== index))
   }
 
   // 파일 크기 포맷
@@ -160,8 +141,8 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
   }
 
-  // 이메일 전송 (approver-review로 이동)
-  const handleSend = () => {
+  // 이메일 전송
+  const handleSend = async () => {
     // 검증
     if (!fromEmail) {
       toast.error('보내는 사람 이메일을 입력하세요')
@@ -184,22 +165,47 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
       return
     }
 
-    // 파일 업로드 진행 중 체크
-    if (uploadingFiles.size > 0) {
-      toast.error('파일 업로드가 진행 중입니다. 잠시만 기다려주세요')
-      return
-    }
+    try {
 
-    const emailData: EmailData = {
-      from: fromEmail,
-      to: recipients,
-      subject,
-      body,
-      attachments,
-    }
+      // FormData 생성
+      const formData = new FormData()
+      formData.append('from_email', fromEmail)
+      formData.append('to_email', recipients.join(', '))
+      formData.append('subject', subject)
+      formData.append('original_body', body)
 
-    toast.success('이메일 분석 준비 중...')
-    onSend?.(emailData)
+      // 첨부파일 추가
+      attachments.forEach((file) => {
+        formData.append('attachments', file)
+      })
+
+      // API 호출
+      const response = await fetch(`${API_BASE_URL}/api/v1/files/upload_email`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error('이메일 전송 실패')
+      }
+
+      const result = await response.json()
+      toast.success('이메일이 전송되었습니다')
+
+      // 콜백 호출
+      if (onSend) {
+        onSend({
+          from: fromEmail,
+          to: recipients,
+          subject,
+          body,
+          attachments,
+        })
+      }
+    } catch (error) {
+      console.error('Send error:', error)
+      toast.error('이메일 전송 중 오류가 발생했습니다')
+    }
   }
 
   // 임시 저장
@@ -319,18 +325,18 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
 
               {/* 첨부파일 목록 */}
               {attachments.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {attachments.map((file) => (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {attachments.map((file, index) => (
                     <div
-                      key={file.file_id}
+                      key={`${file.name}-${index}`}
                       className="flex items-center gap-2 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-md text-sm"
                     >
                       <span>
-                        📄 {file.filename} ({formatFileSize(file.size)})
+                        📄 {file.name} ({formatFileSize(file.size)})
                       </span>
                       <button
                         type="button"
-                        onClick={() => removeAttachment(file.file_id)}
+                        onClick={() => removeAttachment(index)}
                         className="hover:text-destructive"
                       >
                         <X className="h-4 w-4" />
@@ -342,7 +348,7 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
 
               {/* 드래그 앤 드롭 영역 */}
               <div
-                className="mt-3 p-8 border-2 border-dashed border-muted-foreground/25 rounded-lg text-center cursor-pointer hover:border-primary hover:bg-accent/10 transition-colors"
+                className="p-8 border-2 border-dashed border-muted-foreground/25 rounded-lg text-center cursor-pointer hover:border-primary hover:bg-accent/10 transition-colors"
                 onClick={() => fileInputRef.current?.click()}
                 onDragOver={(e) => {
                   e.preventDefault()

@@ -4,6 +4,13 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import asyncio
 import os
+import sys
+
+# Windows 한글/이모지 출력 설정
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # DLP 라우터
 from app.routers import uploads, process, ocr, analyzer, masking_pdf
