@@ -31,7 +31,8 @@ class SMTPEmailClient:
         body: str,
         cc: Optional[str] = None,
         bcc: Optional[str] = None,
-        attachments: Optional[List[str]] = None
+        attachments: Optional[List[str]] = None,
+        smtp_config: Optional[dict] = None
     ) -> dict:
         """
         SMTP를 통해 이메일 전송
@@ -44,11 +45,35 @@ class SMTPEmailClient:
             cc: 참조 (옵션)
             bcc: 숨은 참조 (옵션)
             attachments: 첨부파일 경로 리스트 (옵션)
+            smtp_config: 사용자 SMTP 설정 (옵션, 없으면 환경변수 사용)
 
         Returns:
             dict: {"success": bool, "message": str, "sent_at": datetime}
         """
         try:
+            # 사용자 SMTP 설정이 제공된 경우 사용
+            if smtp_config:
+                smtp_host = smtp_config.get('smtp_host', self.smtp_host)
+                smtp_port = smtp_config.get('smtp_port', self.smtp_port)
+                smtp_user = smtp_config.get('smtp_user', self.smtp_user)
+                smtp_password = smtp_config.get('smtp_password', self.smtp_password)
+                use_tls = smtp_config.get('use_tls', self.use_tls)
+                use_ssl = smtp_config.get('use_ssl', self.use_ssl)
+
+                print(f"[SMTP Client] 🔧 사용자 SMTP 설정 사용")
+                print(f"  Host: {smtp_host}")
+                print(f"  Port: {smtp_port}")
+                print(f"  User: {smtp_user}")
+            else:
+                smtp_host = self.smtp_host
+                smtp_port = self.smtp_port
+                smtp_user = self.smtp_user
+                smtp_password = self.smtp_password
+                use_tls = self.use_tls
+                use_ssl = self.use_ssl
+
+                print(f"[SMTP Client] 🔧 환경변수 SMTP 설정 사용")
+
             # MIMEMultipart 메시지 생성
             msg = MIMEMultipart()
             msg['From'] = from_email
@@ -89,32 +114,32 @@ class SMTPEmailClient:
             print(f"  From: {from_email}")
             print(f"  To: {to}")
             print(f"  Subject: {subject}")
-            print(f"  Protocol: {'SSL' if self.use_ssl else 'TLS' if self.use_tls else 'Plain'}")
-            print(f"  SMTP Server: {self.smtp_host}:{self.smtp_port}")
-            print(f"  Auth User: {self.smtp_user if self.smtp_user else '(none)'}")
+            print(f"  Protocol: {'SSL' if use_ssl else 'TLS' if use_tls else 'Plain'}")
+            print(f"  SMTP Server: {smtp_host}:{smtp_port}")
+            print(f"  Auth User: {smtp_user if smtp_user else '(none)'}")
 
             # SMTP 서버 연결 (SSL 또는 TLS)
-            if self.use_ssl:
+            if use_ssl:
                 # SSL 사용 (포트 465)
-                print(f"[SMTP Client] SSL 연결 시도: {self.smtp_host}:{self.smtp_port}")
-                with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port) as server:
+                print(f"[SMTP Client] SSL 연결 시도: {smtp_host}:{smtp_port}")
+                with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
                     # 인증 (설정된 경우)
-                    if self.smtp_user and self.smtp_password:
-                        server.login(self.smtp_user, self.smtp_password)
+                    if smtp_user and smtp_password:
+                        server.login(smtp_user, smtp_password)
 
                     # 메일 전송
                     server.send_message(msg)
             else:
                 # TLS 또는 Plain SMTP 사용 (포트 587 또는 25)
-                print(f"[SMTP Client] SMTP 연결 시도: {self.smtp_host}:{self.smtp_port}")
-                with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
-                    if self.use_tls:
+                print(f"[SMTP Client] SMTP 연결 시도: {smtp_host}:{smtp_port}")
+                with smtplib.SMTP(smtp_host, smtp_port) as server:
+                    if use_tls:
                         print(f"[SMTP Client] STARTTLS 활성화")
                         server.starttls()
 
                     # 인증 (설정된 경우)
-                    if self.smtp_user and self.smtp_password:
-                        server.login(self.smtp_user, self.smtp_password)
+                    if smtp_user and smtp_password:
+                        server.login(smtp_user, smtp_password)
 
                     # 메일 전송
                     server.send_message(msg)

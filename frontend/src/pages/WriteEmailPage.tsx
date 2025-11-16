@@ -1,0 +1,458 @@
+import React, { useState, useRef, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import {
+  ArrowLeft,
+  Send,
+  Save,
+  Upload,
+  X,
+  Bold,
+  Italic,
+  Underline,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  List,
+  ListOrdered
+} from 'lucide-react'
+import { toast } from 'sonner'
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+
+interface WriteEmailPageProps {
+  onBack?: () => void
+  onSend?: (emailData: EmailData) => void
+}
+
+interface EmailData {
+  from: string
+  to: string[]
+  subject: string
+  body: string
+  attachments: AttachmentInfo[]
+}
+
+interface AttachmentInfo {
+  file_id: string
+  filename: string
+  size: number
+  content_type: string
+}
+
+export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }) => {
+  const [fromEmail, setFromEmail] = useState('')
+  const [recipients, setRecipients] = useState<string[]>([])
+  const [recipientInput, setRecipientInput] = useState('')
+  const [subject, setSubject] = useState('')
+  const [bodyHtml, setBodyHtml] = useState('')
+  const [attachments, setAttachments] = useState<AttachmentInfo[]>([])
+  const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set())
+
+  const editorRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // 설정에서 기본 이메일 로드
+  useEffect(() => {
+    const savedEmailSettings = localStorage.getItem('email_settings')
+    if (savedEmailSettings) {
+      try {
+        const settings = JSON.parse(savedEmailSettings)
+        if (settings.default_email) {
+          setFromEmail(settings.default_email)
+        }
+      } catch (error) {
+        console.error('Failed to load email settings:', error)
+      }
+    }
+  }, [])
+
+  // 받는 사람 추가
+  const addRecipient = () => {
+    const email = recipientInput.trim()
+    if (!email) return
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      toast.error('올바른 이메일 주소를 입력하세요')
+      return
+    }
+
+    if (recipients.includes(email)) {
+      toast.error('이미 추가된 이메일입니다')
+      return
+    }
+
+    setRecipients([...recipients, email])
+    setRecipientInput('')
+  }
+
+  const removeRecipient = (email: string) => {
+    setRecipients(recipients.filter(r => r !== email))
+  }
+
+  // 텍스트 서식 적용
+  const formatText = (command: string) => {
+    document.execCommand(command, false, undefined)
+    editorRef.current?.focus()
+  }
+
+  // 파일 업로드
+  const handleFileSelect = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+
+    for (const file of Array.from(files)) {
+      // 중복 체크
+      if (attachments.some(a => a.filename === file.name)) {
+        toast.error(`이미 추가된 파일입니다: ${file.name}`)
+        continue
+      }
+
+      // 업로드 시작
+      const uploadId = `${file.name}-${Date.now()}`
+      setUploadingFiles(prev => new Set(prev).add(uploadId))
+
+      toast.loading(`${file.name} 업로드 중...`, { id: uploadId })
+
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const response = await fetch(`${API_BASE_URL}/api/v1/emails/upload-attachment`, {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (!response.ok) {
+          throw new Error('파일 업로드 실패')
+        }
+
+        const result = await response.json()
+
+        setAttachments(prev => [...prev, result])
+        toast.success(`${file.name} 업로드 완료`, { id: uploadId })
+      } catch (error) {
+        console.error('Upload error:', error)
+        toast.error(`${file.name} 업로드 실패`, { id: uploadId })
+      } finally {
+        setUploadingFiles(prev => {
+          const next = new Set(prev)
+          next.delete(uploadId)
+          return next
+        })
+      }
+    }
+  }
+
+  const removeAttachment = (fileId: string) => {
+    setAttachments(attachments.filter(a => a.file_id !== fileId))
+  }
+
+  // 파일 크기 포맷
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
+  }
+
+  // 이메일 전송 (approver-review로 이동)
+  const handleSend = () => {
+    // 검증
+    if (!fromEmail) {
+      toast.error('보내는 사람 이메일을 입력하세요')
+      return
+    }
+
+    if (recipients.length === 0) {
+      toast.error('받는 사람을 최소 1명 이상 입력하세요')
+      return
+    }
+
+    if (!subject.trim()) {
+      toast.error('제목을 입력하세요')
+      return
+    }
+
+    const body = editorRef.current?.innerHTML || ''
+    if (!body.trim() || body.trim() === '<br>') {
+      toast.error('메일 본문을 입력하세요')
+      return
+    }
+
+    // 파일 업로드 진행 중 체크
+    if (uploadingFiles.size > 0) {
+      toast.error('파일 업로드가 진행 중입니다. 잠시만 기다려주세요')
+      return
+    }
+
+    const emailData: EmailData = {
+      from: fromEmail,
+      to: recipients,
+      subject,
+      body,
+      attachments,
+    }
+
+    toast.success('이메일 분석 준비 중...')
+    onSend?.(emailData)
+  }
+
+  // 임시 저장
+  const handleSaveDraft = () => {
+    toast.success('임시저장 되었습니다')
+  }
+
+  return (
+    <div className="container mx-auto max-w-6xl p-6">
+      <div className="mb-6">
+        <h2 className="text-2xl font-semibold">메일 쓰기</h2>
+      </div>
+
+      <Card>
+        <CardHeader className="border-b">
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" onClick={onBack}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              뒤로가기
+            </Button>
+            <Button onClick={handleSend}>
+              <Send className="mr-2 h-4 w-4" />
+              보내기
+            </Button>
+            <Button variant="outline" onClick={handleSaveDraft}>
+              <Save className="mr-2 h-4 w-4" />
+              임시 저장
+            </Button>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-0">
+          {/* 보내는 사람 */}
+          <div className="flex items-center p-4 border-b">
+            <Label className="min-w-[100px] font-medium">보내는 사람</Label>
+            <Input
+              type="email"
+              value={fromEmail}
+              onChange={(e) => setFromEmail(e.target.value)}
+              className="max-w-md"
+              placeholder="your@email.com"
+            />
+          </div>
+
+          {/* 받는 사람 */}
+          <div className="flex items-start p-4 border-b">
+            <Label className="min-w-[100px] font-medium pt-2">받는 사람</Label>
+            <div className="flex-1">
+              <div className="flex flex-wrap gap-2 mb-2">
+                {recipients.map((email) => (
+                  <Badge key={email} variant="secondary" className="gap-1">
+                    {email}
+                    <button
+                      type="button"
+                      onClick={() => removeRecipient(email)}
+                      className="ml-1 hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  value={recipientInput}
+                  onChange={(e) => setRecipientInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      addRecipient()
+                    }
+                  }}
+                  placeholder="받는 사람 이메일 (Enter로 추가)"
+                  className="flex-1"
+                />
+                <Button variant="outline" size="sm">
+                  주소록
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* 제목 */}
+          <div className="flex items-center p-4 border-b">
+            <Label className="min-w-[100px] font-medium">제목</Label>
+            <Input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="제목을 입력하세요"
+              className="flex-1"
+            />
+          </div>
+
+          {/* 파일 첨부 */}
+          <div className="flex items-start p-4 border-b">
+            <Label className="min-w-[100px] font-medium pt-2">파일 첨부</Label>
+            <div className="flex-1">
+              <div className="flex gap-2 mb-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  내 PC
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleFileSelect(e.target.files)}
+                />
+              </div>
+
+              {/* 첨부파일 목록 */}
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {attachments.map((file) => (
+                    <div
+                      key={file.file_id}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-md text-sm"
+                    >
+                      <span>
+                        📄 {file.filename} ({formatFileSize(file.size)})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(file.file_id)}
+                        className="hover:text-destructive"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* 드래그 앤 드롭 영역 */}
+              <div
+                className="mt-3 p-8 border-2 border-dashed border-muted-foreground/25 rounded-lg text-center cursor-pointer hover:border-primary hover:bg-accent/10 transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  e.currentTarget.classList.add('border-primary', 'bg-accent/20')
+                }}
+                onDragLeave={(e) => {
+                  e.currentTarget.classList.remove('border-primary', 'bg-accent/20')
+                }}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  e.currentTarget.classList.remove('border-primary', 'bg-accent/20')
+                  handleFileSelect(e.dataTransfer.files)
+                }}
+              >
+                <p className="text-sm text-muted-foreground">
+                  📎 첨부할 파일을 마우스로 끌어 놓으세요
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 에디터 툴바 */}
+          <div className="flex items-center gap-1 p-3 bg-muted/30 border-b flex-wrap">
+            <div className="flex gap-1 pr-3 border-r">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => formatText('bold')}
+                title="굵게"
+              >
+                <Bold className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => formatText('italic')}
+                title="기울임"
+              >
+                <Italic className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => formatText('underline')}
+                title="밑줄"
+              >
+                <Underline className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="flex gap-1 pr-3 border-r">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => formatText('justifyLeft')}
+                title="왼쪽 정렬"
+              >
+                <AlignLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => formatText('justifyCenter')}
+                title="가운데 정렬"
+              >
+                <AlignCenter className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => formatText('justifyRight')}
+                title="오른쪽 정렬"
+              >
+                <AlignRight className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => formatText('insertUnorderedList')}
+                title="글머리 기호"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => formatText('insertOrderedList')}
+                title="번호 매기기"
+              >
+                <ListOrdered className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* 에디터 본문 */}
+          <div
+            ref={editorRef}
+            contentEditable
+            className="min-h-[400px] max-h-[600px] p-6 focus:outline-none overflow-y-auto"
+            onInput={(e) => setBodyHtml(e.currentTarget.innerHTML)}
+            style={{ lineHeight: '1.6' }}
+            suppressContentEditableWarning
+          >
+            {/* 플레이스홀더는 CSS로 처리 */}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

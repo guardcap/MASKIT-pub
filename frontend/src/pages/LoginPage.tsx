@@ -3,13 +3,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { toast } from 'sonner'
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 interface LoginFormData {
   userId: string
@@ -28,62 +24,75 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   onLogin,
   onShowRegister,
 }) => {
-  const [formData, setFormData] = useState<LoginFormData>({
-    userId: '',
-    userName: '',
-    userEmail: '',
-    userTeam: '',
-    userRole: '',
-  })
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    onLogin?.(formData)
+
+    if (!email || !password) {
+      toast.error('이메일과 비밀번호를 입력해주세요')
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || '로그인에 실패했습니다')
+      }
+
+      const data = await response.json()
+
+      // 토큰 저장
+      localStorage.setItem('auth_token', data.access_token)
+      localStorage.setItem('user', JSON.stringify(data.user))
+
+      toast.success('로그인 성공!')
+
+      // 사용자 정보 전달
+      const userData: LoginFormData = {
+        userId: data.user.email,
+        userName: data.user.nickname || data.user.email,
+        userEmail: data.user.email,
+        userTeam: data.user.team_name || '',
+        userRole: data.user.role || 'user',
+      }
+
+      onLogin?.(userData)
+    } catch (error) {
+      console.error('로그인 오류:', error)
+      toast.error(error instanceof Error ? error.message : '로그인에 실패했습니다')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleTestUserLogin = (role: string) => {
-    const testUsers: Record<string, LoginFormData> = {
-      admin: {
-        userId: 'admin',
-        userName: '시스템관리자',
-        userEmail: 'admin@example.com',
-        userTeam: 'IT팀',
-        userRole: 'sys_admin',
-      },
-      policy: {
-        userId: 'policy',
-        userName: '정책관리자',
-        userEmail: 'policy@example.com',
-        userTeam: '보안팀',
-        userRole: 'policy_admin',
-      },
-      auditor: {
-        userId: 'auditor',
-        userName: '감사자',
-        userEmail: 'auditor@example.com',
-        userTeam: '감사팀',
-        userRole: 'auditor',
-      },
-      approver: {
-        userId: 'approver',
-        userName: '승인자',
-        userEmail: 'approver@example.com',
-        userTeam: '관리팀',
-        userRole: 'approver',
-      },
-      user: {
-        userId: 'user',
-        userName: '일반사용자',
-        userEmail: 'user@example.com',
-        userTeam: '개발팀',
-        userRole: 'user',
-      },
-    }
+  // 테스트용 계정으로 로그인 (개발 전용)
+  const handleTestLogin = (testEmail: string) => {
+    setEmail(testEmail)
+    setPassword('password123') // 테스트 계정 기본 비밀번호
 
-    const userData = testUsers[role]
-    if (userData) {
-      onLogin?.(userData)
-    }
+    // 약간의 delay 후 자동 로그인
+    setTimeout(() => {
+      const form = document.querySelector('form') as HTMLFormElement
+      if (form) {
+        form.requestSubmit()
+      }
+    }, 100)
   }
 
   return (
@@ -96,132 +105,44 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="userId">사용자 ID</Label>
+              <Label htmlFor="email">이메일</Label>
               <Input
-                id="userId"
-                placeholder="사용자 ID"
-                value={formData.userId}
-                onChange={(e) =>
-                  setFormData({ ...formData, userId: e.target.value })
-                }
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="userName">이름</Label>
-              <Input
-                id="userName"
-                placeholder="이름"
-                value={formData.userName}
-                onChange={(e) =>
-                  setFormData({ ...formData, userName: e.target.value })
-                }
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="userEmail">이메일</Label>
-              <Input
-                id="userEmail"
+                id="email"
                 type="email"
-                placeholder="이메일"
-                value={formData.userEmail}
-                onChange={(e) =>
-                  setFormData({ ...formData, userEmail: e.target.value })
-                }
+                placeholder="이메일 주소"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={isLoading}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="userTeam">팀</Label>
+              <Label htmlFor="password">비밀번호</Label>
               <Input
-                id="userTeam"
-                placeholder="팀"
-                value={formData.userTeam}
-                onChange={(e) =>
-                  setFormData({ ...formData, userTeam: e.target.value })
-                }
+                id="password"
+                type="password"
+                placeholder="비밀번호"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={isLoading}
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="userRole">역할</Label>
-              <Select
-                value={formData.userRole}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, userRole: value })
-                }
-                required
-              >
-                <SelectTrigger id="userRole">
-                  <SelectValue placeholder="역할 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sys_admin">시스템 관리자</SelectItem>
-                  <SelectItem value="policy_admin">정책 관리자</SelectItem>
-                  <SelectItem value="auditor">감사자</SelectItem>
-                  <SelectItem value="approver">승인자</SelectItem>
-                  <SelectItem value="user">사용자</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Button type="submit" className="w-full">
-              로그인
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? '로그인 중...' : '로그인'}
             </Button>
           </form>
 
-          {/* 테스트 사용자 빠른 로그인 */}
+          {/* 개발용 테스트 계정 */}
           <div className="mt-6 space-y-3">
             <p className="text-center text-sm text-muted-foreground">
-              테스트 사용자 로그인:
+              테스트 계정 (개발용):
             </p>
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handleTestUserLogin('admin')}
-              >
-                시스템 관리자
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handleTestUserLogin('policy')}
-              >
-                정책 관리자
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handleTestUserLogin('auditor')}
-              >
-                감사자
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handleTestUserLogin('approver')}
-              >
-                승인자
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="col-span-2"
-                onClick={() => handleTestUserLogin('user')}
-              >
-                사용자
-              </Button>
+            <div className="text-xs text-muted-foreground text-center space-y-1">
+              <p>먼저 회원가입 후 로그인하세요</p>
+              <p className="text-blue-600">기본 비밀번호: password123</p>
             </div>
           </div>
 

@@ -34,7 +34,8 @@ async def send_email(email_data: EmailSendRequest):
             body=email_data.body,
             cc=email_data.cc,
             bcc=email_data.bcc,
-            attachments=email_data.attachments
+            attachments=email_data.attachments,
+            smtp_config=email_data.smtp_config  # 사용자 SMTP 설정 전달
         )
 
         if not result["success"]:

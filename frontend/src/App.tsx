@@ -1,8 +1,25 @@
 import React, { useState } from 'react'
-import { AppLayout } from '@/components/AppLayout'
+import { ModernAppLayout } from '@/components/ModernAppLayout'
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
-import { Home, Settings, FileText, Shield, Users } from 'lucide-react'
+import { PolicyDashboardPage } from '@/pages/PolicyDashboardPage'
+import { PolicyListPage } from '@/pages/PolicyListPage'
+import { PolicyAddPage } from '@/pages/PolicyAddPage'
+import { PolicyDetailPage } from '@/pages/PolicyDetailPage'
+import { WriteEmailPage } from '@/pages/WriteEmailPage'
+import { ApproverReviewPage } from '@/pages/ApproverReviewPage'
+import { MyPage } from '@/pages/MyPage'
+import { SettingsPage } from '@/pages/SettingsPage'
+import { AdminDashboardPage } from '@/pages/AdminDashboardPage'
+import { UserDashboardPage } from '@/pages/UserDashboardPage'
+import { AuditorDashboardPage } from '@/pages/AuditorDashboardPage'
+import PendingApprovalsPage from '@/pages/PendingApprovalsPage'
+import DecisionLogsPage from '@/pages/DecisionLogsPage'
+import UserManagementPage from '@/pages/UserManagementPage'
+import EntityManagementPage from '@/pages/EntityManagementPage'
+import DlpStatisticsPage from '@/pages/DlpStatisticsPage'
+import RootDashboardPage from '@/pages/RootDashboardPage'
+import { Home, Settings, FileText, Shield, Users, Plus, List, Mail, Send, User } from 'lucide-react'
 
 type Page = 'login' | 'register' | 'main'
 
@@ -14,10 +31,20 @@ interface User {
   userRole: string
 }
 
+interface EmailData {
+  from: string
+  to: string[]
+  subject: string
+  body: string
+  attachments: any[]
+}
+
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('login')
   const [user, setUser] = useState<User | null>(null)
   const [currentView, setCurrentView] = useState('main')
+  const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null)
+  const [emailDraftData, setEmailDraftData] = useState<EmailData | null>(null)
 
   const handleLogin = (userData: any) => {
     setUser(userData)
@@ -45,10 +72,40 @@ function App() {
       onClick: () => setCurrentView('main'),
     },
     {
-      id: 'policy',
-      label: '정책 관리',
+      id: 'write-email',
+      label: '메일 쓰기',
+      icon: <Mail className="h-4 w-4" />,
+      onClick: () => setCurrentView('write-email'),
+    },
+    {
+      id: 'pending-approvals',
+      label: '승인 대기',
+      icon: <Send className="h-4 w-4" />,
+      onClick: () => setCurrentView('pending-approvals'),
+    },
+    {
+      id: 'policy-dashboard',
+      label: '정책 대시보드',
       icon: <Shield className="h-4 w-4" />,
-      onClick: () => setCurrentView('policy'),
+      onClick: () => setCurrentView('policy-dashboard'),
+    },
+    {
+      id: 'policy-list',
+      label: '정책 목록',
+      icon: <List className="h-4 w-4" />,
+      onClick: () => setCurrentView('policy-list'),
+    },
+    {
+      id: 'policy-add',
+      label: '정책 추가',
+      icon: <Plus className="h-4 w-4" />,
+      onClick: () => setCurrentView('policy-add'),
+    },
+    {
+      id: 'entity-management',
+      label: '엔티티 관리',
+      icon: <Shield className="h-4 w-4" />,
+      onClick: () => setCurrentView('entity-management'),
     },
     {
       id: 'users',
@@ -57,10 +114,22 @@ function App() {
       onClick: () => setCurrentView('users'),
     },
     {
+      id: 'dlp-statistics',
+      label: 'DLP 통계',
+      icon: <FileText className="h-4 w-4" />,
+      onClick: () => setCurrentView('dlp-statistics'),
+    },
+    {
       id: 'logs',
-      label: '로그 조회',
+      label: '의사결정 로그',
       icon: <FileText className="h-4 w-4" />,
       onClick: () => setCurrentView('logs'),
+    },
+    {
+      id: 'mypage',
+      label: '마이페이지',
+      icon: <User className="h-4 w-4" />,
+      onClick: () => setCurrentView('mypage'),
     },
     {
       id: 'settings',
@@ -92,38 +161,95 @@ function App() {
 
   // 메인 애플리케이션
   return (
-    <AppLayout
+    <ModernAppLayout
       userName={user?.userName}
-      userTeam={user?.userTeam}
+      userEmail={user?.userEmail}
+      userRole={user?.userRole}
       onLogout={handleLogout}
       sidebarMenu={sidebarMenu}
     >
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {currentView === 'main' && '메인'}
-            {currentView === 'policy' && '정책 관리'}
-            {currentView === 'users' && '사용자 관리'}
-            {currentView === 'logs' && '로그 조회'}
-            {currentView === 'settings' && '설정'}
-          </h1>
-          <p className="text-muted-foreground">
-            {currentView === 'main' && '대시보드 개요'}
-            {currentView === 'policy' && '이메일 마스킹 정책을 관리합니다'}
-            {currentView === 'users' && '사용자 정보를 관리합니다'}
-            {currentView === 'logs' && '시스템 로그를 조회합니다'}
-            {currentView === 'settings' && '시스템 설정을 관리합니다'}
-          </p>
-        </div>
+      {/* 페이지별 컨텐츠 렌더링 */}
+      {currentView === 'main' && (
+        <>
+          {user?.userRole === 'root_admin' && <AdminDashboardPage onNavigate={setCurrentView} />}
+          {user?.userRole === 'auditor' && <AuditorDashboardPage onNavigate={setCurrentView} />}
+          {(!user?.userRole || (user?.userRole !== 'root_admin' && user?.userRole !== 'auditor')) && (
+            <UserDashboardPage onNavigate={setCurrentView} />
+          )}
+        </>
+      )}
 
-        {/* 여기에 각 페이지별 컨텐츠가 들어갑니다 */}
-        <div className="rounded-lg border bg-card p-6 shadow-sm">
-          <p className="text-muted-foreground">
-            이 영역에 실제 페이지 컨텐츠가 표시됩니다.
-          </p>
-        </div>
-      </div>
-    </AppLayout>
+      {currentView === 'policy-dashboard' && (
+        <PolicyDashboardPage onNavigate={setCurrentView} />
+      )}
+
+      {currentView === 'policy-list' && (
+        <PolicyListPage
+          onAddPolicy={() => setCurrentView('policy-add')}
+          onViewPolicy={(id) => {
+            setSelectedPolicyId(id)
+            setCurrentView('policy-detail')
+          }}
+        />
+      )}
+
+      {currentView === 'policy-detail' && selectedPolicyId && (
+        <PolicyDetailPage
+          policyId={selectedPolicyId}
+          onBack={() => setCurrentView('policy-list')}
+          onDelete={(id) => {
+            console.log('Delete policy:', id)
+            // 실제로는 API 호출하여 삭제
+            alert('정책이 삭제되었습니다.')
+            setCurrentView('policy-list')
+          }}
+        />
+      )}
+
+      {currentView === 'policy-add' && (
+        <PolicyAddPage
+          onBack={() => setCurrentView('policy-list')}
+          onSuccess={() => setCurrentView('policy-list')}
+        />
+      )}
+
+      {currentView === 'write-email' && (
+        <WriteEmailPage
+          onBack={() => setCurrentView('main')}
+          onSend={(emailData) => {
+            setEmailDraftData(emailData)
+            setCurrentView('approver-review')
+          }}
+        />
+      )}
+
+      {currentView === 'approver-review' && emailDraftData && (
+        <ApproverReviewPage
+          emailData={emailDraftData}
+          onBack={() => setCurrentView('write-email')}
+          onSendComplete={() => {
+            setEmailDraftData(null)
+            setCurrentView('main')
+          }}
+        />
+      )}
+
+      {currentView === 'mypage' && <MyPage />}
+
+      {currentView === 'users' && <UserManagementPage />}
+
+      {currentView === 'logs' && <DecisionLogsPage />}
+
+      {currentView === 'pending-approvals' && <PendingApprovalsPage />}
+
+      {currentView === 'entity-management' && <EntityManagementPage />}
+
+      {currentView === 'dlp-statistics' && <DlpStatisticsPage />}
+
+      {currentView === 'root-dashboard' && <RootDashboardPage />}
+
+      {currentView === 'settings' && <SettingsPage />}
+    </ModernAppLayout>
   )
 }
 

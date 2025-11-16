@@ -130,13 +130,57 @@ npm run electron
 npm run electron:dev
 ```
 
+## 🔗 Backend API 연동
+
+### 환경 설정
+
+`.env` 파일에서 backend API URL 설정:
+
+```bash
+VITE_API_BASE_URL=http://localhost:8000
+```
+
+### API 기능
+
+정책 업로드 페이지에서 다음 기능이 구현되었습니다:
+
+1. **멀티모달 파일 업로드** (PDF, PNG, JPG, JPEG)
+2. **실시간 진행률 추적** (Toast 알림)
+   - 파일 업로드 진행률
+   - Zerox OCR / PyMuPDF 텍스트 추출
+   - OpenAI Vision API 이미지 처리
+   - VectorDB 임베딩 진행률
+   - 가이드라인 추출 상태
+3. **백그라운드 Task 폴링**
+   - 2초마다 task 상태 확인
+   - 실시간 진행률 업데이트
+
+### 사용된 Backend Endpoints
+
+- `POST /api/policies/upload` - 정책 파일 업로드
+- `GET /api/policies/tasks/{task_id}/status` - 백그라운드 작업 진행률 조회
+- `GET /api/policies/list` - 정책 목록 조회
+- `GET /api/policies/{policy_id}` - 정책 상세 조회
+- `DELETE /api/policies/{policy_id}` - 정책 삭제
+- `GET /api/policies/stats/summary` - 정책 통계
+
+### Toast 알림 시스템
+
+Sonner 라이브러리를 사용하여 다음 알림을 제공합니다:
+
+- ✅ 업로드 시작/완료
+- 📊 실시간 진행률 (0-100%)
+- ⚠️ 에러 메시지
+- ℹ️ 처리 단계별 상태 (OCR, 임베딩, 가이드라인 추출)
+
 ## 💡 다음 단계
 
-1. 실제 API 연동
-2. 상태 관리 추가 (React Context 또는 Zustand)
-3. 라우팅 추가 (React Router)
-4. 폼 검증 강화 (React Hook Form + Zod)
-5. 각 페이지별 상세 구현
+1. ✅ ~~실제 API 연동~~ (완료)
+2. ✅ ~~Toast 알림 시스템~~ (완료)
+3. 상태 관리 추가 (React Context 또는 Zustand)
+4. 라우팅 개선 (React Router)
+5. 폼 검증 강화 (React Hook Form + Zod)
+6. 각 페이지별 상세 구현
 
 ## 📚 참고 자료
 
