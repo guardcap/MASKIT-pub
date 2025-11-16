@@ -11,6 +11,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
+// API 기본 URL 추가 (LoginPage.tsx 참고)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+
 interface RegisterFormData {
   email: string
   nickname: string
@@ -20,12 +23,12 @@ interface RegisterFormData {
 }
 
 interface RegisterPageProps {
-  onRegister?: (data: RegisterFormData) => void
+  onRegister?: (data: RegisterFormData) => void // 이건 이제 사용하지 않을 수 있습니다.
   onShowLogin?: () => void
 }
 
 export const RegisterPage: React.FC<RegisterPageProps> = ({
-  onRegister,
+  onRegister, // onRegister prop은 이제 로직이 여기로 옮겨졌으므로 사용되지 않을 수 있습니다.
   onShowLogin,
 }) => {
   const [formData, setFormData] = useState<RegisterFormData>({
@@ -40,9 +43,14 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
     type: 'success' | 'error'
     text: string
   } | null>(null)
+  
+  // 로딩 상태 추가
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // handleSubmit을 async 함수로 변경
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setMessage(null)
 
     // 비밀번호 확인
     if (formData.password !== formData.confirmPassword) {
@@ -62,8 +70,52 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
       return
     }
 
-    setMessage(null)
-    onRegister?.(formData)
+    setIsLoading(true)
+
+    try {
+      // API 호출 (백엔드의 회원가입 엔드포인트로)
+      // '/api/auth/register'는 예시이며, 실제 백엔드 엔드포인트 주소로 변경해야 합니다.
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          nickname: formData.nickname,
+          team_name: formData.department, // 백엔드 모델에 맞게 키 이름 조정 (예: department -> team_name)
+          password: formData.password,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || '회원가입에 실패했습니다.')
+      }
+
+      // 회원가입 성공
+      setMessage({
+        type: 'success',
+        text: '회원가입 성공! 로그인 페이지로 이동합니다.',
+      })
+
+      // 2초 후 로그인 페이지로 자동 이동
+      setTimeout(() => {
+        onShowLogin?.()
+      }, 2000)
+
+    } catch (error) {
+      console.error('회원가입 오류:', error)
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.',
+      })
+    } finally {
+      setIsLoading(false)
+    }
+    
+    // 이 onRegister는 부모의 prop이므로, 실제 API 호출은 여기서 수행해야 합니다.
+    // onRegister?.(formData) // 이 줄은 제거하거나, API 호출 로직을 이 함수로 대체
   }
 
   return (
@@ -86,6 +138,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                   setFormData({ ...formData, email: e.target.value })
                 }
                 required
+                disabled={isLoading} 
               />
             </div>
 
@@ -99,6 +152,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                   setFormData({ ...formData, nickname: e.target.value })
                 }
                 required
+                disabled={isLoading}
               />
             </div>
 
@@ -110,6 +164,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                   setFormData({ ...formData, department: value })
                 }
                 required
+                disabled={isLoading}
               >
                 <SelectTrigger id="department">
                   <SelectValue placeholder="팀을 선택하세요" />
@@ -138,6 +193,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                   setFormData({ ...formData, password: e.target.value })
                 }
                 required
+                disabled={isLoading}
               />
             </div>
 
@@ -152,11 +208,12 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                   setFormData({ ...formData, confirmPassword: e.target.value })
                 }
                 required
+                disabled={isLoading}
               />
             </div>
 
-            <Button type="submit" className="w-full">
-              회원가입
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? '가입 중...' : '회원가입'}
             </Button>
           </form>
 
@@ -181,6 +238,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
               type="button"
               onClick={onShowLogin}
               className="font-semibold text-primary hover:underline"
+              disabled={isLoading}
             >
               로그인
             </button>
