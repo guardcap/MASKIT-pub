@@ -282,37 +282,16 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
       // 2단계: SMTP 전송 (사용자 SMTP 설정 사용)
       toast.loading('SMTP로 이메일 전송 중...', { id: 'sending-email' })
 
-      // localStorage에서 사용자 SMTP 설정 로드
-      const smtpSettingsStr = localStorage.getItem('smtp_settings')
-      let smtpConfig = null
-
-      if (smtpSettingsStr) {
-        try {
-          smtpConfig = JSON.parse(smtpSettingsStr)
-          console.log('✅ 사용자 SMTP 설정 사용:', {
-            host: smtpConfig.smtp_host,
-            port: smtpConfig.smtp_port,
-            user: smtpConfig.smtp_user,
-          })
-        } catch (error) {
-          console.warn('⚠️ SMTP 설정 파싱 실패, 기본 설정 사용')
-        }
-      }
-
-      if (!smtpConfig) {
-        toast.error('SMTP 설정이 없습니다', {
-          id: 'sending-email',
-          description: '마이페이지에서 SMTP 서버 설정을 먼저 등록하세요.',
-          duration: 7000,
-        })
-        setIsSending(false)
-        return
-      }
+      // [!!! 401 오류 수정 !!!]
+      // 1. localStorage에서 SMTP 설정을 읽어오는 로직 제거
+      // 2. /api/v1/smtp/send 호출 시 Authorization 헤더 추가
+      // 3. /api/v1/smtp/send body에서 smtp_config 제거
 
       const smtpResponse = await fetch(`${API_BASE_URL}/api/v1/smtp/send`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`, // <<< [수정] 401 오류 해결을 위해 토큰 추가
         },
         body: JSON.stringify({
           from_email: emailData.from,
@@ -321,7 +300,7 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
           body: maskedBody,
           cc: null,
           bcc: null,
-          smtp_config: smtpConfig, // 사용자 SMTP 설정 전달
+          // smtp_config: smtpConfig, // <<< [수정] 백엔드가 DB에서 직접 조회하므로 이 필드 제거
         }),
       })
 
@@ -578,9 +557,10 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                           }
                         }}
                       />
-                      <span className="text-sm">{reg}</span>
-                    </label>
-                  ))}
+                        <span className="text-sm">{reg}</span>
+                      </label>
+                    )
+                  )}
                 </div>
               </div>
 

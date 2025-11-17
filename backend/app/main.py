@@ -25,6 +25,9 @@ from app.policy import routes as policy_routes
 from app.entity import routes as entity_routes
 from app.vectordb import routes as vectordb_routes
 
+# Settings 관리
+from app.api import settings as settings_routes
+
 # SMTP 서버 및 라우터
 from app.smtp_server.handler import start_smtp_server
 from app.smtp_server import routes as smtp_routes
@@ -97,6 +100,9 @@ app.include_router(user_routes.router, prefix="/api", tags=["Users"])
 app.include_router(policy_routes.router, tags=["Policy Management"])
 app.include_router(entity_routes.router, tags=["Entity Management"])
 app.include_router(vectordb_routes.router, tags=["VectorDB Management"])
+
+# ===== Settings 라우터 =====
+app.include_router(settings_routes.router, tags=["Settings"])
 
 # ===== SMTP 메일 전송 라우터 =====
 app.include_router(smtp_routes.router, prefix="/api/v1", tags=["SMTP Email"])
