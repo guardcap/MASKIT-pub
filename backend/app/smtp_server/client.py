@@ -57,8 +57,9 @@ class SMTPEmailClient:
                 smtp_port = smtp_config.get('smtp_port', self.smtp_port)
                 smtp_user = smtp_config.get('smtp_user', self.smtp_user)
                 smtp_password = smtp_config.get('smtp_password', self.smtp_password)
-                use_tls = smtp_config.get('use_tls', self.use_tls)
-                use_ssl = smtp_config.get('use_ssl', self.use_ssl)
+                # DB에서는 smtp_use_tls, smtp_use_ssl로 저장되므로 둘 다 지원
+                use_tls = smtp_config.get('smtp_use_tls', smtp_config.get('use_tls', self.use_tls))
+                use_ssl = smtp_config.get('smtp_use_ssl', smtp_config.get('use_ssl', self.use_ssl))
 
                 print(f"[SMTP Client] 🔧 사용자 SMTP 설정 사용")
                 print(f"  Host: {smtp_host}")

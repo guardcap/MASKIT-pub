@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { ModernAppLayout } from '@/components/ModernAppLayout'
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
@@ -7,12 +7,13 @@ import { PolicyListPage } from '@/pages/PolicyListPage'
 import { PolicyAddPage } from '@/pages/PolicyAddPage'
 import { PolicyDetailPage } from '@/pages/PolicyDetailPage'
 import { WriteEmailPage } from '@/pages/WriteEmailPage'
-import { ApproverReviewPage } from '@/pages/ApproverReviewPage'
-import { MyPage } from '@/pages/MyPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { EmailDetailPage } from '@/pages/EmailDetailPage'
 import { AdminDashboardPage } from '@/pages/AdminDashboardPage'
 import { UserDashboardPage } from '@/pages/UserDashboardPage'
 import { AuditorDashboardPage } from '@/pages/AuditorDashboardPage'
+import { SentEmailsPage } from '@/pages/SentEmailsPage'
+import { ReceivedEmailsPage } from '@/pages/ReceivedEmailsPage'
 import PendingApprovalsPage from '@/pages/PendingApprovalsPage'
 import DecisionLogsPage from '@/pages/DecisionLogsPage'
 import UserManagementPage from '@/pages/UserManagementPage'
@@ -31,12 +32,29 @@ interface User {
   userRole: string
 }
 
-interface EmailData {
-  from: string
-  to: string[]
-  subject: string
-  body: string
-  attachments: any[]
+
+// localStorage에서 사용자 정보 복원
+const restoreUserFromStorage = (): User | null => {
+  try {
+    const token = localStorage.getItem('auth_token')
+    const userJson = localStorage.getItem('user')
+
+    if (!token || !userJson) {
+      return null
+    }
+
+    const userData = JSON.parse(userJson)
+    return {
+      userId: userData.email,
+      userName: userData.nickname || userData.email,
+      userEmail: userData.email,
+      userTeam: userData.team_name || '',
+      userRole: userData.role || 'user',
+    }
+  } catch (error) {
+    console.error('사용자 정보 복원 오류:', error)
+    return null
+  }
 }
 
 function App() {
@@ -44,7 +62,18 @@ function App() {
   const [user, setUser] = useState<User | null>(null)
   const [currentView, setCurrentView] = useState('main')
   const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null)
-  const [emailDraftData, setEmailDraftData] = useState<EmailData | null>(null)
+  const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null)
+  const [isInitialized, setIsInitialized] = useState(false)
+
+  // 앱 초기화: localStorage에서 로그인 상태 복원
+  useEffect(() => {
+    const restoredUser = restoreUserFromStorage()
+    if (restoredUser) {
+      setUser(restoredUser)
+      setCurrentPage('main')
+    }
+    setIsInitialized(true)
+  }, [])
 
   const handleLogin = (userData: any) => {
     setUser(userData)
@@ -53,91 +82,115 @@ function App() {
 
   const handleRegister = (userData: any) => {
     console.log('회원가입 데이터:', userData)
-    // 여기서 실제 회원가입 API 호출
     alert('회원가입이 완료되었습니다!')
     setCurrentPage('login')
   }
 
   const handleLogout = () => {
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('user')
+
     setUser(null)
     setCurrentPage('login')
     setCurrentView('main')
   }
 
-  const sidebarMenu = [
-    {
-      id: 'main',
-      label: '메인',
-      icon: <Home className="h-4 w-4" />,
-      onClick: () => setCurrentView('main'),
-    },
-    {
-      id: 'write-email',
-      label: '메일 쓰기',
-      icon: <Mail className="h-4 w-4" />,
-      onClick: () => setCurrentView('write-email'),
-    },
-    {
-      id: 'pending-approvals',
-      label: '승인 대기',
-      icon: <Send className="h-4 w-4" />,
-      onClick: () => setCurrentView('pending-approvals'),
-    },
-    {
-      id: 'policy-dashboard',
-      label: '정책 대시보드',
-      icon: <Shield className="h-4 w-4" />,
-      onClick: () => setCurrentView('policy-dashboard'),
-    },
-    {
-      id: 'policy-list',
-      label: '정책 목록',
-      icon: <List className="h-4 w-4" />,
-      onClick: () => setCurrentView('policy-list'),
-    },
-    {
-      id: 'policy-add',
-      label: '정책 추가',
-      icon: <Plus className="h-4 w-4" />,
-      onClick: () => setCurrentView('policy-add'),
-    },
-    {
-      id: 'entity-management',
-      label: '엔티티 관리',
-      icon: <Shield className="h-4 w-4" />,
-      onClick: () => setCurrentView('entity-management'),
-    },
-    {
-      id: 'users',
-      label: '사용자 관리',
-      icon: <Users className="h-4 w-4" />,
-      onClick: () => setCurrentView('users'),
-    },
-    {
-      id: 'dlp-statistics',
-      label: 'DLP 통계',
-      icon: <FileText className="h-4 w-4" />,
-      onClick: () => setCurrentView('dlp-statistics'),
-    },
-    {
-      id: 'logs',
-      label: '의사결정 로그',
-      icon: <FileText className="h-4 w-4" />,
-      onClick: () => setCurrentView('logs'),
-    },
-    {
-      id: 'mypage',
-      label: '마이페이지',
-      icon: <User className="h-4 w-4" />,
-      onClick: () => setCurrentView('mypage'),
-    },
-    {
-      id: 'settings',
-      label: '설정',
-      icon: <Settings className="h-4 w-4" />,
-      onClick: () => setCurrentView('settings'),
-    },
-  ]
+
+  // 역할별 사이드바 메뉴 생성
+  const getSidebarMenuByRole = (userRole: string) => {
+    const baseMenu = [
+      {
+        id: 'main',
+        label: '메인',
+        icon: <Home className="h-4 w-4" />,
+        onClick: () => setCurrentView('main'),
+      },
+      {
+        id: 'write-email',
+        label: '메일 쓰기',
+        icon: <Mail className="h-4 w-4" />,
+        onClick: () => setCurrentView('write-email'),
+      },
+      {
+        id: 'pending-approvals',
+        label: '승인 대기',
+        icon: <Send className="h-4 w-4" />,
+        onClick: () => setCurrentView('pending-approvals'),
+      },
+    ]
+
+    // Policy Admin 전용 메뉴
+    if (userRole === 'policy_admin') {
+      baseMenu.push(
+        {
+          id: 'policy-dashboard',
+          label: '정책 대시보드',
+          icon: <Shield className="h-4 w-4" />,
+          onClick: () => setCurrentView('policy-dashboard'),
+        },
+        {
+          id: 'policy-list',
+          label: '정책 목록',
+          icon: <List className="h-4 w-4" />,
+          onClick: () => setCurrentView('policy-list'),
+        },
+        {
+          id: 'policy-add',
+          label: '정책 추가',
+          icon: <Plus className="h-4 w-4" />,
+          onClick: () => setCurrentView('policy-add'),
+        },
+      )
+    }
+
+    // Root Admin 전용 메뉴
+    if (userRole === 'root_admin') {
+      baseMenu.push(
+        {
+          id: 'users',
+          label: '사용자 관리',
+          icon: <Users className="h-4 w-4" />,
+          onClick: () => setCurrentView('users'),
+        },
+      )
+    }
+
+    // 공통 메뉴
+    baseMenu.push(
+      {
+        id: 'entity-management',
+        label: '엔티티 관리',
+        icon: <Shield className="h-4 w-4" />,
+        onClick: () => setCurrentView('entity-management'),
+      },
+      {
+        id: 'dlp-statistics',
+        label: 'DLP 통계',
+        icon: <FileText className="h-4 w-4" />,
+        onClick: () => setCurrentView('dlp-statistics'),
+      },
+      {
+        id: 'logs',
+        label: '의사결정 로그',
+        icon: <FileText className="h-4 w-4" />,
+        onClick: () => setCurrentView('logs'),
+      },
+      {
+        id: 'mypage',
+        label: '마이페이지',
+        icon: <User className="h-4 w-4" />,
+        onClick: () => setCurrentView('mypage'),
+      },
+      {
+        id: 'settings',
+        label: '설정',
+        icon: <Settings className="h-4 w-4" />,
+        onClick: () => setCurrentView('settings'),
+      },
+    )
+
+    return baseMenu
+  }
 
   // 로그인 페이지
   if (currentPage === 'login') {
@@ -160,6 +213,8 @@ function App() {
   }
 
   // 메인 애플리케이션
+  const sidebarMenu = user ? getSidebarMenuByRole(user.userRole) : []
+
   return (
     <ModernAppLayout
       userName={user?.userName}
@@ -171,10 +226,29 @@ function App() {
       {/* 페이지별 컨텐츠 렌더링 */}
       {currentView === 'main' && (
         <>
-          {user?.userRole === 'root_admin' && <AdminDashboardPage onNavigate={setCurrentView} />}
-          {user?.userRole === 'auditor' && <AuditorDashboardPage onNavigate={setCurrentView} />}
+          {user?.userRole === 'root_admin' && (
+            <AdminDashboardPage
+              onNavigate={(view, emailId) => {
+                setCurrentView(view)
+                if (emailId) setSelectedEmailId(emailId)
+              }}
+            />
+          )}
+          {user?.userRole === 'auditor' && (
+            <AuditorDashboardPage
+              onNavigate={(view, emailId) => {
+                setCurrentView(view)
+                if (emailId) setSelectedEmailId(emailId)
+              }}
+            />
+          )}
           {(!user?.userRole || (user?.userRole !== 'root_admin' && user?.userRole !== 'auditor')) && (
-            <UserDashboardPage onNavigate={setCurrentView} />
+            <UserDashboardPage
+              onNavigate={(view, emailId) => {
+                setCurrentView(view)
+                if (emailId) setSelectedEmailId(emailId)
+              }}
+            />
           )}
         </>
       )}
@@ -199,7 +273,6 @@ function App() {
           onBack={() => setCurrentView('policy-list')}
           onDelete={(id) => {
             console.log('Delete policy:', id)
-            // 실제로는 API 호출하여 삭제
             alert('정책이 삭제되었습니다.')
             setCurrentView('policy-list')
           }}
@@ -216,25 +289,14 @@ function App() {
       {currentView === 'write-email' && (
         <WriteEmailPage
           onBack={() => setCurrentView('main')}
-          onSend={(emailData) => {
-            setEmailDraftData(emailData)
-            setCurrentView('approver-review')
-          }}
-        />
-      )}
-
-      {currentView === 'approver-review' && emailDraftData && (
-        <ApproverReviewPage
-          emailData={emailDraftData}
-          onBack={() => setCurrentView('write-email')}
-          onSendComplete={() => {
-            setEmailDraftData(null)
+          onSend={() => {
             setCurrentView('main')
           }}
         />
       )}
 
-      {currentView === 'mypage' && <MyPage />}
+
+      {currentView === 'mypage' && <div>마이페이지 (준비 중)</div>}
 
       {currentView === 'users' && <UserManagementPage />}
 
@@ -249,6 +311,30 @@ function App() {
       {currentView === 'root-dashboard' && <RootDashboardPage />}
 
       {currentView === 'settings' && <SettingsPage />}
+
+      {currentView === 'email-detail' && selectedEmailId && (
+        <EmailDetailPage emailId={selectedEmailId} onBack={() => setCurrentView('main')} />
+      )}
+
+      {currentView === 'my-emails' && (
+        <SentEmailsPage
+          onNavigate={(view, emailId) => {
+            setCurrentView(view)
+            if (emailId) setSelectedEmailId(emailId)
+          }}
+          onBack={() => setCurrentView('main')}
+        />
+      )}
+
+      {currentView === 'received-emails' && (
+        <ReceivedEmailsPage
+          onNavigate={(view, emailId) => {
+            setCurrentView(view)
+            if (emailId) setSelectedEmailId(emailId)
+          }}
+          onBack={() => setCurrentView('main')}
+        />
+      )}
     </ModernAppLayout>
   )
 }

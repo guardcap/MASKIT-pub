@@ -33,11 +33,11 @@ load_dotenv()
 # 작업 상태 저장
 task_status: Dict[str, Dict] = {}
 
-# VectorDB 설정
-CHROMA_DB_DIR = Path("backend/app/data/chromadb")
+# VectorDB 설정 - backend/app/rag/data로 통일
+CHROMA_DB_DIR = Path("backend/app/rag/data/chromadb")
 CHROMA_DB_DIR.mkdir(parents=True, exist_ok=True)
 
-# JSONL 저장 디렉토리 (RAG staging)
+# JSONL 저장 디렉토리 (RAG staging) - backend/app/rag/data로 통일
 STAGING_DIR = Path("backend/app/rag/data/staging")
 STAGING_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -41,7 +41,7 @@ router = APIRouter(prefix="/api/policies", tags=["Policy Management"])
 UPLOAD_DIR = Path("backend/app/uploads/policies")
 TEMP_DIR = Path("backend/app/uploads/temp")
 PROCESSED_DIR = Path("backend/app/uploads/processed")
-STAGING_DIR = Path("app/rag/data/staging")
+STAGING_DIR = Path("backend/app/rag/data/staging")  # backend/app/rag/data로 통일
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
@@ -543,6 +543,9 @@ async def get_policy_stats(db = Depends(get_db)):
         # 총 정책 수
         total_policies = await db["policies"].count_documents({})
 
+        # 총 엔티티 수 (entities 컬렉션에서 조회)
+        total_entities = await db.get_collection("entities").count_documents({})
+
         # 기관별 집계
         authority_pipeline = [
             {"$group": {"_id": "$authority", "count": {"$sum": 1}}}
@@ -565,6 +568,7 @@ async def get_policy_stats(db = Depends(get_db)):
             "success": True,
             "data": {
                 "total_policies": total_policies,
+                "total_entities": total_entities,
                 "by_authority": authority_count,
                 "by_file_type": file_type_count
             }
