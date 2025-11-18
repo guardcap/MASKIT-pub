@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import {
   ArrowLeft,
   Send,
@@ -257,7 +258,7 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
 
         <CardContent className="p-0">
           {/* 보내는 사람 */}
-          <div className="flex items-center p-4 border-b">
+          <div className="flex items-center p-4">
             <Label className="min-w-[100px] font-medium">보내는 사람</Label>
             <Input
               type="email"
@@ -268,8 +269,10 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
             />
           </div>
 
+          <Separator />
+
           {/* 받는 사람 */}
-          <div className="flex items-start p-4 border-b">
+          <div className="flex items-start p-4">
             <Label className="min-w-[100px] font-medium pt-2">받는 사람</Label>
             <div className="flex-1">
               <div className="flex flex-wrap gap-2 mb-2">
@@ -307,8 +310,10 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
             </div>
           </div>
 
+          <Separator />
+
           {/* 제목 */}
-          <div className="flex items-center p-4 border-b">
+          <div className="flex items-center p-4">
             <Label className="min-w-[100px] font-medium">제목</Label>
             <Input
               type="text"
@@ -319,8 +324,10 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
             />
           </div>
 
+          <Separator />
+
           {/* 파일 첨부 */}
-          <div className="flex items-start p-4 border-b">
+          <div className="flex items-start p-4">
             <Label className="min-w-[100px] font-medium pt-2">파일 첨부</Label>
             <div className="flex-1">
               <div className="flex gap-2 mb-3">
@@ -388,8 +395,10 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
             </div>
           </div>
 
+          <Separator />
+
           {/* 에디터 툴바 */}
-          <div className="flex items-center gap-1 p-3 bg-muted/30 border-b flex-wrap">
+          <div className="flex items-center gap-1 p-3 bg-muted/30 flex-wrap">
             <div className="flex gap-1 pr-3 border-r">
               <Button
                 variant="ghost"
@@ -463,6 +472,8 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
               </Button>
             </div>
           </div>
+
+          <Separator />
 
           {/* 에디터 본문 */}
           <div
