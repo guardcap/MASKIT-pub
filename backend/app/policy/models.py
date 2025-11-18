@@ -29,6 +29,8 @@ class UserBase(BaseModel):
     department: Optional[str] = None
     team_name: Optional[str] = None  # 소속 팀 (USER, APPROVER용)
     role: UserRole = UserRole.USER
+    phone_number: Optional[str] = None  # 전화번호
+    profile_photo: Optional[str] = None  # 프로필 사진 URL
 
 class UserCreate(UserBase):
     password: str
@@ -39,6 +41,16 @@ class UserUpdate(BaseModel):
     team_name: Optional[str] = None
     role: Optional[UserRole] = None
     password: Optional[str] = None
+    phone_number: Optional[str] = None
+    profile_photo: Optional[str] = None
+
+class UserSelfUpdate(BaseModel):
+    """사용자 본인 프로필 수정용 (role, team_name 제외)"""
+    nickname: Optional[str] = None
+    department: Optional[str] = None
+    password: Optional[str] = None
+    phone_number: Optional[str] = None
+    profile_photo: Optional[str] = None
 
 class UserInDB(UserBase):
     hashed_password: str
