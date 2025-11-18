@@ -87,13 +87,11 @@ function App() {
 
   const handleRegister = (userData: any) => {
     console.log('회원가입 데이터:', userData)
-    // 여기서 실제 회원가입 API 호출
     alert('회원가입이 완료되었습니다!')
     setCurrentPage('login')
   }
 
   const handleLogout = () => {
-    // localStorage 정리
     localStorage.removeItem('auth_token')
     localStorage.removeItem('user')
 
@@ -102,80 +100,101 @@ function App() {
     setCurrentView('main')
   }
 
-  const sidebarMenu = [
-    {
-      id: 'main',
-      label: '메인',
-      icon: <Home className="h-4 w-4" />,
-      onClick: () => setCurrentView('main'),
-    },
-    {
-      id: 'write-email',
-      label: '메일 쓰기',
-      icon: <Mail className="h-4 w-4" />,
-      onClick: () => setCurrentView('write-email'),
-    },
-    {
-      id: 'pending-approvals',
-      label: '승인 대기',
-      icon: <Send className="h-4 w-4" />,
-      onClick: () => setCurrentView('pending-approvals'),
-    },
-    {
-      id: 'policy-dashboard',
-      label: '정책 대시보드',
-      icon: <Shield className="h-4 w-4" />,
-      onClick: () => setCurrentView('policy-dashboard'),
-    },
-    {
-      id: 'policy-list',
-      label: '정책 목록',
-      icon: <List className="h-4 w-4" />,
-      onClick: () => setCurrentView('policy-list'),
-    },
-    {
-      id: 'policy-add',
-      label: '정책 추가',
-      icon: <Plus className="h-4 w-4" />,
-      onClick: () => setCurrentView('policy-add'),
-    },
-    {
-      id: 'entity-management',
-      label: '엔티티 관리',
-      icon: <Shield className="h-4 w-4" />,
-      onClick: () => setCurrentView('entity-management'),
-    },
-    {
-      id: 'users',
-      label: '사용자 관리',
-      icon: <Users className="h-4 w-4" />,
-      onClick: () => setCurrentView('users'),
-    },
-    {
-      id: 'dlp-statistics',
-      label: 'DLP 통계',
-      icon: <FileText className="h-4 w-4" />,
-      onClick: () => setCurrentView('dlp-statistics'),
-    },
-    {
-      id: 'logs',
-      label: '의사결정 로그',
-      icon: <FileText className="h-4 w-4" />,
-      onClick: () => setCurrentView('logs'),
-    },
-    {
-      id: 'mypage',
-      label: '마이페이지',
-      icon: <User className="h-4 w-4" />,
-      onClick: () => setCurrentView('mypage'),
-    },
-    {
-      id: 'settings',
-      label: '설정',
-      icon: <Settings className="h-4 w-4" />,
-      onClick: () => setCurrentView('settings'),
-    },
-  ]
+  // 역할별 사이드바 메뉴 생성
+  const getSidebarMenuByRole = (userRole: string) => {
+    const baseMenu = [
+      {
+        id: 'main',
+        label: '메인',
+        icon: <Home className="h-4 w-4" />,
+        onClick: () => setCurrentView('main'),
+      },
+      {
+        id: 'write-email',
+        label: '메일 쓰기',
+        icon: <Mail className="h-4 w-4" />,
+        onClick: () => setCurrentView('write-email'),
+      },
+      {
+        id: 'pending-approvals',
+        label: '승인 대기',
+        icon: <Send className="h-4 w-4" />,
+        onClick: () => setCurrentView('pending-approvals'),
+      },
+    ]
+
+    // Policy Admin 전용 메뉴
+    if (userRole === 'policy_admin') {
+      baseMenu.push(
+        {
+          id: 'policy-dashboard',
+          label: '정책 대시보드',
+          icon: <Shield className="h-4 w-4" />,
+          onClick: () => setCurrentView('policy-dashboard'),
+        },
+        {
+          id: 'policy-list',
+          label: '정책 목록',
+          icon: <List className="h-4 w-4" />,
+          onClick: () => setCurrentView('policy-list'),
+        },
+        {
+          id: 'policy-add',
+          label: '정책 추가',
+          icon: <Plus className="h-4 w-4" />,
+          onClick: () => setCurrentView('policy-add'),
+        },
+      )
+    }
+
+    // Root Admin 전용 메뉴
+    if (userRole === 'root_admin') {
+      baseMenu.push(
+        {
+          id: 'users',
+          label: '사용자 관리',
+          icon: <Users className="h-4 w-4" />,
+          onClick: () => setCurrentView('users'),
+        },
+      )
+    }
+
+    // 공통 메뉴
+    baseMenu.push(
+      {
+        id: 'entity-management',
+        label: '엔티티 관리',
+        icon: <Shield className="h-4 w-4" />,
+        onClick: () => setCurrentView('entity-management'),
+      },
+      {
+        id: 'dlp-statistics',
+        label: 'DLP 통계',
+        icon: <FileText className="h-4 w-4" />,
+        onClick: () => setCurrentView('dlp-statistics'),
+      },
+      {
+        id: 'logs',
+        label: '의사결정 로그',
+        icon: <FileText className="h-4 w-4" />,
+        onClick: () => setCurrentView('logs'),
+      },
+      {
+        id: 'mypage',
+        label: '마이페이지',
+        icon: <User className="h-4 w-4" />,
+        onClick: () => setCurrentView('mypage'),
+      },
+      {
+        id: 'settings',
+        label: '설정',
+        icon: <Settings className="h-4 w-4" />,
+        onClick: () => setCurrentView('settings'),
+      },
+    )
+
+    return baseMenu
+  }
 
   // 로그인 페이지
   if (currentPage === 'login') {
@@ -198,6 +217,8 @@ function App() {
   }
 
   // 메인 애플리케이션
+  const sidebarMenu = user ? getSidebarMenuByRole(user.userRole) : []
+
   return (
     <ModernAppLayout
       userName={user?.userName}
@@ -237,7 +258,6 @@ function App() {
           onBack={() => setCurrentView('policy-list')}
           onDelete={(id) => {
             console.log('Delete policy:', id)
-            // 실제로는 API 호출하여 삭제
             alert('정책이 삭제되었습니다.')
             setCurrentView('policy-list')
           }}
@@ -272,7 +292,7 @@ function App() {
         />
       )}
 
-      {currentView === 'mypage' && <MyPage />}
+      {currentView === 'mypage' && <div>마이페이지 (준비 중)</div>}
 
       {currentView === 'users' && <UserManagementPage />}
 
