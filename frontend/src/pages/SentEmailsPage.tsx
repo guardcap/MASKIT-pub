@@ -1,36 +1,33 @@
 import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Mail, Paperclip } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Mail, Clock, CheckCircle, XCircle, Paperclip, ArrowLeft } from 'lucide-react'
 
 interface Email {
   _id: string
   subject: string
   to_email: string
+  status: 'pending' | 'approved' | 'rejected'
   created_at: string
-  sent_at?: string
   attachments?: any[]
 }
 
-interface UserDashboardPageProps {
+interface SentEmailsPageProps {
   onNavigate?: (view: string, emailId?: string) => void
+  onBack?: () => void
 }
 
-export function UserDashboardPage({ onNavigate }: UserDashboardPageProps) {
+export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
   const [emails, setEmails] = useState<Email[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
-    const userData = localStorage.getItem('user')
-    if (userData) {
-      setUser(JSON.parse(userData))
-    }
-    loadEmails()
+    loadSentEmails()
   }, [])
 
-  const loadEmails = async () => {
+  const loadSentEmails = async () => {
     try {
       setLoading(true)
       const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
@@ -54,13 +51,29 @@ export function UserDashboardPage({ onNavigate }: UserDashboardPageProps) {
       setEmails(data)
       setError(null)
     } catch (err) {
-      console.error('Error loading emails:', err)
+      console.error('Error loading sent emails:', err)
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.')
     } finally {
       setLoading(false)
     }
   }
 
+  const getStatusBadge = (status: string) => {
+    const variants = {
+      pending: { label: '승인 대기', variant: 'secondary' as const, icon: Clock },
+      approved: { label: '승인 완료', variant: 'default' as const, icon: CheckCircle },
+      rejected: { label: '반려', variant: 'destructive' as const, icon: XCircle },
+    }
+    const config = variants[status as keyof typeof variants] || variants.pending
+    const Icon = config.icon
+
+    return (
+      <Badge variant={config.variant} className="gap-1">
+        <Icon className="h-3 w-3" />
+        {config.label}
+      </Badge>
+    )
+  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('ko-KR', {
@@ -74,34 +87,53 @@ export function UserDashboardPage({ onNavigate }: UserDashboardPageProps) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">🛡️ MASKIT</h1>
-        <p className="text-muted-foreground">내 메일함</p>
+      {/* 헤더 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">보낸 메일함</h1>
+          <p className="text-muted-foreground">내가 보낸 메일 목록</p>
+        </div>
+        {onBack && (
+          <Button variant="ghost" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            뒤로 가기
+          </Button>
+        )}
       </div>
 
-      {/* 메뉴 버튼 */}
-      <div className="flex flex-wrap gap-3">
-        <Button variant="default" onClick={() => loadEmails()}>
-          대시보드
-        </Button>
-        <Button variant="outline" onClick={() => onNavigate?.('my-emails')}>
-          보낸 메일함
-        </Button>
-        <Button variant="outline" onClick={() => onNavigate?.('received-emails')}>
-          받은 메일함
-        </Button>
-        <Button variant="outline" onClick={() => onNavigate?.('my-statistics')}>
-          내 통계
-        </Button>
-        <Button variant="outline" onClick={() => onNavigate?.('my-logs')}>
-          내 로그
-        </Button>
-        <Button variant="outline" onClick={() => onNavigate?.('policy-view')}>
-          정책 조회
-        </Button>
-        <Button variant="outline" onClick={() => onNavigate?.('entity-view')}>
-          엔티티 조회
-        </Button>
+      {/* 통계 카드 */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">전체 메일</CardTitle>
+            <Mail className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{emails.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">승인 대기</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {emails.filter((e) => e.status === 'pending').length}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">승인 완료</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {emails.filter((e) => e.status === 'approved').length}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* 메일 목록 */}
@@ -122,7 +154,14 @@ export function UserDashboardPage({ onNavigate }: UserDashboardPageProps) {
       ) : emails.length === 0 ? (
         <Card>
           <CardContent className="pt-6">
-            <p className="text-center text-muted-foreground">메일이 없습니다</p>
+            <div className="text-center space-y-4">
+              <Mail className="h-12 w-12 mx-auto text-muted-foreground" />
+              <p className="text-muted-foreground">보낸 메일이 없습니다</p>
+              <Button onClick={() => onNavigate?.('write-email')}>
+                <Mail className="h-4 w-4 mr-2" />
+                메일 작성하기
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -140,11 +179,12 @@ export function UserDashboardPage({ onNavigate }: UserDashboardPageProps) {
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-lg">{email.subject}</h3>
+                    {getStatusBadge(email.status)}
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <span>받는이: {email.to_email}</span>
                     <span>•</span>
-                    <span>{formatDate(email.sent_at || email.created_at)}</span>
+                    <span>{formatDate(email.created_at)}</span>
                     {email.attachments && email.attachments.length > 0 && (
                       <>
                         <span>•</span>
@@ -161,16 +201,6 @@ export function UserDashboardPage({ onNavigate }: UserDashboardPageProps) {
           </CardContent>
         </Card>
       )}
-
-      {/* 메일 작성 버튼 (고정) */}
-      <Button
-        className="fixed bottom-8 right-8 rounded-full h-14 px-6 shadow-lg"
-        size="lg"
-        onClick={() => onNavigate?.('write-email')}
-      >
-        <Mail className="h-5 w-5 mr-2" />
-        메일 작성
-      </Button>
     </div>
   )
 }

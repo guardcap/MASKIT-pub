@@ -204,16 +204,7 @@ class SendEmailRequest(BaseModel):
     body: str
     attachments: List[dict] = []  # [{"file_id": "...", "filename": "...", "size": 123}]
     masking_applied: bool = False
-
-
-class ApproveEmailRequest(BaseModel):
-    """마스킹 승인 후 전송 요청"""
-    from_email: EmailStr
-    to: str
-    subject: str
-    body: str
-    attachments: List[dict] = []
-    masking_decisions: dict = {}
+    masking_decisions: dict = {}  # 마스킹 결정사항
 
 
 # ===== 이메일 전송 APIs =====
@@ -251,39 +242,29 @@ async def send_email(
                 "from_email": request.from_email,
                 "to_email": recipient,
                 "subject": request.subject,
-                "original_body": request.body,
-                "masked_body": None,
-                "status": "pending",
+                "body": request.body,  # 마스킹된 본문
                 "attachments": attachment_records,
                 "team_name": current_user.get("team_name"),
-                "content_hash": "",
-                "dlp_token": "",
+                "masking_decisions": request.masking_decisions,
                 "created_at": datetime.utcnow(),
-                "received_at": None,
-                "sent_at": None,
+                "sent_at": datetime.utcnow(),
                 "read_at": None,
-                "dlp_verified": False,
-                "dlp_verified_at": None,
-                "dlp_policy_violation": None,
-                "reviewed_at": None,
-                "reviewed_by": None,
-                "reject_reason": None
             }
-            
+
             result = await db.emails.insert_one(email_record)
             email_ids.append(str(result.inserted_id))
-        
+
         print(f"✅ 이메일 전송: {len(recipients)}명, 첨부파일: {len(attachment_records)}개")
-        
+
         return JSONResponse({
             "success": True,
-            "message": f"{len(recipients)}명의 수신자에게 이메일이 임시 저장되었습니다",
+            "message": f"{len(recipients)}명의 수신자에게 이메일이 전송되었습니다",
             "email_ids": email_ids,
             "data": {
                 "from": request.from_email,
                 "to": recipients,
                 "subject": request.subject,
-                "status": "pending",
+                "sent_at": datetime.utcnow().isoformat(),
                 "attachments": len(attachment_records)
             }
         })
@@ -293,84 +274,12 @@ async def send_email(
         raise HTTPException(status_code=500, detail=f"이메일 전송 실패: {str(e)}")
 
 
-@router.post("/send-approved")
-async def send_approved_email(
-    request: ApproveEmailRequest,
-    current_user: dict = Depends(get_current_user),
-    db = Depends(get_db)
-):
-    """마스킹 승인 후 이메일 전송"""
-    try:
-        recipients = [email.strip() for email in request.to.split(',')]
-        email_ids = []
-        
-        # 첨부파일 정보 처리
-        attachment_records = []
-        for att in request.attachments:
-            if isinstance(att, dict) and att.get("file_id"):
-                attachment_records.append({
-                    "file_id": att["file_id"],
-                    "filename": att.get("filename", "unknown"),
-                    "size": att.get("size", 0),
-                    "content_type": att.get("content_type", "application/octet-stream")
-                })
-            elif isinstance(att, str):
-                attachment_records.append({"filename": att})
-        
-        for recipient in recipients:
-            email_record = {
-                "from_email": request.from_email,
-                "to_email": recipient,
-                "subject": request.subject,
-                "original_body": request.body,
-                "masked_body": request.body,
-                "status": "approved",
-                "attachments": attachment_records,
-                "team_name": current_user.get("team_name"),
-                "content_hash": "",
-                "dlp_token": "",
-                "created_at": datetime.utcnow(),
-                "received_at": datetime.utcnow(),
-                "sent_at": datetime.utcnow(),
-                "read_at": None,
-                "dlp_verified": True,
-                "dlp_verified_at": datetime.utcnow(),
-                "dlp_policy_violation": None,
-                "reviewed_at": datetime.utcnow(),
-                "reviewed_by": current_user.get("email"),
-                "reject_reason": None,
-                "masking_decisions": request.masking_decisions
-            }
-            
-            result = await db.emails.insert_one(email_record)
-            email_ids.append(str(result.inserted_id))
-        
-        print(f"✅ 승인된 이메일 전송: {len(recipients)}명, 첨부파일: {len(attachment_records)}개")
-        
-        return JSONResponse({
-            "success": True,
-            "message": f"마스킹이 적용된 이메일이 {len(recipients)}명에게 전송되었습니다",
-            "email_ids": email_ids,
-            "data": {
-                "from": request.from_email,
-                "to": recipients,
-                "subject": request.subject,
-                "status": "approved",
-                "sent_at": datetime.utcnow().isoformat(),
-                "attachments": len(attachment_records)
-            }
-        })
-        
-    except Exception as e:
-        print(f"❌ 승인된 이메일 전송 오류: {e}")
-        raise HTTPException(status_code=500, detail=f"이메일 전송 실패: {str(e)}")
 
 
 # ===== 메일함 조회 APIs =====
 
 @router.get("/my-emails")
 async def get_my_emails(
-    status_filter: Optional[str] = Query(None, description="pending/approved/rejected"),
     current_user: dict = Depends(get_current_user),
     db = Depends(get_db)
 ):
@@ -380,22 +289,19 @@ async def get_my_emails(
     try:
         # 쿼리 조건
         query = {"from_email": current_user["email"]}
-        
-        if status_filter and status_filter != "all":
-            query["status"] = status_filter
-        
+
         # 이메일 목록 조회
         cursor = db.emails.find(query).sort("created_at", -1).limit(100)
         emails = []
-        
+
         async for email in cursor:
             email["_id"] = str(email["_id"])
             email["id"] = str(email["_id"])  # 프론트엔드 호환성
             emails.append(email)
-        
+
         print(f"✅ 보낸 메일 조회: {current_user['email']} - {len(emails)}개")
         return emails
-        
+
     except Exception as e:
         print(f"❌ 보낸 메일 조회 오류: {e}")
         raise HTTPException(status_code=500, detail=f"메일 조회 실패: {str(e)}")
@@ -426,8 +332,10 @@ async def get_received_emails(
         async for email in cursor:
             email["_id"] = str(email["_id"])
             email["id"] = str(email["_id"])  # 프론트엔드 호환성
+            # read 상태 추가 (read_at이 있으면 읽음)
+            email["read"] = email.get("read_at") is not None
             emails.append(email)
-        
+
         print(f"✅ 받은 메일 조회: {current_user['email']} - {len(emails)}개")
         return emails
         
@@ -487,118 +395,3 @@ async def get_email_detail(
         raise HTTPException(status_code=500, detail=f"메일 조회 실패: {str(e)}")
 
 
-# ===== 메일 승인/반려 APIs =====
-
-@router.post("/{email_id}/approve")
-async def approve_email(
-    email_id: str,
-    current_user: dict = Depends(get_current_user),
-    db = Depends(get_db)
-):
-    """
-    이메일 승인 (승인자 권한 필요)
-    """
-    try:
-        # 권한 확인
-        if current_user.get("role") not in ["root_admin", "auditor", "approver"]:
-            raise HTTPException(status_code=403, detail="승인 권한이 없습니다")
-        
-        # ObjectId 변환
-        try:
-            obj_id = ObjectId(email_id)
-        except:
-            raise HTTPException(status_code=400, detail="잘못된 이메일 ID입니다")
-        
-        # 이메일 조회
-        email = await db.emails.find_one({"_id": obj_id})
-        
-        if not email:
-            raise HTTPException(status_code=404, detail="이메일을 찾을 수 없습니다")
-        
-        if email.get("status") != "pending":
-            raise HTTPException(status_code=400, detail="승인 대기 상태가 아닙니다")
-        
-        # 승인 처리
-        await db.emails.update_one(
-            {"_id": obj_id},
-            {
-                "$set": {
-                    "status": "approved",
-                    "reviewed_at": datetime.utcnow(),
-                    "reviewed_by": current_user["email"],
-                    "sent_at": datetime.utcnow()
-                }
-            }
-        )
-        
-        print(f"✅ 메일 승인: {email_id} by {current_user['email']}")
-        
-        return JSONResponse({
-            "success": True,
-            "message": "이메일이 승인되었습니다",
-            "email_id": email_id
-        })
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ 메일 승인 오류: {e}")
-        raise HTTPException(status_code=500, detail=f"승인 실패: {str(e)}")
-
-
-@router.post("/{email_id}/reject")
-async def reject_email(
-    email_id: str,
-    reason: str,
-    current_user: dict = Depends(get_current_user),
-    db = Depends(get_db)
-):
-    """
-    이메일 반려 (승인자 권한 필요)
-    """
-    try:
-        # 권한 확인
-        if current_user.get("role") not in ["root_admin", "auditor", "approver"]:
-            raise HTTPException(status_code=403, detail="반려 권한이 없습니다")
-        
-        # ObjectId 변환
-        try:
-            obj_id = ObjectId(email_id)
-        except:
-            raise HTTPException(status_code=400, detail="잘못된 이메일 ID입니다")
-        
-        # 이메일 조회
-        email = await db.emails.find_one({"_id": obj_id})
-        
-        if not email:
-            raise HTTPException(status_code=404, detail="이메일을 찾을 수 없습니다")
-        
-        if email.get("status") != "pending":
-            raise HTTPException(status_code=400, detail="승인 대기 상태가 아닙니다")
-        
-        # 반려 처리
-        await db.emails.update_one(
-            {"_id": obj_id},
-            {
-                "$set": {
-                    "status": "rejected",
-                    "reviewed_at": datetime.utcnow(),
-                    "reviewed_by": current_user["email"],
-                    "reject_reason": reason
-                }
-            }
-        )
-        
-        print(f"✅ 메일 반려: {email_id} by {current_user['email']}")
-        
-        return JSONResponse({
-            "success": True,
-            "message": "이메일이 반려되었습니다",
-            "email_id": email_id
-        })
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ 메일 반려 오류: {e}")
-        raise HTTPException(status_code=500, detail=f"반려 실패: {str(e)}")
