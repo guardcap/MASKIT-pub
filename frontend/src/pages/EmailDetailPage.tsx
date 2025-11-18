@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import {
   ArrowLeft,
   Mail,
@@ -8,6 +10,9 @@ import {
   Download,
   User,
   Calendar,
+  Clock,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react'
 
 interface EmailDetail {
@@ -18,6 +23,7 @@ interface EmailDetail {
   body?: string
   original_body?: string
   masked_body?: string
+  status?: 'pending' | 'approved' | 'rejected'
   created_at: string
   sent_at?: string
   read_at?: string
@@ -75,6 +81,24 @@ export function EmailDetailPage({ emailId, onBack }: EmailDetailPageProps) {
     }
   }
 
+
+  const getStatusBadge = (status?: string) => {
+    if (!status) return null
+
+    const variants = {
+      pending: { variant: 'secondary' as const, icon: Clock },
+      approved: { variant: 'default' as const, icon: CheckCircle },
+      rejected: { variant: 'destructive' as const, icon: XCircle },
+    }
+    const config = variants[status as keyof typeof variants] || variants.pending
+    const Icon = config.icon
+
+    return (
+      <Badge variant={config.variant} className="gap-1">
+        <Icon className="h-3 w-3" />
+      </Badge>
+    )
+  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('ko-KR', {
@@ -167,58 +191,37 @@ export function EmailDetailPage({ emailId, onBack }: EmailDetailPageProps) {
           <ArrowLeft className="h-4 w-4 mr-2" />
           뒤로 가기
         </Button>
+        {email.status && getStatusBadge(email.status)}
       </div>
 
       {/* 메일 정보 */}
       <Card>
-        <CardHeader>
+        <CardHeader className="space-y-3">
           <CardTitle className="text-2xl">{email.subject}</CardTitle>
+          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4" />
+              <span>{email.from_email}</span>
+            </div>
+            <Separator orientation="vertical" className="h-4" />
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4" />
+              <span>{email.to_email}</span>
+            </div>
+            <Separator orientation="vertical" className="h-4" />
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              <span>{formatDate(email.created_at)}</span>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {/* 발신/수신 정보 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <User className="h-4 w-4" />
-                <span className="font-semibold">보낸 사람:</span>
-              </div>
-              <p className="text-sm">{email.from_email}</p>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Mail className="h-4 w-4" />
-                <span className="font-semibold">받는 사람:</span>
-              </div>
-              <p className="text-sm">{email.to_email}</p>
-            </div>
-          </div>
-
-          {/* 날짜 정보 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                <span className="font-semibold">작성일:</span>
-              </div>
-              <p className="text-sm">{formatDate(email.created_at)}</p>
-            </div>
-            {email.sent_at && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Calendar className="h-4 w-4" />
-                  <span className="font-semibold">전송일:</span>
-                </div>
-                <p className="text-sm">{formatDate(email.sent_at)}</p>
-              </div>
-            )}
-          </div>
-
-          {/* 구분선 */}
-          <div className="border-t pt-6">
-            <h3 className="text-lg font-semibold mb-4">메일 본문</h3>
-            <div className="prose prose-sm max-w-none">
+        <Separator />
+        <CardContent className="pt-6 space-y-6">
+          {/* 메일 본문 */}
+          <div>
+            <div className="prose prose-sm max-w-none dark:prose-invert">
               <div
-                className="text-sm"
+                className="text-sm leading-relaxed"
                 dangerouslySetInnerHTML={{
                   __html: email.masked_body || email.original_body || email.body || '본문 없음'
                 }}
@@ -228,35 +231,73 @@ export function EmailDetailPage({ emailId, onBack }: EmailDetailPageProps) {
 
           {/* 첨부파일 */}
           {email.attachments && email.attachments.length > 0 && (
-            <div className="border-t pt-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Paperclip className="h-5 w-5" />
-                첨부파일 ({email.attachments.length}개)
-              </h3>
-              <div className="space-y-2">
-                {email.attachments.map((attachment, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/50 transition-colors"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{attachment.filename}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatFileSize(attachment.size)} • {attachment.content_type}
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleDownloadAttachment(attachment.file_id, attachment.filename)}
+            <>
+              <Separator />
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Paperclip className="h-5 w-5 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold">
+                    첨부파일 ({email.attachments.length}개)
+                  </h3>
+                </div>
+                <div className="grid gap-3">
+                  {email.attachments.map((attachment, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors group"
                     >
-                      <Download className="h-4 w-4 mr-2" />
-                      다운로드
-                    </Button>
-                  </div>
-                ))}
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="p-2 rounded-md bg-primary/10">
+                          <Paperclip className="h-4 w-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{attachment.filename}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatFileSize(attachment.size)} • {attachment.content_type}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="ml-4 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => handleDownloadAttachment(attachment.file_id, attachment.filename)}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        다운로드
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            </>
+          )}
+
+          {/* 추가 메타 정보 */}
+          {(email.sent_at || email.read_at) && (
+            <>
+              <Separator />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                {email.sent_at && (
+                  <div className="flex items-start gap-2">
+                    <CheckCircle className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="font-medium">전송일</p>
+                      <p className="text-muted-foreground">{formatDate(email.sent_at)}</p>
+                    </div>
+                  </div>
+                )}
+                {email.read_at && (
+                  <div className="flex items-start gap-2">
+                    <Mail className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="font-medium">읽은 날짜</p>
+                      <p className="text-muted-foreground">{formatDate(email.read_at)}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
