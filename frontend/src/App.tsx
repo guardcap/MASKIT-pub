@@ -7,6 +7,7 @@ import { PolicyListPage } from '@/pages/PolicyListPage'
 import { PolicyAddPage } from '@/pages/PolicyAddPage'
 import { PolicyDetailPage } from '@/pages/PolicyDetailPage'
 import { WriteEmailPage } from '@/pages/WriteEmailPage'
+import { ApproverReviewPage } from '@/pages/ApproverReviewPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { EmailDetailPage } from '@/pages/EmailDetailPage'
 import { AdminDashboardPage } from '@/pages/AdminDashboardPage'
@@ -30,6 +31,15 @@ interface User {
   userEmail: string
   userTeam: string
   userRole: string
+}
+
+interface EmailData {
+  from: string
+  to: string[]
+  subject: string
+  body: string
+  attachments: File[]
+  email_id?: string
 }
 
 
@@ -64,6 +74,7 @@ function App() {
   const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null)
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
+  const [emailDraftData, setEmailDraftData] = useState<EmailData | null>(null)
 
   // 앱 초기화: localStorage에서 로그인 상태 복원
   useEffect(() => {
@@ -289,7 +300,19 @@ function App() {
       {currentView === 'write-email' && (
         <WriteEmailPage
           onBack={() => setCurrentView('main')}
-          onSend={() => {
+          onSend={(emailData) => {
+            setEmailDraftData(emailData)
+            setCurrentView('approver-review')
+          }}
+        />
+      )}
+
+      {currentView === 'approver-review' && emailDraftData && (
+        <ApproverReviewPage
+          emailData={emailDraftData}
+          onBack={() => setCurrentView('write-email')}
+          onSendComplete={() => {
+            setEmailDraftData(null)
             setCurrentView('main')
           }}
         />
