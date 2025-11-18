@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 import { Send } from 'lucide-react'
 
@@ -497,36 +501,21 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
           {/* 파일 탭 (FE 방식) */}
           <Card>
             <CardHeader>
-              <div className="flex gap-2 border-b pb-2">
-                <button
-                  onClick={() => setActiveTab('all')}
-                  className={`px-4 py-2 text-sm font-medium rounded-t ${
-                    activeTab === 'all'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-100 hover:bg-gray-200'
-                  }`}
-                >
-                  전체
-                </button>
-                {(originalEmailData?.attachments || emailData.attachments).map((att: any, idx: number) => (
-                  <button
-                    key={att.filename || att.file_id || idx}
-                    onClick={() => setActiveTab(att.filename || att.file_id)}
-                    className={`px-4 py-2 text-sm font-medium rounded-t ${
-                      activeTab === (att.filename || att.file_id)
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-100 hover:bg-gray-200'
-                    }`}
-                  >
-                    {att.filename}
-                  </button>
-                ))}
-              </div>
+              <CardTitle>이메일 내용 및 첨부파일</CardTitle>
             </CardHeader>
             <CardContent className="min-h-[400px]">
-              {/* 전체 탭 */}
-              {activeTab === 'all' && (
-                <div className="space-y-6">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="w-full justify-start">
+                  <TabsTrigger value="all">전체</TabsTrigger>
+                  {(originalEmailData?.attachments || emailData.attachments).map((att: any, idx: number) => (
+                    <TabsTrigger key={att.filename || att.file_id || idx} value={att.filename || att.file_id}>
+                      {att.filename}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+
+                {/* 전체 탭 */}
+                <TabsContent value="all" className="space-y-6 mt-4">
                   {/* 이메일 본문 (contenteditable) */}
                   <div>
                     <h3 className="font-semibold mb-3">{emailData.subject}</h3>
@@ -534,7 +523,7 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                       ref={emailBodyRef}
                       contentEditable
                       suppressContentEditableWarning
-                      className="border rounded p-4 min-h-[200px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="border rounded-md p-4 min-h-[200px] focus:outline-none focus:ring-2 focus:ring-ring"
                       style={{ whiteSpace: 'pre-wrap' }}
                     >
                       {emailBodyParagraphs.map((para, idx) => (
@@ -547,27 +536,22 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
 
                   {/* 첨부파일 표시 */}
                   {(originalEmailData?.attachments || emailData.attachments).map((att: any, idx: number) => (
-                    <div key={att.filename || att.file_id || idx} className="border-t pt-4">
+                    <div key={att.filename || att.file_id || idx}>
+                      <Separator className="my-4" />
                       <h4 className="font-medium mb-2">📎 {att.filename}</h4>
                       {renderAttachment(att)}
                     </div>
                   ))}
-                </div>
-              )}
+                </TabsContent>
 
-              {/* 개별 파일 탭 */}
-              {activeTab !== 'all' && (
-                <div>
-                  {(originalEmailData?.attachments || emailData.attachments)
-                    .filter((att: any) => (att.filename || att.file_id) === activeTab)
-                    .map((att: any, idx: number) => (
-                      <div key={att.filename || att.file_id || idx}>
-                        <h3 className="font-semibold mb-4">{att.filename}</h3>
-                        {renderAttachment(att)}
-                      </div>
-                    ))}
-                </div>
-              )}
+                {/* 개별 파일 탭 */}
+                {(originalEmailData?.attachments || emailData.attachments).map((att: any, idx: number) => (
+                  <TabsContent key={att.filename || att.file_id || idx} value={att.filename || att.file_id} className="mt-4">
+                    <h3 className="font-semibold mb-4">{att.filename}</h3>
+                    {renderAttachment(att)}
+                  </TabsContent>
+                ))}
+              </Tabs>
             </CardContent>
           </Card>
 
@@ -662,7 +646,7 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
             </CardHeader>
             <CardContent className="space-y-4">
               {/* 사내 그룹 */}
-              <div className="border-b pb-4">
+              <div className="pb-4">
                 <button 
                   className="flex items-center justify-between w-full text-sm font-medium mb-3"
                   onClick={() => {/* 토글 기능은 유지 */}}
@@ -672,13 +656,13 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                     <polyline points="8 4 16 12 8 20" />
                   </svg>
                 </button>
-                <div className="space-y-2 pl-2">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                <div className="space-y-3 pl-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="hr-team"
                       checked={purposes.includes('인사팀(HR)')}
-                      onChange={(e) => {
-                        if (e.target.checked) {
+                      onCheckedChange={(checked) => {
+                        if (checked) {
                           setPurposes([...purposes, '인사팀(HR)'])
                           setSenderContext('사내')
                         } else {
@@ -690,14 +674,16 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                         }
                       }}
                     />
-                    <span className="text-sm">인사팀(HR)</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                    <Label htmlFor="hr-team" className="text-sm font-normal cursor-pointer">
+                      인사팀(HR)
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="cs-team"
                       checked={purposes.includes('고객지원팀(CS)')}
-                      onChange={(e) => {
-                        if (e.target.checked) {
+                      onCheckedChange={(checked) => {
+                        if (checked) {
                           setPurposes([...purposes, '고객지원팀(CS)'])
                           setSenderContext('사내')
                         } else {
@@ -708,14 +694,16 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                         }
                       }}
                     />
-                    <span className="text-sm">고객지원팀(CS)</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                    <Label htmlFor="cs-team" className="text-sm font-normal cursor-pointer">
+                      고객지원팀(CS)
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="rd-team"
                       checked={purposes.includes('R&D팀')}
-                      onChange={(e) => {
-                        if (e.target.checked) {
+                      onCheckedChange={(checked) => {
+                        if (checked) {
                           setPurposes([...purposes, 'R&D팀'])
                           setSenderContext('사내')
                         } else {
@@ -726,14 +714,16 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                         }
                       }}
                     />
-                    <span className="text-sm">R&D팀</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                    <Label htmlFor="rd-team" className="text-sm font-normal cursor-pointer">
+                      R&D팀
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="external-team"
                       checked={purposes.includes('대외협력팀')}
-                      onChange={(e) => {
-                        if (e.target.checked) {
+                      onCheckedChange={(checked) => {
+                        if (checked) {
                           setPurposes([...purposes, '대외협력팀'])
                           setSenderContext('사내')
                         } else {
@@ -744,13 +734,17 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                         }
                       }}
                     />
-                    <span className="text-sm">대외협력팀</span>
-                  </label>
+                    <Label htmlFor="external-team" className="text-sm font-normal cursor-pointer">
+                      대외협력팀
+                    </Label>
+                  </div>
                 </div>
               </div>
 
+              <Separator />
+
               {/* 사외 그룹 */}
-              <div className="border-b pb-4">
+              <div className="pb-4">
                 <button 
                   className="flex items-center justify-between w-full text-sm font-medium mb-3"
                   onClick={() => {/* 토글 기능은 유지 */}}
@@ -760,13 +754,13 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                     <polyline points="8 4 16 12 8 20" />
                   </svg>
                 </button>
-                <div className="space-y-2 pl-2">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                <div className="space-y-3 pl-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="partner"
                       checked={purposes.includes('협력 업체')}
-                      onChange={(e) => {
-                        if (e.target.checked) {
+                      onCheckedChange={(checked) => {
+                        if (checked) {
                           setPurposes([...purposes, '협력 업체'])
                           setReceiverContext('사외')
                         } else {
@@ -777,14 +771,16 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                         }
                       }}
                     />
-                    <span className="text-sm">협력 업체</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                    <Label htmlFor="partner" className="text-sm font-normal cursor-pointer">
+                      협력 업체
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="client"
                       checked={purposes.includes('고객사')}
-                      onChange={(e) => {
-                        if (e.target.checked) {
+                      onCheckedChange={(checked) => {
+                        if (checked) {
                           setPurposes([...purposes, '고객사'])
                           setReceiverContext('사외')
                         } else {
@@ -795,17 +791,19 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                         }
                       }}
                     />
-                    <span className="text-sm">고객사</span>
-                  </label>
+                    <Label htmlFor="client" className="text-sm font-normal cursor-pointer">
+                      고객사
+                    </Label>
+                  </div>
 
                   {/* 정부 기관 (서브 드롭다운) */}
                   <div>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="government"
                         checked={purposes.includes('정부 기관')}
-                        onChange={(e) => {
-                          if (e.target.checked) {
+                        onCheckedChange={(checked) => {
+                          if (checked) {
                             setPurposes([...purposes, '정부 기관'])
                             setReceiverContext('사외')
                           } else {
@@ -816,71 +814,83 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                           }
                         }}
                       />
-                      <span className="text-sm">정부 기관</span>
-                    </label>
+                      <Label htmlFor="government" className="text-sm font-normal cursor-pointer">
+                        정부 기관
+                      </Label>
+                    </div>
                     {purposes.includes('정부 기관') && (
-                      <div className="ml-6 mt-2 space-y-2 border-l-2 border-gray-200 pl-3">
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
+                      <div className="ml-6 mt-3 space-y-3 border-l-2 border-muted pl-3">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="tax-report"
                             checked={purposes.includes('세무 신고 / 재무 보고')}
-                            onChange={(e) => {
-                              if (e.target.checked) {
+                            onCheckedChange={(checked) => {
+                              if (checked) {
                                 setPurposes([...purposes, '세무 신고 / 재무 보고'])
                               } else {
                                 setPurposes(purposes.filter((p) => p !== '세무 신고 / 재무 보고'))
                               }
                             }}
                           />
-                          <span className="text-sm">세무 신고 / 재무 보고</span>
-                        </label>
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
+                          <Label htmlFor="tax-report" className="text-sm font-normal cursor-pointer">
+                            세무 신고 / 재무 보고
+                          </Label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="labor-report"
                             checked={purposes.includes('노동·고용 관련 보고')}
-                            onChange={(e) => {
-                              if (e.target.checked) {
+                            onCheckedChange={(checked) => {
+                              if (checked) {
                                 setPurposes([...purposes, '노동·고용 관련 보고'])
                               } else {
                                 setPurposes(purposes.filter((p) => p !== '노동·고용 관련 보고'))
                               }
                             }}
                           />
-                          <span className="text-sm">노동·고용 관련 보고</span>
-                        </label>
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
+                          <Label htmlFor="labor-report" className="text-sm font-normal cursor-pointer">
+                            노동·고용 관련 보고
+                          </Label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="privacy-security"
                             checked={purposes.includes('개인정보·보안 규제 대응')}
-                            onChange={(e) => {
-                              if (e.target.checked) {
+                            onCheckedChange={(checked) => {
+                              if (checked) {
                                 setPurposes([...purposes, '개인정보·보안 규제 대응'])
                               } else {
                                 setPurposes(purposes.filter((p) => p !== '개인정보·보안 규제 대응'))
                               }
                             }}
                           />
-                          <span className="text-sm">개인정보·보안 규제 대응</span>
-                        </label>
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
+                          <Label htmlFor="privacy-security" className="text-sm font-normal cursor-pointer">
+                            개인정보·보안 규제 대응
+                          </Label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="gov-support"
                             checked={purposes.includes('정부 지원사업 / 과제 보고')}
-                            onChange={(e) => {
-                              if (e.target.checked) {
+                            onCheckedChange={(checked) => {
+                              if (checked) {
                                 setPurposes([...purposes, '정부 지원사업 / 과제 보고'])
                               } else {
                                 setPurposes(purposes.filter((p) => p !== '정부 지원사업 / 과제 보고'))
                               }
                             }}
                           />
-                          <span className="text-sm">정부 지원사업 / 과제 보고</span>
-                        </label>
+                          <Label htmlFor="gov-support" className="text-sm font-normal cursor-pointer">
+                            정부 지원사업 / 과제 보고
+                          </Label>
+                        </div>
                       </div>
                     )}
                   </div>
                 </div>
               </div>
+
+              <Separator />
 
               {/* 세부 커스텀 그룹 */}
               <div className="pb-4">
@@ -893,51 +903,59 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                     <polyline points="8 4 16 12 8 20" />
                   </svg>
                 </button>
-                <div className="space-y-2 pl-2">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                <div className="space-y-3 pl-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="internal-rules"
                       checked={regulations.includes('사내 규칙 우선')}
-                      onChange={(e) => {
-                        if (e.target.checked) {
+                      onCheckedChange={(checked) => {
+                        if (checked) {
                           setRegulations([...regulations, '사내 규칙 우선'])
                         } else {
                           setRegulations(regulations.filter((r) => r !== '사내 규칙 우선'))
                         }
                       }}
                     />
-                    <span className="text-sm">사내 규칙 우선</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                    <Label htmlFor="internal-rules" className="text-sm font-normal cursor-pointer">
+                      사내 규칙 우선
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="domestic-law"
                       checked={regulations.includes('국내 법률 우선')}
-                      onChange={(e) => {
-                        if (e.target.checked) {
+                      onCheckedChange={(checked) => {
+                        if (checked) {
                           setRegulations([...regulations, '국내 법률 우선'])
                         } else {
                           setRegulations(regulations.filter((r) => r !== '국내 법률 우선'))
                         }
                       }}
                     />
-                    <span className="text-sm">국내 법률 우선</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                    <Label htmlFor="domestic-law" className="text-sm font-normal cursor-pointer">
+                      국내 법률 우선
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="gdpr"
                       checked={regulations.includes('GDPR 우선')}
-                      onChange={(e) => {
-                        if (e.target.checked) {
+                      onCheckedChange={(checked) => {
+                        if (checked) {
                           setRegulations([...regulations, 'GDPR 우선'])
                         } else {
                           setRegulations(regulations.filter((r) => r !== 'GDPR 우선'))
                         }
                       }}
                     />
-                    <span className="text-sm">GDPR 우선</span>
-                  </label>
+                    <Label htmlFor="gdpr" className="text-sm font-normal cursor-pointer">
+                      GDPR 우선
+                    </Label>
+                  </div>
                 </div>
               </div>
+
+              <Separator />
 
               <div className="pt-4 space-y-2">
                 <Button onClick={analyzeWithRAG} disabled={isAnalyzing} className="w-full">
