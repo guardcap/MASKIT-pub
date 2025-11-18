@@ -2,7 +2,23 @@ import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Mail, Clock, CheckCircle, XCircle, Paperclip, ArrowLeft } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Mail, Clock, CheckCircle, XCircle, Paperclip, ArrowLeft, Search, Filter } from 'lucide-react'
 
 interface Email {
   _id: string
@@ -22,6 +38,8 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
   const [emails, setEmails] = useState<Email[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
 
   useEffect(() => {
     loadSentEmails()
@@ -85,6 +103,15 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
     })
   }
 
+  // 필터링된 메일 목록
+  const filteredEmails = emails.filter((email) => {
+    const matchesSearch =
+      email.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      email.to_email.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesStatus = statusFilter === 'all' || email.status === statusFilter
+    return matchesSearch && matchesStatus
+  })
+
   return (
     <div className="space-y-6">
       {/* 헤더 */}
@@ -136,6 +163,37 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
         </Card>
       </div>
 
+      {/* 검색 및 필터 */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="제목 또는 받는 사람으로 검색..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="상태 필터" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체</SelectItem>
+                  <SelectItem value="pending">승인 대기</SelectItem>
+                  <SelectItem value="approved">승인 완료</SelectItem>
+                  <SelectItem value="rejected">반려</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* 메일 목록 */}
       {error && (
         <Card className="border-red-200 bg-red-50">
@@ -164,40 +222,70 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
             </div>
           </CardContent>
         </Card>
+      ) : filteredEmails.length === 0 ? (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center space-y-4">
+              <Search className="h-12 w-12 mx-auto text-muted-foreground" />
+              <p className="text-muted-foreground">검색 결과가 없습니다</p>
+            </div>
+          </CardContent>
+        </Card>
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>메일 목록</CardTitle>
+            <CardTitle>
+              메일 목록 ({filteredEmails.length}개)
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {emails.map((email) => (
-              <div
-                key={email._id}
-                className="flex items-start justify-between p-4 border rounded-lg hover:bg-accent/50 cursor-pointer transition-colors"
-                onClick={() => onNavigate?.('email-detail', email._id)}
-              >
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-lg">{email.subject}</h3>
-                    {getStatusBadge(email.status)}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span>받는이: {email.to_email}</span>
-                    <span>•</span>
-                    <span>{formatDate(email.created_at)}</span>
-                    {email.attachments && email.attachments.length > 0 && (
-                      <>
-                        <span>•</span>
-                        <span className="flex items-center gap-1">
-                          <Paperclip className="h-3 w-3" />
-                          {email.attachments.length}개
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[40%]">제목</TableHead>
+                  <TableHead className="w-[25%]">받는이</TableHead>
+                  <TableHead className="w-[15%]">상태</TableHead>
+                  <TableHead className="w-[15%]">작성일</TableHead>
+                  <TableHead className="w-[5%]"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredEmails.map((email) => (
+                  <TableRow
+                    key={email._id}
+                    className="cursor-pointer"
+                    onClick={() => onNavigate?.('email-detail', email._id)}
+                  >
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate">{email.subject}</span>
+                        {email.attachments && email.attachments.length > 0 && (
+                          <Paperclip className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-muted-foreground truncate block">
+                        {email.to_email}
+                      </span>
+                    </TableCell>
+                    <TableCell>{getStatusBadge(email.status)}</TableCell>
+                    <TableCell>
+                      <span className="text-sm text-muted-foreground">
+                        {formatDate(email.created_at)}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {email.attachments && email.attachments.length > 0 && (
+                        <Badge variant="secondary" className="text-xs">
+                          {email.attachments.length}
+                        </Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}
