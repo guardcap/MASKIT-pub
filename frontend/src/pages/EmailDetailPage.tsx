@@ -15,7 +15,9 @@ interface EmailDetail {
   from_email: string
   to_email: string
   subject: string
-  body: string
+  body?: string
+  original_body?: string
+  masked_body?: string
   created_at: string
   sent_at?: string
   read_at?: string
@@ -215,7 +217,12 @@ export function EmailDetailPage({ emailId, onBack }: EmailDetailPageProps) {
           <div className="border-t pt-6">
             <h3 className="text-lg font-semibold mb-4">메일 본문</h3>
             <div className="prose prose-sm max-w-none">
-              <pre className="whitespace-pre-wrap font-sans text-sm">{email.body}</pre>
+              <div
+                className="text-sm"
+                dangerouslySetInnerHTML={{
+                  __html: email.masked_body || email.original_body || email.body || '본문 없음'
+                }}
+              />
             </div>
           </div>
 

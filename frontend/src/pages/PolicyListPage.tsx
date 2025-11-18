@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { getPolicies, deletePolicy } from '@/lib/api'
 
 interface Policy {
   policy_id: string
@@ -45,32 +46,35 @@ export const PolicyListPage: React.FC<PolicyListPageProps> = ({
   const [authorityFilter, setAuthorityFilter] = useState('all')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [policyToDelete, setPolicyToDelete] = useState<string | null>(null)
+  const [policies, setPolicies] = useState<Policy[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // 샘플 데이터 (실제로는 API에서 가져옴)
-  const [policies] = useState<Policy[]>([
-    {
-      policy_id: '1',
-      title: '개인정보 처리 방침 2024',
-      authority: '개인정보보호위원회',
-      description: '개인정보 보호법에 따른 처리 방침',
-      file_type: '.pdf',
-      created_at: '2024-01-15',
-      metadata: {
-        keywords: ['개인정보', '보호', '처리'],
-      },
-    },
-    {
-      policy_id: '2',
-      title: '금융 보안 가이드',
-      authority: '금융보안원',
-      description: '금융 정보 보안 관련 가이드라인',
-      file_type: '.pdf',
-      created_at: '2024-01-10',
-      metadata: {
-        keywords: ['금융', '보안', '가이드'],
-      },
-    },
-  ])
+  useEffect(() => {
+    loadPolicies()
+  }, [authorityFilter])
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+  }
+
+  const loadPolicies = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const data = await getPolicies(0, 50, authorityFilter)
+      setPolicies(data)
+    } catch (err) {
+      console.error('Failed to load policies:', err)
+      setError(err instanceof Error ? err.message : '정책 목록을 불러오는데 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filteredPolicies = policies.filter((policy) => {
     const matchesSearch =
@@ -85,10 +89,19 @@ export const PolicyListPage: React.FC<PolicyListPageProps> = ({
     setDeleteDialogOpen(true)
   }
 
-  const handleDeleteConfirm = () => {
-    console.log('Deleting policy:', policyToDelete)
-    setDeleteDialogOpen(false)
-    setPolicyToDelete(null)
+  const handleDeleteConfirm = async () => {
+    if (!policyToDelete) return
+
+    try {
+      await deletePolicy(policyToDelete)
+      setDeleteDialogOpen(false)
+      setPolicyToDelete(null)
+      // Reload policies after deletion
+      await loadPolicies()
+    } catch (err) {
+      console.error('Failed to delete policy:', err)
+      alert(err instanceof Error ? err.message : '정책 삭제에 실패했습니다.')
+    }
   }
 
   return (
@@ -131,9 +144,24 @@ export const PolicyListPage: React.FC<PolicyListPageProps> = ({
         </CardContent>
       </Card>
 
+      {/* 에러 메시지 */}
+      {error && (
+        <Card className="border-red-200 bg-red-50 mb-6">
+          <CardContent className="pt-6">
+            <p className="text-red-800">{error}</p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* 정책 목록 */}
       <div className="space-y-4">
-        {filteredPolicies.length === 0 ? (
+        {loading ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <p className="text-muted-foreground">정책을 불러오는 중...</p>
+            </CardContent>
+          </Card>
+        ) : filteredPolicies.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <p className="text-muted-foreground mb-4">등록된 정책이 없습니다</p>
@@ -150,7 +178,7 @@ export const PolicyListPage: React.FC<PolicyListPageProps> = ({
                     <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
                       <span>🏛️ {policy.authority}</span>
                       <span>•</span>
-                      <span>📅 {policy.created_at}</span>
+                      <span>📅 {formatDate(policy.created_at)}</span>
                       <span>•</span>
                       <Badge variant={policy.file_type === '.pdf' ? 'destructive' : 'secondary'}>
                         {policy.file_type === '.pdf' ? 'PDF' : '이미지'}

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { getPolicyDetail, deletePolicy } from '@/lib/api'
 
 interface PolicyDetailPageProps {
   policyId: string
@@ -23,52 +24,75 @@ export const PolicyDetailPage: React.FC<PolicyDetailPageProps> = ({
   onBack,
   onDelete,
 }) => {
-  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [policy, setPolicy] = useState<any | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // 샘플 데이터 (실제로는 API에서 가져옴)
-  const policy = {
-    policy_id: policyId,
-    title: '개인정보 처리 방침 2024',
-    authority: '개인정보보호위원회',
-    description: '개인정보 보호법에 따른 처리 방침',
-    file_type: '.pdf',
-    file_size_mb: 2.5,
-    processing_method: 'PDF 텍스트 추출',
-    created_at: '2024-01-15T10:30:00',
-    original_filename: 'privacy_policy_2024.pdf',
-    saved_filename: 'policy_20240115_103000.pdf',
-    extracted_text: `제1조 (개인정보의 처리 목적)
-회사는 다음의 목적을 위하여 개인정보를 처리합니다. 처리하고 있는 개인정보는 다음의 목적 이외의 용도로는 이용되지 않으며, 이용 목적이 변경되는 경우에는 개인정보 보호법 제18조에 따라 별도의 동의를 받는 등 필요한 조치를 이행할 예정입니다.
+  useEffect(() => {
+    loadPolicyDetail()
+  }, [policyId])
 
-1. 회원 가입 및 관리
-회원 가입의사 확인, 회원제 서비스 제공에 따른 본인 식별·인증, 회원자격 유지·관리, 서비스 부정이용 방지, 각종 고지·통지 목적으로 개인정보를 처리합니다.
-
-2. 재화 또는 서비스 제공
-물품배송, 서비스 제공, 계약서·청구서 발송, 콘텐츠 제공, 맞춤서비스 제공, 본인인증, 요금결제·정산을 목적으로 개인정보를 처리합니다.`,
-    metadata: {
-      keywords: ['개인정보', '보호', '처리', '동의', '수집'],
-      entity_types: ['이름', '이메일', '전화번호', '주소'],
-      summary: '개인정보 보호법에 따른 처리 방침 및 이용자의 권리에 관한 내용',
-      scenarios: [
-        '회원 가입 시 개인정보 수집',
-        '서비스 제공을 위한 개인정보 이용',
-        '마케팅 활용을 위한 개인정보 처리',
-      ],
-      directives: [
-        '개인정보는 목적 외 용도로 사용하지 않습니다',
-        '개인정보 수집 시 동의를 받아야 합니다',
-        '개인정보는 안전하게 보관되어야 합니다',
-      ],
-    },
+  const loadPolicyDetail = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const data = await getPolicyDetail(policyId)
+      setPolicy(data)
+    } catch (err) {
+      console.error('Failed to load policy detail:', err)
+      setError(err instanceof Error ? err.message : '정책을 불러오는데 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleDelete = () => {
-    onDelete?.(policyId)
-    setDeleteDialogOpen(false)
+  const handleDelete = async () => {
+    try {
+      await deletePolicy(policyId)
+      setDeleteDialogOpen(false)
+      onDelete?.(policyId)
+      onBack?.()
+    } catch (err) {
+      console.error('Failed to delete policy:', err)
+      alert(err instanceof Error ? err.message : '정책 삭제에 실패했습니다.')
+    }
   }
 
   const formatDateTime = (dateStr: string) => {
     return new Date(dateStr).toLocaleString('ko-KR')
+  }
+
+  if (loading) {
+    return (
+      <div className="container mx-auto max-w-4xl p-6">
+        <Button variant="outline" onClick={onBack} className="mb-4">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          목록으로 돌아가기
+        </Button>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">정책을 불러오는 중...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (error || !policy) {
+    return (
+      <div className="container mx-auto max-w-4xl p-6">
+        <Button variant="outline" onClick={onBack} className="mb-4">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          목록으로 돌아가기
+        </Button>
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <p className="text-red-800">{error || '정책을 찾을 수 없습니다.'}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -94,12 +118,16 @@ export const PolicyDetailPage: React.FC<PolicyDetailPageProps> = ({
                 {policy.file_type === '.pdf' ? 'PDF' : '이미지'}
               </Badge>
             </div>
-            <div className="flex items-center gap-2">
-              <strong>파일 크기:</strong> {policy.file_size_mb.toFixed(2)} MB
-            </div>
-            <div className="flex items-center gap-2">
-              <strong>처리 방법:</strong> {policy.processing_method}
-            </div>
+            {policy.file_size_mb && (
+              <div className="flex items-center gap-2">
+                <strong>파일 크기:</strong> {policy.file_size_mb.toFixed(2)} MB
+              </div>
+            )}
+            {policy.processing_method && (
+              <div className="flex items-center gap-2">
+                <strong>처리 방법:</strong> {policy.processing_method}
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <strong>생성일:</strong> {formatDateTime(policy.created_at)}
             </div>
@@ -145,7 +173,7 @@ export const PolicyDetailPage: React.FC<PolicyDetailPageProps> = ({
       </Card>
 
       {/* 요약 */}
-      {policy.metadata.summary && (
+      {policy.metadata?.summary && (
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>요약</CardTitle>
@@ -157,7 +185,7 @@ export const PolicyDetailPage: React.FC<PolicyDetailPageProps> = ({
       )}
 
       {/* 키워드 */}
-      {policy.metadata.keywords && policy.metadata.keywords.length > 0 && (
+      {policy.metadata?.keywords && policy.metadata.keywords.length > 0 && (
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>키워드</CardTitle>
@@ -175,7 +203,7 @@ export const PolicyDetailPage: React.FC<PolicyDetailPageProps> = ({
       )}
 
       {/* 개인정보 유형 */}
-      {policy.metadata.entity_types && policy.metadata.entity_types.length > 0 && (
+      {policy.metadata?.entity_types && policy.metadata.entity_types.length > 0 && (
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>개인정보 유형</CardTitle>
@@ -193,7 +221,7 @@ export const PolicyDetailPage: React.FC<PolicyDetailPageProps> = ({
       )}
 
       {/* 적용 시나리오 */}
-      {policy.metadata.scenarios && policy.metadata.scenarios.length > 0 && (
+      {policy.metadata?.scenarios && policy.metadata.scenarios.length > 0 && (
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>적용 시나리오</CardTitle>
@@ -211,7 +239,7 @@ export const PolicyDetailPage: React.FC<PolicyDetailPageProps> = ({
       )}
 
       {/* 실행 지침 */}
-      {policy.metadata.directives && policy.metadata.directives.length > 0 && (
+      {policy.metadata?.directives && policy.metadata.directives.length > 0 && (
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>실행 지침</CardTitle>
