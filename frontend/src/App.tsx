@@ -8,7 +8,7 @@ import { PolicyAddPage } from '@/pages/PolicyAddPage'
 import { PolicyDetailPage } from '@/pages/PolicyDetailPage'
 import { WriteEmailPage } from '@/pages/WriteEmailPage'
 import { ApproverReviewPage } from '@/pages/ApproverReviewPage'
-import { SettingsPage } from '@/pages/SettingsPage'
+import { MyPage } from '@/pages/MyPage'
 import { EmailDetailPage } from '@/pages/EmailDetailPage'
 import { AdminDashboardPage } from '@/pages/AdminDashboardPage'
 import { UserDashboardPage } from '@/pages/UserDashboardPage'
@@ -21,7 +21,7 @@ import UserManagementPage from '@/pages/UserManagementPage'
 import EntityManagementPage from '@/pages/EntityManagementPage'
 import DlpStatisticsPage from '@/pages/DlpStatisticsPage'
 import RootDashboardPage from '@/pages/RootDashboardPage'
-import { Home, Settings, FileText, Shield, Users, Plus, List, Mail, Send, User } from 'lucide-react'
+import { Home, FileText, Shield, Users, Plus, List, Mail, Send, User } from 'lucide-react'
 
 type Page = 'login' | 'register' | 'main'
 
@@ -192,12 +192,6 @@ function App() {
         icon: <User className="h-4 w-4" />,
         onClick: () => setCurrentView('mypage'),
       },
-      {
-        id: 'settings',
-        label: '설정',
-        icon: <Settings className="h-4 w-4" />,
-        onClick: () => setCurrentView('settings'),
-      },
     )
 
     return baseMenu
@@ -319,7 +313,7 @@ function App() {
       )}
 
 
-      {currentView === 'mypage' && <div>마이페이지 (준비 중)</div>}
+      {currentView === 'mypage' && <MyPage />}
 
       {currentView === 'users' && <UserManagementPage />}
 
@@ -332,8 +326,6 @@ function App() {
       {currentView === 'dlp-statistics' && <DlpStatisticsPage />}
 
       {currentView === 'root-dashboard' && <RootDashboardPage />}
-
-      {currentView === 'settings' && <SettingsPage />}
 
       {currentView === 'email-detail' && selectedEmailId && (
         <EmailDetailPage emailId={selectedEmailId} onBack={() => setCurrentView('main')} />
