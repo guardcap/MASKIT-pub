@@ -1,13 +1,17 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, UploadFile, File
 from typing import List
 from datetime import datetime,timedelta
-from app.policy.models import UserResponse, UserUpdate, UserRole
+from app.policy.models import UserResponse, UserUpdate, UserSelfUpdate, UserRole
 from app.auth.auth_utils import (
     get_current_root_admin,
     get_current_auditor,
     get_current_admin_or_approver,
+    get_current_user,
     get_password_hash
 )
+import os
+import uuid
+from pathlib import Path
 from app.database.mongodb import get_database
 
 router = APIRouter(prefix="/users", tags=["사용자 관리"])
@@ -25,7 +29,7 @@ async def list_users(current_user: dict = Depends(get_current_admin_or_approver)
     - APPROVER: 본인 팀만 조회
     """
     db = get_database()
-    
+
     # APPROVER는 본인 팀만 조회
     if current_user["role"] == UserRole.APPROVER:
         team_name = current_user.get("team_name")
@@ -35,8 +39,109 @@ async def list_users(current_user: dict = Depends(get_current_admin_or_approver)
     else:
         # ROOT_ADMIN, AUDITOR는 전체 조회
         users = await db.users.find().to_list(length=1000)
-    
+
     return [UserResponse(**user) for user in users]
+
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """
+    현재 로그인한 사용자 정보 조회
+    - 모든 인증된 사용자가 자신의 정보를 조회할 수 있음
+    """
+    return UserResponse(**current_user)
+
+@router.patch("/me", response_model=UserResponse)
+async def update_my_profile(
+    user_update: UserSelfUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    현재 로그인한 사용자의 프로필 수정
+    - 본인의 nickname, department, phone_number, password만 수정 가능
+    - role, team_name은 관리자만 수정 가능
+    """
+    db = get_database()
+
+    update_data = user_update.dict(exclude_unset=True)
+
+    # 비밀번호 변경 시 해시화
+    if "password" in update_data and update_data["password"]:
+        update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
+
+    update_data["updated_at"] = get_kst_now()
+
+    await db.users.update_one(
+        {"email": current_user["email"]},
+        {"$set": update_data}
+    )
+
+    updated_user = await db.users.find_one({"email": current_user["email"]})
+    return UserResponse(**updated_user)
+
+@router.post("/me/profile-photo")
+async def upload_profile_photo(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    프로필 사진 업로드
+    - 지원 형식: jpg, jpeg, png, gif
+    - 최대 크기: 5MB
+    """
+    # 파일 형식 확인
+    allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/gif"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="지원하지 않는 파일 형식입니다. (jpg, jpeg, png, gif만 가능)"
+        )
+
+    # 파일 크기 확인 (5MB)
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="파일 크기는 5MB를 초과할 수 없습니다"
+        )
+
+    # 업로드 디렉토리 생성
+    upload_dir = Path("uploads/profile_photos")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    # 파일명 생성 (UUID + 확장자)
+    file_ext = Path(file.filename).suffix
+    new_filename = f"{uuid.uuid4()}{file_ext}"
+    file_path = upload_dir / new_filename
+
+    # 기존 프로필 사진 삭제 (있다면)
+    if current_user.get("profile_photo"):
+        old_file_path = Path(current_user["profile_photo"])
+        if old_file_path.exists():
+            try:
+                old_file_path.unlink()
+            except Exception as e:
+                print(f"기존 프로필 사진 삭제 실패: {e}")
+
+    # 파일 저장
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    # DB 업데이트
+    db = get_database()
+    profile_photo_url = str(file_path)
+
+    await db.users.update_one(
+        {"email": current_user["email"]},
+        {"$set": {
+            "profile_photo": profile_photo_url,
+            "updated_at": get_kst_now()
+        }}
+    )
+
+    return {
+        "message": "프로필 사진이 업로드되었습니다",
+        "profile_photo": profile_photo_url
+    }
 
 @router.get("/{email}", response_model=UserResponse)
 async def get_user(email: str, current_user: dict = Depends(get_current_admin_or_approver)):
