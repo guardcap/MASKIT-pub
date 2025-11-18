@@ -13,7 +13,7 @@ interface DashboardStats {
 }
 
 interface AdminDashboardPageProps {
-  onNavigate?: (view: string) => void
+  onNavigate?: (view: string, emailId?: string) => void
 }
 
 export function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {

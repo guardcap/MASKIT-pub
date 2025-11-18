@@ -19,7 +19,7 @@ interface LogEntry {
 }
 
 interface AuditorDashboardPageProps {
-  onNavigate?: (view: string) => void
+  onNavigate?: (view: string, emailId?: string) => void
 }
 
 export function AuditorDashboardPage({ onNavigate }: AuditorDashboardPageProps) {

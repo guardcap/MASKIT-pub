@@ -7,11 +7,13 @@ import { PolicyListPage } from '@/pages/PolicyListPage'
 import { PolicyAddPage } from '@/pages/PolicyAddPage'
 import { PolicyDetailPage } from '@/pages/PolicyDetailPage'
 import { WriteEmailPage } from '@/pages/WriteEmailPage'
-import { ApproverReviewPage } from '@/pages/ApproverReviewPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { EmailDetailPage } from '@/pages/EmailDetailPage'
 import { AdminDashboardPage } from '@/pages/AdminDashboardPage'
 import { UserDashboardPage } from '@/pages/UserDashboardPage'
 import { AuditorDashboardPage } from '@/pages/AuditorDashboardPage'
+import { SentEmailsPage } from '@/pages/SentEmailsPage'
+import { ReceivedEmailsPage } from '@/pages/ReceivedEmailsPage'
 import PendingApprovalsPage from '@/pages/PendingApprovalsPage'
 import DecisionLogsPage from '@/pages/DecisionLogsPage'
 import UserManagementPage from '@/pages/UserManagementPage'
@@ -30,13 +32,6 @@ interface User {
   userRole: string
 }
 
-interface EmailData {
-  from: string
-  to: string[]
-  subject: string
-  body: string
-  attachments: any[]
-}
 
 // localStorage에서 사용자 정보 복원
 const restoreUserFromStorage = (): User | null => {
@@ -67,7 +62,7 @@ function App() {
   const [user, setUser] = useState<User | null>(null)
   const [currentView, setCurrentView] = useState('main')
   const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null)
-  const [emailDraftData, setEmailDraftData] = useState<EmailData | null>(null)
+  const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
 
   // 앱 초기화: localStorage에서 로그인 상태 복원
@@ -99,6 +94,7 @@ function App() {
     setCurrentPage('login')
     setCurrentView('main')
   }
+
 
   // 역할별 사이드바 메뉴 생성
   const getSidebarMenuByRole = (userRole: string) => {
@@ -230,10 +226,29 @@ function App() {
       {/* 페이지별 컨텐츠 렌더링 */}
       {currentView === 'main' && (
         <>
-          {user?.userRole === 'root_admin' && <AdminDashboardPage onNavigate={setCurrentView} />}
-          {user?.userRole === 'auditor' && <AuditorDashboardPage onNavigate={setCurrentView} />}
+          {user?.userRole === 'root_admin' && (
+            <AdminDashboardPage
+              onNavigate={(view, emailId) => {
+                setCurrentView(view)
+                if (emailId) setSelectedEmailId(emailId)
+              }}
+            />
+          )}
+          {user?.userRole === 'auditor' && (
+            <AuditorDashboardPage
+              onNavigate={(view, emailId) => {
+                setCurrentView(view)
+                if (emailId) setSelectedEmailId(emailId)
+              }}
+            />
+          )}
           {(!user?.userRole || (user?.userRole !== 'root_admin' && user?.userRole !== 'auditor')) && (
-            <UserDashboardPage onNavigate={setCurrentView} />
+            <UserDashboardPage
+              onNavigate={(view, emailId) => {
+                setCurrentView(view)
+                if (emailId) setSelectedEmailId(emailId)
+              }}
+            />
           )}
         </>
       )}
@@ -274,23 +289,12 @@ function App() {
       {currentView === 'write-email' && (
         <WriteEmailPage
           onBack={() => setCurrentView('main')}
-          onSend={(emailData) => {
-            setEmailDraftData(emailData)
-            setCurrentView('approver-review')
-          }}
-        />
-      )}
-
-      {currentView === 'approver-review' && emailDraftData && (
-        <ApproverReviewPage
-          emailData={emailDraftData}
-          onBack={() => setCurrentView('write-email')}
-          onSendComplete={() => {
-            setEmailDraftData(null)
+          onSend={() => {
             setCurrentView('main')
           }}
         />
       )}
+
 
       {currentView === 'mypage' && <div>마이페이지 (준비 중)</div>}
 
@@ -307,6 +311,30 @@ function App() {
       {currentView === 'root-dashboard' && <RootDashboardPage />}
 
       {currentView === 'settings' && <SettingsPage />}
+
+      {currentView === 'email-detail' && selectedEmailId && (
+        <EmailDetailPage emailId={selectedEmailId} onBack={() => setCurrentView('main')} />
+      )}
+
+      {currentView === 'my-emails' && (
+        <SentEmailsPage
+          onNavigate={(view, emailId) => {
+            setCurrentView(view)
+            if (emailId) setSelectedEmailId(emailId)
+          }}
+          onBack={() => setCurrentView('main')}
+        />
+      )}
+
+      {currentView === 'received-emails' && (
+        <ReceivedEmailsPage
+          onNavigate={(view, emailId) => {
+            setCurrentView(view)
+            if (emailId) setSelectedEmailId(emailId)
+          }}
+          onBack={() => setCurrentView('main')}
+        />
+      )}
     </ModernAppLayout>
   )
 }
