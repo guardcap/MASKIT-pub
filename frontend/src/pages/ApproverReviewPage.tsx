@@ -324,40 +324,12 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
         throw new Error('인증이 필요합니다. 다시 로그인해주세요.')
       }
 
-      // 1단계: DB 저장
-      const dbResponse = await fetch(`${API_BASE_URL}/api/v1/emails/send-approved`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          from_email: emailData.from,
-          to: emailData.to,
-          subject: emailData.subject,
-          body: emailData.body,
-          masked_body: maskedBody,
-          attachments: emailData.attachments.map((att) => ({
-            filename: att.filename,
-            size: att.size,
-            content_type: att.content_type,
-          })),
-          masking_count: maskedCount,
-        }),
-      })
-
-      if (!dbResponse.ok) {
-        const errorData = await dbResponse.json()
-        throw new Error(errorData.detail || 'DB 저장 실패')
-      }
-
-      console.log('✅ DB 저장 성공')
-
-      // 2단계: SMTP 전송
+      // SMTP 전송 (DB 저장도 자동으로 처리됨)
       const smtpResponse = await fetch(`${API_BASE_URL}/api/v1/smtp/send`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           from_email: emailData.from,
@@ -373,14 +345,15 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
       if (!smtpResponse.ok) {
         const smtpError = await smtpResponse.json()
         console.error('❌ SMTP 전송 실패:', smtpError)
-        toast.warning('이메일이 DB에 저장되었으나 SMTP 전송에 실패했습니다.')
-      } else {
-        console.log('✅ SMTP 전송 성공')
-        toast.success(`이메일 전송 완료! (마스킹: ${maskedCount}개)`)
-        
-        if (onSendComplete) {
-          onSendComplete()
-        }
+        throw new Error(smtpError.detail || 'SMTP 전송 실패')
+      }
+
+      const result = await smtpResponse.json()
+      console.log('✅ SMTP 전송 성공:', result)
+      toast.success(`이메일 전송 완료! (마스킹: ${maskedCount}개)`)
+
+      if (onSendComplete) {
+        onSendComplete()
       }
     } catch (error: any) {
       toast.dismiss('sending-email')
