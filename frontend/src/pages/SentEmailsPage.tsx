@@ -78,9 +78,9 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
 
   const getStatusBadge = (status: string) => {
     const variants = {
-      pending: { label: '승인 대기', variant: 'secondary' as const, icon: Clock },
-      approved: { label: '승인 완료', variant: 'default' as const, icon: CheckCircle },
-      rejected: { label: '반려', variant: 'destructive' as const, icon: XCircle },
+      pending: { variant: 'secondary' as const, icon: Clock },
+      approved: { variant: 'default' as const, icon: CheckCircle },
+      rejected: { variant: 'destructive' as const, icon: XCircle },
     }
     const config = variants[status as keyof typeof variants] || variants.pending
     const Icon = config.icon
@@ -88,7 +88,6 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
     return (
       <Badge variant={config.variant} className="gap-1">
         <Icon className="h-3 w-3" />
-        {config.label}
       </Badge>
     )
   }
