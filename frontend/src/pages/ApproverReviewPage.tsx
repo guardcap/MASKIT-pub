@@ -233,8 +233,10 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email_body: emailData.body,
-          pii_items: detectedPII,
+          email_subject: emailData.subject,
+          detected_pii: detectedPII,
           context: context,
+          query: `${senderContext} to ${receiverContext} email masking analysis`,
         }),
       })
 
@@ -242,18 +244,14 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
 
       const result = await response.json()
 
-      if (result.decisions) {
-        const decisionsMap: Record<string, MaskingDecision> = {}
-        detectedPII.forEach((pii, idx) => {
-          const decision = result.decisions.find((d: any) => d.value === pii.value)
-          if (decision) {
-            decisionsMap[`pii_${idx}`] = decision
-          }
-        })
-        setMaskingDecisions(decisionsMap)
+      // 백엔드 응답 구조: { success, data: { masking_decisions, summary, ... } }
+      if (result.success && result.data) {
+        const decisions = result.data.masking_decisions || {}
+        setMaskingDecisions(decisions)
+        setAiSummary(result.data.summary || '분석이 완료되었습니다.')
+      } else {
+        throw new Error('분석 결과가 올바르지 않습니다.')
       }
-
-      setAiSummary(result.summary || '분석이 완료되었습니다.')
       toast.success('AI 분석이 완료되었습니다!')
     } catch (error) {
       console.error('AI 분석 오류:', error)
