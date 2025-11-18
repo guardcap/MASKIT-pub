@@ -14,7 +14,7 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { Upload, X, FileText, Image as ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { uploadPolicy, pollTaskStatus } from '@/lib/api'
+import { uploadPolicyFile, pollTaskStatus } from '@/lib/api'
 
 interface PolicyAddPageProps {
   onBack?: () => void
@@ -111,7 +111,7 @@ export const PolicyAddPage: React.FC<PolicyAddPageProps> = ({ onBack, onSuccess 
     try {
       // 1단계: 파일 업로드
       setUploadProgress(10)
-      const uploadResult = await uploadPolicy(
+      const uploadResult = await uploadPolicyFile(
         selectedFile,
         formData.title,
         formData.authority,

@@ -1,3 +1,10 @@
+"""
+백그라운드 작업 처리
+- 정책 가이드라인 추출
+- VectorDB 임베딩 생성
+- 작업 상태 관리
+"""
+
 import asyncio
 from typing import Dict, Optional
 from datetime import datetime
@@ -6,37 +13,39 @@ import json
 import os
 from dotenv import load_dotenv
 
-# ... (OpenAI, ChromaDB import 부분은 그대로 두세요) ...
+# OpenAI imports
+try:
+    from openai import AsyncOpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
+# ChromaDB imports
+try:
+    import chromadb
+    from sentence_transformers import SentenceTransformer
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    CHROMADB_AVAILABLE = False
 
 load_dotenv()
 
 # 작업 상태 저장
 task_status: Dict[str, Dict] = {}
 
-# [▼ 수정된 부분 시작] -----------------------------------------------------
-# 1. 현재 파일(background_tasks.py)을 기준으로 'backend/app' 디렉토리 찾기
-# 현재 파일 경로: .../backend/app/policy/background_tasks.py
-# .parent       : .../backend/app/policy
-# .parent.parent: .../backend/app
-APP_DIR = Path(__file__).resolve().parent.parent
-
-# 2. 절대 경로로 설정 (운영체제나 실행 위치 상관없이 고정됨)
-CHROMA_DB_DIR = APP_DIR / "rag" / "data" / "chromadb"
-STAGING_DIR = APP_DIR / "rag" / "data" / "staging"
-
-# 3. 디렉토리 생성
+# VectorDB 설정 - backend/app/rag/data로 통일
+CHROMA_DB_DIR = Path("backend/app/rag/data/chromadb")
 CHROMA_DB_DIR.mkdir(parents=True, exist_ok=True)
-STAGING_DIR.mkdir(parents=True, exist_ok=True)
 
-# (디버깅용) 서버 실행 시 경로가 맞게 잡혔는지 로그 출력
-print(f"✅ ChromaDB Path: {CHROMA_DB_DIR}")
-print(f"✅ Staging Path: {STAGING_DIR}")
-# [▲ 수정된 부분 끝] -------------------------------------------------------
+# JSONL 저장 디렉토리 (RAG staging) - backend/app/rag/data로 통일
+STAGING_DIR = Path("backend/app/rag/data/staging")
+STAGING_DIR.mkdir(parents=True, exist_ok=True)
 
 # 환경 변수에서 설정값 로드
 PDF_BATCH_SIZE = int(os.getenv("PDF_BATCH_SIZE", "10"))
 PDF_BATCH_DELAY = int(os.getenv("PDF_BATCH_DELAY", "3"))
 SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.85"))
+
 
 class LargePDFProcessor:
     """대용량 PDF 최적화 처리기"""

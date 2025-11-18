@@ -178,3 +178,46 @@ export async function getPolicySchemas(
 export async function getTaskStatus(taskId: string): Promise<any> {
   return await apiRequest<any>(`/api/policies/tasks/${taskId}/status`)
 }
+
+/**
+ * 백그라운드 작업 상태를 폴링하여 완료될 때까지 추적
+ */
+export async function pollTaskStatus(
+  taskId: string,
+  onProgress?: (progress: number, message: string) => void,
+  interval: number = 2000
+): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const poll = async () => {
+      try {
+        const status = await getTaskStatus(taskId)
+
+        // 진행 상황 콜백 호출
+        if (onProgress && status.progress !== undefined) {
+          onProgress(status.progress, status.message || '')
+        }
+
+        // 완료된 경우
+        if (status.status === 'completed') {
+          resolve(status)
+          return
+        }
+
+        // 실패한 경우
+        if (status.status === 'failed') {
+          reject(new Error(status.error || '작업이 실패했습니다'))
+          return
+        }
+
+        // 아직 진행 중이면 다시 폴링
+        if (status.status === 'processing' || status.status === 'pending') {
+          setTimeout(poll, interval)
+        }
+      } catch (error) {
+        reject(error)
+      }
+    }
+
+    poll()
+  })
+}
