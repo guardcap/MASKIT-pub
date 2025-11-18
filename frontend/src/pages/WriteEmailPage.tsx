@@ -34,6 +34,7 @@ interface EmailData {
   subject: string
   body: string
   attachments: File[]
+  email_id?: string // MongoDB에 저장된 원본 이메일 ID
 }
 
 export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }) => {
@@ -166,6 +167,15 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
     }
 
     try {
+      console.log('='.repeat(80))
+      console.log('📧 이메일 전송 시작')
+      console.log('='.repeat(80))
+      console.log('발신자:', fromEmail)
+      console.log('수신자:', recipients)
+      console.log('제목:', subject)
+      console.log('본문 길이:', body.length)
+      console.log('첨부파일:', attachments.length, '개')
+      console.log('='.repeat(80))
 
       // FormData 생성
       const formData = new FormData()
@@ -177,22 +187,29 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
       // 첨부파일 추가
       attachments.forEach((file) => {
         formData.append('attachments', file)
+        console.log('첨부파일 추가:', file.name, file.size, 'bytes')
       })
 
       // API 호출
+      console.log('API 호출 URL:', `${API_BASE_URL}/api/v1/files/upload_email`)
       const response = await fetch(`${API_BASE_URL}/api/v1/files/upload_email`, {
         method: 'POST',
         body: formData,
       })
 
+      console.log('응답 상태:', response.status, response.statusText)
+
       if (!response.ok) {
+        const errorText = await response.text()
+        console.error('응답 에러:', errorText)
         throw new Error('이메일 전송 실패')
       }
 
       const result = await response.json()
+      console.log('✅ 전송 성공:', result)
       toast.success('이메일이 전송되었습니다')
 
-      // 콜백 호출
+      // 콜백 호출 (email_id 포함)
       if (onSend) {
         onSend({
           from: fromEmail,
@@ -200,6 +217,7 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
           subject,
           body,
           attachments,
+          email_id: result.email_id, // MongoDB에 저장된 이메일 ID
         })
       }
     } catch (error) {

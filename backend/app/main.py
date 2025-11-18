@@ -5,12 +5,23 @@ from contextlib import asynccontextmanager
 import asyncio
 import os
 import sys
+from pathlib import Path
+from dotenv import load_dotenv
 
-# Windows 한글/이모지 출력 설정
+# ✅ 버퍼링 비활성화 (로그 즉시 출력)
+os.environ['PYTHONUNBUFFERED'] = '1'
+
+# .env 파일 로드 (프로젝트 루트에서)
+env_path = Path(__file__).parent.parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
+print(f"[ENV] .env 파일 로드: {env_path}", flush=True)
+print(f"[ENV] MONGODB_URI 확인: {os.getenv('MONGODB_URI', 'NOT_FOUND')[:50]}...", flush=True)
+
+# Windows 한글/이모지 출력 설정 + 라인 버퍼링
 if sys.platform == 'win32':
     import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', line_buffering=True)
 
 # DLP 라우터
 from app.routers import uploads, process, ocr, analyzer, masking_pdf
