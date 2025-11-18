@@ -212,8 +212,8 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
   }
 
   const analyzeWithRAG = async () => {
-    if (!senderContext || !receiverContext) {
-      toast.error('발신자와 수신자 유형을 선택해주세요.')
+    if (!senderContext && !receiverContext) {
+      toast.error('수신자 유형을 최소 하나 이상 선택해주세요.')
       return
     }
 
@@ -685,111 +685,292 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>커스텀 설정</CardTitle>
-              <CardDescription>이메일 전송 상황에 맞게 설정하세요</CardDescription>
+              <CardTitle>커스텀</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">발신자</label>
-                <div className="space-y-2">
+              {/* 사내 그룹 */}
+              <div className="border-b pb-4">
+                <button 
+                  className="flex items-center justify-between w-full text-sm font-medium mb-3"
+                  onClick={() => {/* 토글 기능은 유지 */}}
+                >
+                  <span>사내</span>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="8 4 16 12 8 20" />
+                  </svg>
+                </button>
+                <div className="space-y-2 pl-2">
                   <label className="flex items-center gap-2">
                     <input
-                      type="radio"
-                      name="sender"
-                      value="internal"
-                      checked={senderContext === 'internal'}
-                      onChange={(e) => setSenderContext(e.target.value)}
+                      type="checkbox"
+                      checked={purposes.includes('인사팀(HR)')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPurposes([...purposes, '인사팀(HR)'])
+                          setSenderContext('사내')
+                        } else {
+                          setPurposes(purposes.filter((p) => p !== '인사팀(HR)'))
+                          // 사내 항목이 모두 해제되면 senderContext 초기화
+                          if (!purposes.some(p => ['고객지원팀(CS)', 'R&D팀', '대외협력팀'].includes(p))) {
+                            setSenderContext('')
+                          }
+                        }
+                      }}
                     />
-                    <span className="text-sm">사내</span>
+                    <span className="text-sm">인사팀(HR)</span>
                   </label>
                   <label className="flex items-center gap-2">
                     <input
-                      type="radio"
-                      name="sender"
-                      value="external"
-                      checked={senderContext === 'external'}
-                      onChange={(e) => setSenderContext(e.target.value)}
+                      type="checkbox"
+                      checked={purposes.includes('고객지원팀(CS)')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPurposes([...purposes, '고객지원팀(CS)'])
+                          setSenderContext('사내')
+                        } else {
+                          setPurposes(purposes.filter((p) => p !== '고객지원팀(CS)'))
+                          if (!purposes.some(p => ['인사팀(HR)', 'R&D팀', '대외협력팀'].includes(p))) {
+                            setSenderContext('')
+                          }
+                        }
+                      }}
                     />
-                    <span className="text-sm">사외</span>
+                    <span className="text-sm">고객지원팀(CS)</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={purposes.includes('R&D팀')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPurposes([...purposes, 'R&D팀'])
+                          setSenderContext('사내')
+                        } else {
+                          setPurposes(purposes.filter((p) => p !== 'R&D팀'))
+                          if (!purposes.some(p => ['인사팀(HR)', '고객지원팀(CS)', '대외협력팀'].includes(p))) {
+                            setSenderContext('')
+                          }
+                        }
+                      }}
+                    />
+                    <span className="text-sm">R&D팀</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={purposes.includes('대외협력팀')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPurposes([...purposes, '대외협력팀'])
+                          setSenderContext('사내')
+                        } else {
+                          setPurposes(purposes.filter((p) => p !== '대외협력팀'))
+                          if (!purposes.some(p => ['인사팀(HR)', '고객지원팀(CS)', 'R&D팀'].includes(p))) {
+                            setSenderContext('')
+                          }
+                        }
+                      }}
+                    />
+                    <span className="text-sm">대외협력팀</span>
                   </label>
                 </div>
               </div>
 
-              <div>
-                <label className="text-sm font-medium mb-2 block">수신자</label>
-                <div className="space-y-2">
+              {/* 사외 그룹 */}
+              <div className="border-b pb-4">
+                <button 
+                  className="flex items-center justify-between w-full text-sm font-medium mb-3"
+                  onClick={() => {/* 토글 기능은 유지 */}}
+                >
+                  <span>사외</span>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="8 4 16 12 8 20" />
+                  </svg>
+                </button>
+                <div className="space-y-2 pl-2">
                   <label className="flex items-center gap-2">
                     <input
-                      type="radio"
-                      name="receiver"
-                      value="internal"
-                      checked={receiverContext === 'internal'}
-                      onChange={(e) => setReceiverContext(e.target.value)}
+                      type="checkbox"
+                      checked={purposes.includes('협력 업체')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPurposes([...purposes, '협력 업체'])
+                          setReceiverContext('사외')
+                        } else {
+                          setPurposes(purposes.filter((p) => p !== '협력 업체'))
+                          if (!purposes.some(p => ['고객사', '정부 기관'].includes(p))) {
+                            setReceiverContext('')
+                          }
+                        }
+                      }}
                     />
-                    <span className="text-sm">사내</span>
+                    <span className="text-sm">협력 업체</span>
                   </label>
                   <label className="flex items-center gap-2">
                     <input
-                      type="radio"
-                      name="receiver"
-                      value="external"
-                      checked={receiverContext === 'external'}
-                      onChange={(e) => setReceiverContext(e.target.value)}
+                      type="checkbox"
+                      checked={purposes.includes('고객사')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPurposes([...purposes, '고객사'])
+                          setReceiverContext('사외')
+                        } else {
+                          setPurposes(purposes.filter((p) => p !== '고객사'))
+                          if (!purposes.some(p => ['협력 업체', '정부 기관'].includes(p))) {
+                            setReceiverContext('')
+                          }
+                        }
+                      }}
                     />
-                    <span className="text-sm">사외 (고객사, 협력업체 등)</span>
+                    <span className="text-sm">고객사</span>
                   </label>
-                </div>
-              </div>
 
-              <div>
-                <label className="text-sm font-medium mb-2 block">목적 (선택사항)</label>
-                <div className="space-y-2">
-                  {['세무 신고 / 재무 보고', '노동·고용 관련 보고', '개인정보·보안 규제 대응'].map(
-                    (purpose) => (
-                      <label key={purpose} className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={purposes.includes(purpose)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setPurposes([...purposes, purpose])
-                            } else {
-                              setPurposes(purposes.filter((p) => p !== purpose))
-                            }
-                          }}
-                        />
-                        <span className="text-sm">{purpose}</span>
-                      </label>
-                    )
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium mb-2 block">우선 규정</label>
-                <div className="space-y-2">
-                  {['사내 규칙 우선', '국내 법률 우선', 'GDPR 우선'].map((reg) => (
-                    <label key={reg} className="flex items-center gap-2">
+                  {/* 정부 기관 (서브 드롭다운) */}
+                  <div>
+                    <label className="flex items-center gap-2">
                       <input
                         type="checkbox"
-                        checked={regulations.includes(reg)}
+                        checked={purposes.includes('정부 기관')}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setRegulations([...regulations, reg])
+                            setPurposes([...purposes, '정부 기관'])
+                            setReceiverContext('사외')
                           } else {
-                            setRegulations(regulations.filter((r) => r !== reg))
+                            setPurposes(purposes.filter((p) => p !== '정부 기관'))
+                            if (!purposes.some(p => ['협력 업체', '고객사'].includes(p))) {
+                              setReceiverContext('')
+                            }
                           }
                         }}
                       />
-                      <span className="text-sm">{reg}</span>
+                      <span className="text-sm">정부 기관</span>
                     </label>
-                  ))}
+                    {purposes.includes('정부 기관') && (
+                      <div className="ml-6 mt-2 space-y-2 border-l-2 border-gray-200 pl-3">
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={purposes.includes('세무 신고 / 재무 보고')}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setPurposes([...purposes, '세무 신고 / 재무 보고'])
+                              } else {
+                                setPurposes(purposes.filter((p) => p !== '세무 신고 / 재무 보고'))
+                              }
+                            }}
+                          />
+                          <span className="text-sm">세무 신고 / 재무 보고</span>
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={purposes.includes('노동·고용 관련 보고')}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setPurposes([...purposes, '노동·고용 관련 보고'])
+                              } else {
+                                setPurposes(purposes.filter((p) => p !== '노동·고용 관련 보고'))
+                              }
+                            }}
+                          />
+                          <span className="text-sm">노동·고용 관련 보고</span>
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={purposes.includes('개인정보·보안 규제 대응')}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setPurposes([...purposes, '개인정보·보안 규제 대응'])
+                              } else {
+                                setPurposes(purposes.filter((p) => p !== '개인정보·보안 규제 대응'))
+                              }
+                            }}
+                          />
+                          <span className="text-sm">개인정보·보안 규제 대응</span>
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={purposes.includes('정부 지원사업 / 과제 보고')}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setPurposes([...purposes, '정부 지원사업 / 과제 보고'])
+                              } else {
+                                setPurposes(purposes.filter((p) => p !== '정부 지원사업 / 과제 보고'))
+                              }
+                            }}
+                          />
+                          <span className="text-sm">정부 지원사업 / 과제 보고</span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <Button onClick={analyzeWithRAG} disabled={isAnalyzing} className="w-full">
-                {isAnalyzing ? 'AI 분석 중...' : 'AI 분석 시작'}
-              </Button>
+              {/* 세부 커스텀 그룹 */}
+              <div className="pb-4">
+                <button 
+                  className="flex items-center justify-between w-full text-sm font-medium mb-3"
+                  onClick={() => {/* 토글 기능은 유지 */}}
+                >
+                  <span>세부 커스텀</span>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="8 4 16 12 8 20" />
+                  </svg>
+                </button>
+                <div className="space-y-2 pl-2">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={regulations.includes('사내 규칙 우선')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setRegulations([...regulations, '사내 규칙 우선'])
+                        } else {
+                          setRegulations(regulations.filter((r) => r !== '사내 규칙 우선'))
+                        }
+                      }}
+                    />
+                    <span className="text-sm">사내 규칙 우선</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={regulations.includes('국내 법률 우선')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setRegulations([...regulations, '국내 법률 우선'])
+                        } else {
+                          setRegulations(regulations.filter((r) => r !== '국내 법률 우선'))
+                        }
+                      }}
+                    />
+                    <span className="text-sm">국내 법률 우선</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={regulations.includes('GDPR 우선')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setRegulations([...regulations, 'GDPR 우선'])
+                        } else {
+                          setRegulations(regulations.filter((r) => r !== 'GDPR 우선'))
+                        }
+                      }}
+                    />
+                    <span className="text-sm">GDPR 우선</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="pt-4 space-y-2">
+                <Button onClick={analyzeWithRAG} disabled={isAnalyzing} className="w-full">
+                  {isAnalyzing ? 'AI 분석 중...' : 'AI 분석 시작'}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
