@@ -6,6 +6,7 @@ from app.auth.auth_utils import (
     get_current_root_admin,
     get_current_auditor,
     get_current_admin_or_approver,
+    get_current_user,
     get_password_hash
 )
 from app.database.mongodb import get_database
@@ -25,7 +26,7 @@ async def list_users(current_user: dict = Depends(get_current_admin_or_approver)
     - APPROVER: 본인 팀만 조회
     """
     db = get_database()
-    
+
     # APPROVER는 본인 팀만 조회
     if current_user["role"] == UserRole.APPROVER:
         team_name = current_user.get("team_name")
@@ -35,8 +36,16 @@ async def list_users(current_user: dict = Depends(get_current_admin_or_approver)
     else:
         # ROOT_ADMIN, AUDITOR는 전체 조회
         users = await db.users.find().to_list(length=1000)
-    
+
     return [UserResponse(**user) for user in users]
+
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """
+    현재 로그인한 사용자 정보 조회
+    - 모든 인증된 사용자가 자신의 정보를 조회할 수 있음
+    """
+    return UserResponse(**current_user)
 
 @router.get("/{email}", response_model=UserResponse)
 async def get_user(email: str, current_user: dict = Depends(get_current_admin_or_approver)):
