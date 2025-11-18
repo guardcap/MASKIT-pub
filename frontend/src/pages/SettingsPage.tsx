@@ -20,7 +20,7 @@ interface SMTPSettings {
   smtp_user: string
   smtp_password: string
   smtp_use_tls: boolean
-  // smtp_use_ssl: boolean // .py 파일에 있으니 이것도 추가하는 것이 좋습니다.
+  smtp_use_ssl: boolean
 }
 
 // API URL (LoginPage.tsx 참고)
@@ -42,7 +42,32 @@ export function SettingsPage({ onBack }: SettingsPageProps) { // [수정] { onBa
     smtp_user: '',
     smtp_password: '',
     smtp_use_tls: true,
+    smtp_use_ssl: false,
   })
+
+  // 포트 변경 시 SSL/TLS 자동 설정
+  const handlePortChange = (port: number) => {
+    if (port === 465) {
+      // SSL 포트
+      setSmtpSettings({
+        ...smtpSettings,
+        smtp_port: port,
+        smtp_use_tls: false,
+        smtp_use_ssl: true
+      })
+    } else if (port === 587 || port === 25) {
+      // TLS/STARTTLS 포트
+      setSmtpSettings({
+        ...smtpSettings,
+        smtp_port: port,
+        smtp_use_tls: true,
+        smtp_use_ssl: false
+      })
+    } else {
+      // 기타 포트는 사용자 설정 유지
+      setSmtpSettings({ ...smtpSettings, smtp_port: port })
+    }
+  }
 
   const [showPassword, setShowPassword] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
@@ -292,11 +317,12 @@ export function SettingsPage({ onBack }: SettingsPageProps) { // [수정] { onBa
                 type="number"
                 placeholder="587"
                 value={smtpSettings.smtp_port}
-                onChange={(e) =>
-                  setSmtpSettings({ ...smtpSettings, smtp_port: parseInt(e.target.value) || 587 })
-                }
+                onChange={(e) => handlePortChange(parseInt(e.target.value) || 587)}
                 disabled={isLoading}
               />
+              <p className="text-xs text-muted-foreground">
+                587: TLS/STARTTLS (권장) | 465: SSL | 25: Plain/TLS
+              </p>
             </div>
           </div>
 
@@ -342,38 +368,39 @@ export function SettingsPage({ onBack }: SettingsPageProps) { // [수정] { onBa
             </p>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="smtp_use_tls"
-              checked={smtpSettings.smtp_use_tls}
-              onChange={(e) =>
-                setSmtpSettings({ ...smtpSettings, smtp_use_tls: e.target.checked })
-              }
-              className="h-4 w-4"
-              disabled={isLoading}
-            />
-            <Label htmlFor="smtp_use_tls" className="text-sm font-normal">
-              TLS/STARTTLS 사용
-            </Label>
+          <div className="space-y-3 p-4 bg-muted/50 rounded-lg">
+            <p className="text-sm font-medium">암호화 프로토콜 (포트에 따라 자동 설정됨)</p>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="smtp_use_tls"
+                checked={smtpSettings.smtp_use_tls}
+                onChange={(e) =>
+                  setSmtpSettings({ ...smtpSettings, smtp_use_tls: e.target.checked, smtp_use_ssl: false })
+                }
+                className="h-4 w-4"
+                disabled={isLoading}
+              />
+              <Label htmlFor="smtp_use_tls" className="text-sm font-normal">
+                TLS/STARTTLS 사용 (포트 587, 25)
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="smtp_use_ssl"
+                checked={smtpSettings.smtp_use_ssl}
+                onChange={(e) =>
+                  setSmtpSettings({ ...smtpSettings, smtp_use_ssl: e.target.checked, smtp_use_tls: false })
+                }
+                className="h-4 w-4"
+                disabled={isLoading}
+              />
+              <Label htmlFor="smtp_use_ssl" className="text-sm font-normal">
+                SSL 사용 (포트 465)
+              </Label>
+            </div>
           </div>
-          {/* // .py 파일에 SMTP_USE_SSL도 있으므로, 이것도 옵션으로 추가하는 것이 좋습니다.
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="smtp_use_ssl"
-              checked={smtpSettings.smtp_use_ssl || false}
-              onChange={(e) =>
-                setSmtpSettings({ ...smtpSettings, smtp_use_ssl: e.target.checked })
-              }
-              className="h-4 w-4"
-              disabled={isLoading}
-            />
-            <Label htmlFor="smtp_use_ssl" className="text-sm font-normal">
-              SSL 사용
-            </Label>
-          </div> 
-          */}
 
           <div className="flex gap-2">
             <Button onClick={handleTestSMTPConnection} disabled={isTesting || isLoading} variant="outline">

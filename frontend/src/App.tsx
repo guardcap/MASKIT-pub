@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { ModernAppLayout } from '@/components/ModernAppLayout'
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
@@ -8,7 +8,6 @@ import { PolicyAddPage } from '@/pages/PolicyAddPage'
 import { PolicyDetailPage } from '@/pages/PolicyDetailPage'
 import { WriteEmailPage } from '@/pages/WriteEmailPage'
 import { ApproverReviewPage } from '@/pages/ApproverReviewPage'
-import { MyPage } from '@/pages/MyPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { AdminDashboardPage } from '@/pages/AdminDashboardPage'
 import { UserDashboardPage } from '@/pages/UserDashboardPage'
@@ -39,12 +38,47 @@ interface EmailData {
   attachments: any[]
 }
 
+// localStorage에서 사용자 정보 복원
+const restoreUserFromStorage = (): User | null => {
+  try {
+    const token = localStorage.getItem('auth_token')
+    const userJson = localStorage.getItem('user')
+
+    if (!token || !userJson) {
+      return null
+    }
+
+    const userData = JSON.parse(userJson)
+    return {
+      userId: userData.email,
+      userName: userData.nickname || userData.email,
+      userEmail: userData.email,
+      userTeam: userData.team_name || '',
+      userRole: userData.role || 'user',
+    }
+  } catch (error) {
+    console.error('사용자 정보 복원 오류:', error)
+    return null
+  }
+}
+
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('login')
   const [user, setUser] = useState<User | null>(null)
   const [currentView, setCurrentView] = useState('main')
   const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null)
   const [emailDraftData, setEmailDraftData] = useState<EmailData | null>(null)
+  const [isInitialized, setIsInitialized] = useState(false)
+
+  // 앱 초기화: localStorage에서 로그인 상태 복원
+  useEffect(() => {
+    const restoredUser = restoreUserFromStorage()
+    if (restoredUser) {
+      setUser(restoredUser)
+      setCurrentPage('main')
+    }
+    setIsInitialized(true)
+  }, [])
 
   const handleLogin = (userData: any) => {
     setUser(userData)
@@ -59,6 +93,10 @@ function App() {
   }
 
   const handleLogout = () => {
+    // localStorage 정리
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('user')
+
     setUser(null)
     setCurrentPage('login')
     setCurrentView('main')

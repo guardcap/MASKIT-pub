@@ -119,17 +119,28 @@ async def save_smtp_settings(
     SMTP 서버 설정 저장
     """
     try:
+        print(f"\n[Settings] ===== SMTP 설정 저장 시작 =====")
+        print(f"[Settings] 사용자 이메일: {current_user['email']}")
+        print(f"[Settings] 저장할 설정: {dict((k, v if k != 'smtp_password' else '***') for k, v in settings.dict().items())}")
+
         # 사용자 문서 업데이트
         result = await db.users.update_one(
             {"email": current_user["email"]},
             {"$set": {"smtp_config": settings.dict()}}
         )
 
+        print(f"[Settings] matched_count: {result.matched_count}")
+        print(f"[Settings] modified_count: {result.modified_count}")
+
         if result.modified_count == 0 and result.matched_count == 0:
+            print(f"[Settings] ❌ 사용자를 찾을 수 없습니다!")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="사용자를 찾을 수 없습니다"
             )
+
+        print(f"[Settings] ✅ SMTP 설정 저장 완료")
+        print(f"[Settings] ===== SMTP 설정 저장 끝 =====\n")
 
         return {
             "success": True,
@@ -153,30 +164,19 @@ async def save_smtp_settings(
 
 @router.post("/smtp/test")
 async def test_smtp_connection(
-    settings: Optional[SMTPSettings] = None,
+    settings: SMTPSettings,
     current_user: dict = Depends(get_current_user),
     db = Depends(get_database)
 ):
     """
     SMTP 연결 테스트
-    - settings 파라미터가 없으면 저장된 설정 사용
-    - settings 파라미터가 있으면 해당 설정으로 테스트 (저장하지 않음)
+    - 현재 입력된 설정으로 테스트 (저장하지 않음)
     """
     import smtplib
 
     try:
-        # 테스트할 설정 결정
-        if settings is None:
-            # 저장된 설정 사용
-            if "smtp_config" not in current_user or not current_user["smtp_config"]:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="저장된 SMTP 설정이 없습니다. 설정을 먼저 저장하거나 테스트할 설정을 제공해주세요."
-                )
-            smtp_config = current_user["smtp_config"]
-        else:
-            # 제공된 설정 사용
-            smtp_config = settings.dict()
+        # 제공된 설정 사용
+        smtp_config = settings.dict()
 
         smtp_host = smtp_config.get("smtp_host")
         smtp_port = smtp_config.get("smtp_port", 587)
@@ -189,23 +189,37 @@ async def test_smtp_connection(
         print(f"  Host: {smtp_host}:{smtp_port}")
         print(f"  User: {smtp_user}")
         print(f"  TLS: {use_tls}, SSL: {use_ssl}")
+        print(f"  Password 존재: {bool(smtp_password)}")
 
         # SMTP 서버 연결 테스트
         if use_ssl:
-            # SSL 사용
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=10) as server:
+            # SSL 사용 (포트 465)
+            print(f"[SMTP Test] SSL 모드로 연결 시도...")
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30) as server:
+                print(f"[SMTP Test] SSL 연결 성공")
+                server.set_debuglevel(0)  # 디버그 레벨 설정
                 if smtp_user and smtp_password:
+                    print(f"[SMTP Test] 로그인 시도 중...")
                     server.login(smtp_user, smtp_password)
+                    print(f"[SMTP Test] 로그인 성공")
                 server.noop()  # 연결 확인
         else:
-            # TLS 또는 Plain SMTP
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+            # TLS 또는 Plain SMTP (포트 587, 25)
+            print(f"[SMTP Test] SMTP 모드로 연결 시도...")
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
+                print(f"[SMTP Test] SMTP 연결 성공")
+                server.set_debuglevel(0)  # 디버그 레벨 설정
                 server.ehlo()
+                print(f"[SMTP Test] EHLO 성공")
                 if use_tls:
+                    print(f"[SMTP Test] STARTTLS 시작...")
                     server.starttls()
+                    print(f"[SMTP Test] STARTTLS 성공")
                     server.ehlo()
                 if smtp_user and smtp_password:
+                    print(f"[SMTP Test] 로그인 시도 중...")
                     server.login(smtp_user, smtp_password)
+                    print(f"[SMTP Test] 로그인 성공")
                 server.noop()  # 연결 확인
 
         print(f"[SMTP Test] ✅ 연결 성공")
@@ -223,7 +237,7 @@ async def test_smtp_connection(
         }
 
     except smtplib.SMTPAuthenticationError as e:
-        error_msg = f"인증 실패: {str(e)}"
+        error_msg = f"인증 실패: 이메일 또는 비밀번호가 올바르지 않습니다. {str(e)}"
         print(f"[SMTP Test] ❌ {error_msg}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -231,27 +245,50 @@ async def test_smtp_connection(
         )
 
     except smtplib.SMTPConnectError as e:
-        error_msg = f"서버 연결 실패: {str(e)}"
+        error_msg = f"서버 연결 실패: SMTP 서버 주소를 확인하세요. {str(e)}"
         print(f"[SMTP Test] ❌ {error_msg}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=error_msg
         )
 
+    except TimeoutError as e:
+        error_msg = f"연결 시간 초과: 서버 주소나 포트를 확인하세요. 방화벽이 차단하고 있을 수 있습니다."
+        print(f"[SMTP Test] ❌ {error_msg}")
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=error_msg
+        )
+
     except smtplib.SMTPException as e:
         error_msg = f"SMTP 오류: {str(e)}"
         print(f"[SMTP Test] ❌ {error_msg}")
+        # SSL/TLS 설정 힌트 추가
+        hint = ""
+        if smtp_port == 465 and not use_ssl:
+            hint = " (포트 465는 SSL을 사용해야 합니다)"
+        elif smtp_port == 587 and not use_tls:
+            hint = " (포트 587은 TLS를 사용해야 합니다)"
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=error_msg
+            detail=error_msg + hint
         )
 
     except Exception as e:
         error_msg = f"연결 테스트 실패: {str(e)}"
-        print(f"[SMTP Test] ❌ {error_msg}")
+        error_type = type(e).__name__
+        print(f"[SMTP Test] ❌ [{error_type}] {error_msg}")
         import traceback
         traceback.print_exc()
+
+        # 일반적인 오류에 대한 힌트
+        hint = ""
+        if "timed out" in str(e).lower():
+            hint = " 서버 주소나 포트 번호를 확인하세요. 방화벽이나 네트워크 설정을 확인해야 할 수 있습니다."
+        elif "connection refused" in str(e).lower():
+            hint = " 서버가 해당 포트에서 연결을 거부했습니다. 포트 번호를 확인하세요."
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=error_msg
+            detail=error_msg + hint
         )

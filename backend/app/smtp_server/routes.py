@@ -44,11 +44,27 @@ async def send_email(
         # 3. DB에서 현재 사용자의 SMTP 설정을 가져옵니다.
         #    (User 모델이 Pydantic이 아닌 dict일 경우: current_user["smtp_config"])
         #    (user.smtp_config는 User 모델 정의에 따라 다릅니다)
-        user_smtp_config = current_user.get("smtp_config") 
+        user_smtp_config = current_user.get("smtp_config")
+
+        print(f"[SMTP Send] ===== 디버깅 시작 =====")
+        print(f"[SMTP Send] 사용자 이메일: {current_user.get('email')}")
+        print(f"[SMTP Send] user_smtp_config: {user_smtp_config}")
+        print(f"[SMTP Send] 기본 SMTP_HOST: {SMTP_HOST}")
+        print(f"[SMTP Send] 기본 SMTP_USER: {SMTP_USER}")
+        print(f"[SMTP Send] 기본 SMTP_PASSWORD 존재: {bool(SMTP_PASSWORD)}")
 
         # 4. 사용자 설정이 없으면, .env의 기본 설정을 사용합니다.
         if not user_smtp_config or not user_smtp_config.get("smtp_host"):
-            print(f"[SMTP Send] 사용자 {current_user.get('email')}의 SMTP 설정이 없어 기본 서버 설정을 사용합니다.")
+            print(f"[SMTP Send] ⚠️ 사용자 SMTP 설정이 없어 기본 서버 설정을 사용합니다.")
+
+            # 기본 설정이 제대로 있는지 확인
+            if not SMTP_HOST or not SMTP_USER or not SMTP_PASSWORD:
+                print(f"[SMTP Send] ❌ 기본 SMTP 설정도 없습니다!")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="SMTP 설정이 없습니다. 설정 페이지에서 SMTP 설정을 저장하거나, 관리자에게 문의하세요."
+                )
+
             smtp_config = {
                 "smtp_host": SMTP_HOST,
                 "smtp_port": SMTP_PORT,
@@ -58,8 +74,15 @@ async def send_email(
                 "smtp_use_ssl": SMTP_USE_SSL,
             }
         else:
-            print(f"[SMTP Send] 사용자 {current_user.get('email')}의 저장된 SMTP 설정을 사용합니다.")
+            print(f"[SMTP Send] ✅ 사용자 저장된 SMTP 설정을 사용합니다.")
+            print(f"[SMTP Send]   - Host: {user_smtp_config.get('smtp_host')}")
+            print(f"[SMTP Send]   - Port: {user_smtp_config.get('smtp_port')}")
+            print(f"[SMTP Send]   - User: {user_smtp_config.get('smtp_user')}")
+            print(f"[SMTP Send]   - Password 존재: {bool(user_smtp_config.get('smtp_password'))}")
             smtp_config = user_smtp_config
+
+        print(f"[SMTP Send] 최종 smtp_config: {dict((k, v if k != 'smtp_password' else '***') for k, v in smtp_config.items())}")
+        print(f"[SMTP Send] ===== 디버깅 끝 =====\n")
 
         # 5. SMTP 클라이언트를 통해 메일 전송
         result = smtp_client.send_email(
