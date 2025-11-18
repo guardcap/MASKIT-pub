@@ -44,6 +44,9 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# Exception: Allow frontend lib directory
+!frontend/src/lib/
+
 # Virtual Environments
 venv/
 env/
