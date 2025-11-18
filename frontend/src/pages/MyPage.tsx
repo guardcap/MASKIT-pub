@@ -2,9 +2,17 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldDescription,
+  FieldError,
+  FieldSet,
+  FieldLegend,
+} from '@/components/ui/field'
 import { toast } from 'sonner'
 import {
   User,
@@ -392,39 +400,41 @@ export function MyPage({ onBack }: MyPageProps) {
         </CardHeader>
         <CardContent className="space-y-6">
           {/* 프로필 이미지 */}
-          <div className="flex items-center gap-6">
-            <Avatar className="h-24 w-24">
-              <AvatarImage src={profileImagePreview} alt={userProfile.nickname} />
-              <AvatarFallback className="text-2xl">
-                {getInitials(userProfile.nickname || userProfile.email)}
-              </AvatarFallback>
-            </Avatar>
-            <div className="space-y-2">
-              <Label htmlFor="profile-image" className="cursor-pointer">
-                <div className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-accent transition-colors">
-                  <Camera className="h-4 w-4" />
-                  <span className="text-sm">사진 변경</span>
-                </div>
-              </Label>
-              <Input
-                id="profile-image"
-                type="file"
-                accept="image/*"
-                onChange={handleProfileImageChange}
-                className="hidden"
-              />
-              <p className="text-xs text-muted-foreground">
-                JPG, PNG 파일 (최대 5MB)
-              </p>
+          <Field>
+            <div className="flex items-center gap-6">
+              <Avatar className="h-24 w-24">
+                <AvatarImage src={profileImagePreview} alt={userProfile.nickname} />
+                <AvatarFallback className="text-2xl">
+                  {getInitials(userProfile.nickname || userProfile.email)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="space-y-2">
+                <FieldLabel htmlFor="profile-image" className="cursor-pointer">
+                  <div className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-accent transition-colors">
+                    <Camera className="h-4 w-4" />
+                    <span className="text-sm">사진 변경</span>
+                  </div>
+                </FieldLabel>
+                <Input
+                  id="profile-image"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProfileImageChange}
+                  className="hidden"
+                />
+                <FieldDescription>
+                  JPG, PNG 파일 (최대 5MB)
+                </FieldDescription>
+              </div>
             </div>
-          </div>
+          </Field>
 
           <Separator />
 
           {/* 기본 정보 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">이메일 (변경 불가)</Label>
+          <FieldGroup className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field>
+              <FieldLabel htmlFor="email">이메일</FieldLabel>
               <div className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-muted-foreground" />
                 <Input
@@ -435,10 +445,11 @@ export function MyPage({ onBack }: MyPageProps) {
                   className="bg-muted"
                 />
               </div>
-            </div>
+              <FieldDescription>변경할 수 없습니다</FieldDescription>
+            </Field>
 
-            <div className="space-y-2">
-              <Label htmlFor="nickname">닉네임 *</Label>
+            <Field>
+              <FieldLabel htmlFor="nickname">닉네임 *</FieldLabel>
               <div className="flex items-center gap-2">
                 <User className="h-4 w-4 text-muted-foreground" />
                 <Input
@@ -451,10 +462,10 @@ export function MyPage({ onBack }: MyPageProps) {
                   disabled={isLoading}
                 />
               </div>
-            </div>
+            </Field>
 
-            <div className="space-y-2">
-              <Label htmlFor="phone">전화번호</Label>
+            <Field>
+              <FieldLabel htmlFor="phone">전화번호</FieldLabel>
               <div className="flex items-center gap-2">
                 <Phone className="h-4 w-4 text-muted-foreground" />
                 <Input
@@ -467,10 +478,10 @@ export function MyPage({ onBack }: MyPageProps) {
                   disabled={isLoading}
                 />
               </div>
-            </div>
+            </Field>
 
-            <div className="space-y-2">
-              <Label htmlFor="extension">사내 내선번호</Label>
+            <Field>
+              <FieldLabel htmlFor="extension">사내 내선번호</FieldLabel>
               <div className="flex items-center gap-2">
                 <Phone className="h-4 w-4 text-muted-foreground" />
                 <Input
@@ -483,10 +494,10 @@ export function MyPage({ onBack }: MyPageProps) {
                   disabled={isLoading}
                 />
               </div>
-            </div>
+            </Field>
 
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="team">소속 팀 (변경 불가)</Label>
+            <Field className="md:col-span-2">
+              <FieldLabel htmlFor="team">소속 팀</FieldLabel>
               <div className="flex items-center gap-2">
                 <Building className="h-4 w-4 text-muted-foreground" />
                 <Input
@@ -496,8 +507,9 @@ export function MyPage({ onBack }: MyPageProps) {
                   className="bg-muted"
                 />
               </div>
-            </div>
-          </div>
+              <FieldDescription>변경할 수 없습니다</FieldDescription>
+            </Field>
+          </FieldGroup>
 
           <Button onClick={handleSaveProfile} disabled={isLoading}>
             <Save className="mr-2 h-4 w-4" />
@@ -517,86 +529,89 @@ export function MyPage({ onBack }: MyPageProps) {
             계정의 비밀번호를 변경합니다
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="current_password">현재 비밀번호</Label>
-            <div className="flex gap-2">
-              <Input
-                id="current_password"
-                type={showPassword.current ? 'text' : 'password'}
-                placeholder="현재 비밀번호를 입력하세요"
-                value={passwordChange.current_password}
-                onChange={(e) =>
-                  setPasswordChange({ ...passwordChange, current_password: e.target.value })
-                }
-                disabled={isLoading}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => setShowPassword({ ...showPassword, current: !showPassword.current })}
-                disabled={isLoading}
-              >
-                {showPassword.current ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
+        <CardContent>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="current_password">현재 비밀번호</FieldLabel>
+              <div className="flex gap-2">
+                <Input
+                  id="current_password"
+                  type={showPassword.current ? 'text' : 'password'}
+                  placeholder="현재 비밀번호를 입력하세요"
+                  value={passwordChange.current_password}
+                  onChange={(e) =>
+                    setPasswordChange({ ...passwordChange, current_password: e.target.value })
+                  }
+                  disabled={isLoading}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowPassword({ ...showPassword, current: !showPassword.current })}
+                  disabled={isLoading}
+                >
+                  {showPassword.current ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </Field>
 
-          <div className="space-y-2">
-            <Label htmlFor="new_password">새 비밀번호</Label>
-            <div className="flex gap-2">
-              <Input
-                id="new_password"
-                type={showPassword.new ? 'text' : 'password'}
-                placeholder="새 비밀번호를 입력하세요 (8자 이상)"
-                value={passwordChange.new_password}
-                onChange={(e) =>
-                  setPasswordChange({ ...passwordChange, new_password: e.target.value })
-                }
-                disabled={isLoading}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => setShowPassword({ ...showPassword, new: !showPassword.new })}
-                disabled={isLoading}
-              >
-                {showPassword.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
+            <Field>
+              <FieldLabel htmlFor="new_password">새 비밀번호</FieldLabel>
+              <div className="flex gap-2">
+                <Input
+                  id="new_password"
+                  type={showPassword.new ? 'text' : 'password'}
+                  placeholder="새 비밀번호를 입력하세요 (8자 이상)"
+                  value={passwordChange.new_password}
+                  onChange={(e) =>
+                    setPasswordChange({ ...passwordChange, new_password: e.target.value })
+                  }
+                  disabled={isLoading}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowPassword({ ...showPassword, new: !showPassword.new })}
+                  disabled={isLoading}
+                >
+                  {showPassword.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              <FieldDescription>비밀번호는 8자 이상이어야 합니다</FieldDescription>
+            </Field>
 
-          <div className="space-y-2">
-            <Label htmlFor="confirm_password">새 비밀번호 확인</Label>
-            <div className="flex gap-2">
-              <Input
-                id="confirm_password"
-                type={showPassword.confirm ? 'text' : 'password'}
-                placeholder="새 비밀번호를 다시 입력하세요"
-                value={passwordChange.confirm_password}
-                onChange={(e) =>
-                  setPasswordChange({ ...passwordChange, confirm_password: e.target.value })
-                }
-                disabled={isLoading}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => setShowPassword({ ...showPassword, confirm: !showPassword.confirm })}
-                disabled={isLoading}
-              >
-                {showPassword.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
+            <Field>
+              <FieldLabel htmlFor="confirm_password">새 비밀번호 확인</FieldLabel>
+              <div className="flex gap-2">
+                <Input
+                  id="confirm_password"
+                  type={showPassword.confirm ? 'text' : 'password'}
+                  placeholder="새 비밀번호를 다시 입력하세요"
+                  value={passwordChange.confirm_password}
+                  onChange={(e) =>
+                    setPasswordChange({ ...passwordChange, confirm_password: e.target.value })
+                  }
+                  disabled={isLoading}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowPassword({ ...showPassword, confirm: !showPassword.confirm })}
+                  disabled={isLoading}
+                >
+                  {showPassword.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </Field>
 
-          <Button onClick={handleChangePassword} disabled={isLoading}>
-            <Lock className="mr-2 h-4 w-4" />
-            {isLoading ? '변경 중...' : '비밀번호 변경'}
-          </Button>
+            <Button onClick={handleChangePassword} disabled={isLoading}>
+              <Lock className="mr-2 h-4 w-4" />
+              {isLoading ? '변경 중...' : '비밀번호 변경'}
+            </Button>
+          </FieldGroup>
         </CardContent>
       </Card>
 
@@ -611,139 +626,144 @@ export function MyPage({ onBack }: MyPageProps) {
             이메일 전송을 위한 SMTP 서버 정보를 설정합니다
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="smtp_host">SMTP 서버 주소</Label>
+        <CardContent>
+          <FieldGroup>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field>
+                <FieldLabel htmlFor="smtp_host">SMTP 서버 주소</FieldLabel>
+                <Input
+                  id="smtp_host"
+                  placeholder="smtp.gmail.com"
+                  value={smtpSettings.smtp_host}
+                  onChange={(e) =>
+                    setSmtpSettings({ ...smtpSettings, smtp_host: e.target.value })
+                  }
+                  disabled={isLoading}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="smtp_port">SMTP 포트</FieldLabel>
+                <Input
+                  id="smtp_port"
+                  type="number"
+                  placeholder="587"
+                  value={smtpSettings.smtp_port}
+                  onChange={(e) => handlePortChange(parseInt(e.target.value) || 587)}
+                  disabled={isLoading}
+                />
+                <FieldDescription>
+                  587: TLS/STARTTLS (권장) | 465: SSL | 25: Plain/TLS
+                </FieldDescription>
+              </Field>
+            </div>
+
+            <Field>
+              <FieldLabel htmlFor="smtp_user">SMTP 사용자명 (이메일)</FieldLabel>
               <Input
-                id="smtp_host"
-                placeholder="smtp.gmail.com"
-                value={smtpSettings.smtp_host}
+                id="smtp_user"
+                type="email"
+                placeholder="your-email@gmail.com"
+                value={smtpSettings.smtp_user}
                 onChange={(e) =>
-                  setSmtpSettings({ ...smtpSettings, smtp_host: e.target.value })
+                  setSmtpSettings({ ...smtpSettings, smtp_user: e.target.value })
                 }
                 disabled={isLoading}
               />
-            </div>
+            </Field>
 
-            <div className="space-y-2">
-              <Label htmlFor="smtp_port">SMTP 포트</Label>
-              <Input
-                id="smtp_port"
-                type="number"
-                placeholder="587"
-                value={smtpSettings.smtp_port}
-                onChange={(e) => handlePortChange(parseInt(e.target.value) || 587)}
-                disabled={isLoading}
-              />
-              <p className="text-xs text-muted-foreground">
-                587: TLS/STARTTLS (권장) | 465: SSL | 25: Plain/TLS
-              </p>
-            </div>
-          </div>
+            <Field>
+              <FieldLabel htmlFor="smtp_password">SMTP 비밀번호</FieldLabel>
+              <div className="flex gap-2">
+                <Input
+                  id="smtp_password"
+                  type={showPassword.smtp ? 'text' : 'password'}
+                  placeholder="앱 비밀번호"
+                  value={smtpSettings.smtp_password}
+                  onChange={(e) =>
+                    setSmtpSettings({ ...smtpSettings, smtp_password: e.target.value })
+                  }
+                  disabled={isLoading}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowPassword({ ...showPassword, smtp: !showPassword.smtp })}
+                  disabled={isLoading}
+                >
+                  {showPassword.smtp ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              <FieldDescription>
+                Gmail을 사용하는 경우 앱 비밀번호를 생성하여 입력하세요.
+              </FieldDescription>
+            </Field>
 
-          <div className="space-y-2">
-            <Label htmlFor="smtp_user">SMTP 사용자명 (이메일)</Label>
-            <Input
-              id="smtp_user"
-              type="email"
-              placeholder="your-email@gmail.com"
-              value={smtpSettings.smtp_user}
-              onChange={(e) =>
-                setSmtpSettings({ ...smtpSettings, smtp_user: e.target.value })
-              }
-              disabled={isLoading}
-            />
-          </div>
+            <Field>
+              <div className="space-y-3 p-4 bg-muted/50 rounded-lg">
+                <FieldLabel>암호화 프로토콜</FieldLabel>
+                <FieldDescription>포트에 따라 자동 설정됩니다</FieldDescription>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="smtp_use_tls"
+                    checked={smtpSettings.smtp_use_tls}
+                    onChange={(e) =>
+                      setSmtpSettings({ ...smtpSettings, smtp_use_tls: e.target.checked, smtp_use_ssl: false })
+                    }
+                    className="h-4 w-4"
+                    disabled={isLoading}
+                  />
+                  <FieldLabel htmlFor="smtp_use_tls" className="text-sm font-normal">
+                    TLS/STARTTLS 사용 (포트 587, 25)
+                  </FieldLabel>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="smtp_use_ssl"
+                    checked={smtpSettings.smtp_use_ssl}
+                    onChange={(e) =>
+                      setSmtpSettings({ ...smtpSettings, smtp_use_ssl: e.target.checked, smtp_use_tls: false })
+                    }
+                    className="h-4 w-4"
+                    disabled={isLoading}
+                  />
+                  <FieldLabel htmlFor="smtp_use_ssl" className="text-sm font-normal">
+                    SSL 사용 (포트 465)
+                  </FieldLabel>
+                </div>
+              </div>
+            </Field>
 
-          <div className="space-y-2">
-            <Label htmlFor="smtp_password">SMTP 비밀번호</Label>
             <div className="flex gap-2">
-              <Input
-                id="smtp_password"
-                type={showPassword.smtp ? 'text' : 'password'}
-                placeholder="앱 비밀번호"
-                value={smtpSettings.smtp_password}
-                onChange={(e) =>
-                  setSmtpSettings({ ...smtpSettings, smtp_password: e.target.value })
-                }
-                disabled={isLoading}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => setShowPassword({ ...showPassword, smtp: !showPassword.smtp })}
-                disabled={isLoading}
-              >
-                {showPassword.smtp ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              <Button onClick={handleTestSMTPConnection} disabled={isTesting || isLoading} variant="outline">
+                <CheckCircle className="mr-2 h-4 w-4" />
+                {isTesting ? '테스트 중...' : '연결 테스트'}
+              </Button>
+              <Button onClick={handleSaveSMTPSettings} disabled={isLoading || isTesting}>
+                <Save className="mr-2 h-4 w-4" />
+                {isLoading ? '저장 중...' : 'SMTP 설정 저장'}
               </Button>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Gmail을 사용하는 경우 앱 비밀번호를 생성하여 입력하세요.
-            </p>
-          </div>
 
-          <div className="space-y-3 p-4 bg-muted/50 rounded-lg">
-            <p className="text-sm font-medium">암호화 프로토콜 (포트에 따라 자동 설정됨)</p>
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="smtp_use_tls"
-                checked={smtpSettings.smtp_use_tls}
-                onChange={(e) =>
-                  setSmtpSettings({ ...smtpSettings, smtp_use_tls: e.target.checked, smtp_use_ssl: false })
-                }
-                className="h-4 w-4"
-                disabled={isLoading}
-              />
-              <Label htmlFor="smtp_use_tls" className="text-sm font-normal">
-                TLS/STARTTLS 사용 (포트 587, 25)
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="smtp_use_ssl"
-                checked={smtpSettings.smtp_use_ssl}
-                onChange={(e) =>
-                  setSmtpSettings({ ...smtpSettings, smtp_use_ssl: e.target.checked, smtp_use_tls: false })
-                }
-                className="h-4 w-4"
-                disabled={isLoading}
-              />
-              <Label htmlFor="smtp_use_ssl" className="text-sm font-normal">
-                SSL 사용 (포트 465)
-              </Label>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <Button onClick={handleTestSMTPConnection} disabled={isTesting || isLoading} variant="outline">
-              <CheckCircle className="mr-2 h-4 w-4" />
-              {isTesting ? '테스트 중...' : '연결 테스트'}
-            </Button>
-            <Button onClick={handleSaveSMTPSettings} disabled={isLoading || isTesting}>
-              <Save className="mr-2 h-4 w-4" />
-              {isLoading ? '저장 중...' : 'SMTP 설정 저장'}
-            </Button>
-          </div>
-
-          {/* SMTP 설정 가이드 */}
-          <Card className="border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-700">
-            <CardContent className="pt-6 text-sm text-blue-900 dark:text-blue-200 space-y-2">
-              <p className="font-semibold">📌 Gmail SMTP 설정 가이드</p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>SMTP 서버: smtp.gmail.com</li>
-                <li>포트: 587 (TLS) 또는 465 (SSL)</li>
-                <li>사용자명: Gmail 주소</li>
-                <li>비밀번호: 앱 비밀번호 (2단계 인증 활성화 후 생성)</li>
-              </ul>
-              <p className="text-xs text-blue-700 dark:text-blue-400 mt-2">
-                앱 비밀번호 생성: Google 계정 &gt; 보안 &gt; 2단계 인증 &gt; 앱 비밀번호
-              </p>
-            </CardContent>
-          </Card>
+            {/* SMTP 설정 가이드 */}
+            <Card className="border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-700">
+              <CardContent className="pt-6 text-sm text-blue-900 dark:text-blue-200 space-y-2">
+                <p className="font-semibold">📌 Gmail SMTP 설정 가이드</p>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>SMTP 서버: smtp.gmail.com</li>
+                  <li>포트: 587 (TLS) 또는 465 (SSL)</li>
+                  <li>사용자명: Gmail 주소</li>
+                  <li>비밀번호: 앱 비밀번호 (2단계 인증 활성화 후 생성)</li>
+                </ul>
+                <p className="text-xs text-blue-700 dark:text-blue-400 mt-2">
+                  앱 비밀번호 생성: Google 계정 &gt; 보안 &gt; 2단계 인증 &gt; 앱 비밀번호
+                </p>
+              </CardContent>
+            </Card>
+          </FieldGroup>
         </CardContent>
       </Card>
     </div>
