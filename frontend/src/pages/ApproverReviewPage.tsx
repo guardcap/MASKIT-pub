@@ -2,10 +2,6 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 import { Send } from 'lucide-react'
 
@@ -56,6 +52,33 @@ interface AnalysisContext {
   regulations: string[]
 }
 
+interface PIICoordinate {
+  pageIndex: number
+  bbox: number[]
+  field_text: string
+}
+
+interface DetectedPIIEntity {
+  text: string
+  type: string
+  score: number
+  start_char: number
+  end_char: number
+  coordinates?: PIICoordinate[]
+}
+
+interface PIIAnalysisResult {
+  full_text: string
+  pii_entities: DetectedPIIEntity[]
+}
+
+interface FileAnalysisResult {
+  filename: string
+  status: string
+  analysis_data?: PIIAnalysisResult
+  ocr_data?: any
+}
+
 export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
   emailData,
   onBack,
@@ -64,8 +87,19 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
   const [activeTab, setActiveTab] = useState<'all' | string>('all')
   const [emailBodyParagraphs, setEmailBodyParagraphs] = useState<string[]>([])
   const [attachmentUrls, setAttachmentUrls] = useState<Map<string, string>>(new Map())
-  const [detectedPII, setDetectedPII] = useState<PIIItem[]>([])
   const [maskingDecisions, setMaskingDecisions] = useState<Record<string, MaskingDecision>>({})
+
+  // 통합된 모든 PII 목록 (체크박스용)
+  const [allPIIList, setAllPIIList] = useState<Array<{
+    id: string
+    type: string
+    value: string
+    source: 'regex' | 'backend_body' | 'backend_attachment'
+    filename?: string
+    shouldMask: boolean
+    maskingDecision?: MaskingDecision
+  }>>([])
+  const [showPIICheckboxList, setShowPIICheckboxList] = useState(false)
   const [aiSummary, setAiSummary] = useState('커스텀 설정을 선택하고 분석을 시작하세요.')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isSending, setIsSending] = useState(false)
@@ -93,8 +127,11 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
   useEffect(() => {
     loadEmailBody()
     loadAttachments()
-    detectPII()
+    // detectPII()는 AI 분석 시 실행되므로 초기화 시 제거
   }, [emailData])
+
+  // 원본 이메일 데이터 로드 후에는 자동 분석하지 않음 (사용자가 커스텀 설정 후 분석 버튼 클릭)
+  // useEffect 제거하여 자동 PII 분석 방지
 
   // 원본 데이터 로드 후 첨부파일 다시 로드
   useEffect(() => {
@@ -107,19 +144,32 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
   const loadOriginalEmail = async (email_id: string) => {
     setIsLoadingOriginal(true)
     try {
+      console.log('📧 원본 이메일 조회 시작:', email_id)
       const response = await fetch(`${API_BASE_URL}/api/v1/files/original_emails/${email_id}`)
 
       if (response.ok) {
         const result = await response.json()
+        console.log('📦 API 응답 전체:', result)
+
         if (result.success && result.data) {
+          console.log('✅ 원본 이메일 데이터:', {
+            email_id: result.data.email_id,
+            from_email: result.data.from_email,
+            to_emails: result.data.to_emails,
+            subject: result.data.subject,
+            has_original_body: !!result.data.original_body,
+            has_body: !!result.data.body,
+            original_body_length: result.data.original_body?.length,
+            body_length: result.data.body?.length,
+            attachments_count: result.data.attachments?.length
+          })
           setOriginalEmailData(result.data)
-          console.log('✅ 원본 이메일 로드 성공:', result.data)
         }
       } else {
-        console.error('원본 이메일 로드 실패:', response.status)
+        console.error('❌ 원본 이메일 로드 실패:', response.status)
       }
     } catch (error) {
-      console.error('원본 이메일 로드 중 오류:', error)
+      console.error('❌ 원본 이메일 로드 중 오류:', error)
     } finally {
       setIsLoadingOriginal(false)
     }
@@ -188,32 +238,8 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
     }
   }, [attachmentUrls])
 
-  const detectPII = () => {
-    const text = (emailData.body || '').replace(/<[^>]*>/g, ' ')
-
-    const patterns = {
-      email: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
-      phone: /\b01[0-9]-?[0-9]{3,4}-?[0-9]{4}\b/g,
-      jumin: /\b\d{6}-?[1-4]\d{6}\b/g,
-      account: /\b\d{3,4}-?\d{2,6}-?\d{2,7}\b/g,
-      passport: /\b[A-Z]\d{8}\b/g,
-      driver_license: /\b\d{2}-\d{6,8}-\d{2}\b/g,
-    }
-
-    const found: PIIItem[] = []
-    for (const [type, regex] of Object.entries(patterns)) {
-      const matches = text.match(regex)
-      if (matches) {
-        matches.forEach((value) => {
-          if (!found.some((item) => item.value === value)) {
-            found.push({ type, value })
-          }
-        })
-      }
-    }
-
-    setDetectedPII(found)
-  }
+  // detectPII는 analyzeWithRAG 내부에서 실행되므로 별도 함수 불필요
+  // (초기화 시 호출하던 부분은 제거)
 
   const analyzeWithRAG = async () => {
     if (!senderContext && !receiverContext) {
@@ -221,44 +247,241 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
       return
     }
 
-    setIsAnalyzing(true)
-    setAiSummary('AI가 가이드라인을 검색하고 분석 중입니다...')
-
-    const context: AnalysisContext = {
-      sender_type: senderContext,
-      receiver_type: receiverContext,
-      purpose: purposes,
-      regulations: regulations,
+    if (!originalEmailData) {
+      toast.error('원본 이메일 데이터를 불러오는 중입니다.')
+      return
     }
 
+    setIsAnalyzing(true)
+    setAiSummary('1단계: 이메일 본문에서 PII 추출 중...')
+
     try {
-      const response = await fetch(`${API_BASE_URL}/api/vectordb/analyze`, {
+      // ==================== 1단계: 이메일 본문 PII 추출 ====================
+      const emailBody = originalEmailData?.original_body || originalEmailData?.body || ''
+
+      let bodyPIIEntities: DetectedPIIEntity[] = []
+      if (emailBody) {
+        const bodyResponse = await fetch(`${API_BASE_URL}/api/v1/analyzer/analyze/text`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text_content: emailBody,
+            user_request: 'email_analysis'
+          })
+        })
+
+        if (bodyResponse.ok) {
+          const bodyResult: PIIAnalysisResult = await bodyResponse.json()
+          bodyPIIEntities = bodyResult.pii_entities || []
+          console.log('✅ 이메일 본문 PII:', bodyPIIEntities.length, '개')
+        }
+      }
+
+      // ==================== 2단계: 첨부파일 PII 추출 ====================
+      setAiSummary('2단계: 첨부파일에서 PII 추출 중...')
+
+      let attachmentPIIList: Array<{ filename: string; entities: DetectedPIIEntity[] }> = []
+
+      if (originalEmailData.attachments && originalEmailData.attachments.length > 0) {
+        const attachmentPromises = originalEmailData.attachments.map(async (attachment: any) => {
+          const filename = attachment.filename
+
+          // Base64 → Blob
+          const binaryString = atob(attachment.data)
+          const bytes = new Uint8Array(binaryString.length)
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i)
+          }
+          const blob = new Blob([bytes], { type: attachment.content_type })
+
+          // OCR
+          const formData = new FormData()
+          formData.append('file_content', blob)
+          formData.append('file_name', filename)
+
+          const ocrResponse = await fetch(`${API_BASE_URL}/api/v1/ocr/extract/ocr`, {
+            method: 'POST',
+            body: formData
+          })
+
+          if (!ocrResponse.ok) {
+            console.error(`❌ OCR 실패: ${filename}`)
+            return { filename, entities: [] }
+          }
+
+          const ocrResult = await ocrResponse.json()
+          const extractedText = typeof ocrResult === 'string' ? ocrResult : ocrResult.full_text || ''
+
+          // PII 분석
+          const analysisResponse = await fetch(`${API_BASE_URL}/api/v1/analyzer/analyze/text`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text_content: extractedText,
+              user_request: 'attachment_analysis',
+              ocr_data: ocrResult
+            })
+          })
+
+          if (!analysisResponse.ok) {
+            console.error(`❌ PII 분석 실패: ${filename}`)
+            return { filename, entities: [] }
+          }
+
+          const analysisData: PIIAnalysisResult = await analysisResponse.json()
+
+          return {
+            filename,
+            entities: analysisData.pii_entities || [],
+            ocr_data: ocrResult,
+            analysis_data: analysisData
+          }
+        })
+
+        const attachmentResults = await Promise.all(attachmentPromises)
+        attachmentPIIList = attachmentResults
+
+        console.log('✅ 첨부파일 PII:', attachmentResults.reduce((sum, r) => sum + r.entities.length, 0), '개')
+      }
+
+      // ==================== 3단계: 정규식 기반 PII 검출 ====================
+      setAiSummary('3단계: 정규식 기반 PII 검출 중...')
+
+      // detectPII() 로직 재실행
+      const text = (emailData.body || '').replace(/<[^>]*>/g, ' ')
+      const patterns = {
+        email: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
+        phone: /\b01[0-9]-?[0-9]{3,4}-?[0-9]{4}\b/g,
+        jumin: /\b\d{6}-?[1-4]\d{6}\b/g,
+        account: /\b\d{3,4}-?\d{2,6}-?\d{2,7}\b/g,
+        passport: /\b[A-Z]\d{8}\b/g,
+        driver_license: /\b\d{2}-\d{6,8}-\d{2}\b/g,
+      }
+
+      const regexPII: PIIItem[] = []
+      for (const [type, regex] of Object.entries(patterns)) {
+        const matches = text.match(regex)
+        if (matches) {
+          matches.forEach((value) => {
+            if (!regexPII.some((item) => item.value === value)) {
+              regexPII.push({ type, value })
+            }
+          })
+        }
+      }
+      console.log('✅ 정규식 PII:', regexPII.length, '개')
+
+      // ==================== 4단계: 모든 PII 통합 ====================
+      setAiSummary('4단계: 모든 PII 통합 중...')
+
+      const allPII: Array<{
+        id: string
+        type: string
+        value: string
+        source: 'regex' | 'backend_body' | 'backend_attachment'
+        filename?: string
+        shouldMask: boolean
+        maskingDecision?: MaskingDecision
+      }> = []
+
+      // 정규식 PII
+      regexPII.forEach((pii, idx) => {
+        allPII.push({
+          id: `regex_${idx}`,
+          type: pii.type,
+          value: pii.value,
+          source: 'regex',
+          shouldMask: false, // 기본값: 체크 해제
+          maskingDecision: undefined
+        })
+      })
+
+      // 백엔드 본문 PII
+      bodyPIIEntities.forEach((entity, idx) => {
+        allPII.push({
+          id: `body_${idx}`,
+          type: entity.type,
+          value: entity.text,
+          source: 'backend_body',
+          shouldMask: false,
+          maskingDecision: undefined
+        })
+      })
+
+      // 백엔드 첨부파일 PII
+      attachmentPIIList.forEach((fileResult) => {
+        fileResult.entities.forEach((entity, idx) => {
+          allPII.push({
+            id: `attachment_${fileResult.filename}_${idx}`,
+            type: entity.type,
+            value: entity.text,
+            source: 'backend_attachment',
+            filename: fileResult.filename,
+            shouldMask: false,
+            maskingDecision: undefined
+          })
+        })
+      })
+
+      console.log('📊 통합 PII 목록:', allPII.length, '개')
+
+      // ==================== 5단계: RAG로 마스킹 필요 여부 분석 ====================
+      setAiSummary('5단계: AI가 가이드라인을 검색하고 마스킹 필요 여부 분석 중...')
+
+      const context: AnalysisContext = {
+        sender_type: senderContext,
+        receiver_type: receiverContext,
+        purpose: purposes,
+        regulations: regulations,
+      }
+
+      // RAG API 호출 (기존 detectedPII 대신 allPII의 value만 전달)
+      const ragResponse = await fetch(`${API_BASE_URL}/api/vectordb/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email_body: emailData.body,
           email_subject: emailData.subject,
-          detected_pii: detectedPII,
+          detected_pii: allPII.map(pii => ({ type: pii.type, value: pii.value })),
           context: context,
           query: `${senderContext} to ${receiverContext} email masking analysis`,
         }),
       })
 
-      if (!response.ok) throw new Error('분석 요청 실패')
+      if (!ragResponse.ok) throw new Error('RAG 분석 요청 실패')
 
-      const result = await response.json()
+      const ragResult = await ragResponse.json()
 
-      // 백엔드 응답 구조: { success, data: { masking_decisions, summary, ... } }
-      if (result.success && result.data) {
-        const decisions = result.data.masking_decisions || {}
+      if (ragResult.success && ragResult.data) {
+        const decisions = ragResult.data.masking_decisions || {}
         setMaskingDecisions(decisions)
-        setAiSummary(result.data.summary || '분석이 완료되었습니다.')
+        setAiSummary(ragResult.data.summary || '분석이 완료되었습니다.')
+
+        // ==================== 6단계: RAG 결과를 PII 리스트에 반영 ====================
+        // RAG가 마스킹 필요하다고 판단한 PII는 shouldMask = true
+        allPII.forEach(pii => {
+          // decisions의 키는 보통 "type_value" 형태 또는 인덱스
+          // 백엔드 응답 구조에 따라 매칭 로직 조정 필요
+          const matchingDecision = Object.values(decisions).find(
+            (d: any) => d.value === pii.value && d.type === pii.type
+          )
+
+          if (matchingDecision && (matchingDecision as MaskingDecision).should_mask) {
+            pii.shouldMask = true
+            pii.maskingDecision = matchingDecision as MaskingDecision
+          }
+        })
+
+        setAllPIIList(allPII)
+        setShowPIICheckboxList(true)
+
+        toast.success(`AI 분석 완료! 총 ${allPII.length}개 PII 중 ${allPII.filter(p => p.shouldMask).length}개 마스킹 권장`)
       } else {
         throw new Error('분석 결과가 올바르지 않습니다.')
       }
-      toast.success('AI 분석이 완료되었습니다!')
+
     } catch (error) {
-      console.error('AI 분석 오류:', error)
+      console.error('❌ AI 분석 오류:', error)
       toast.error('AI 분석 중 오류가 발생했습니다.')
       setAiSummary('분석 중 오류가 발생했습니다.')
     } finally {
@@ -296,9 +519,16 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
     return div.innerHTML
   }
 
+  // 체크박스 토글 핸들러
+  const togglePIIMask = (id: string) => {
+    setAllPIIList(prev => prev.map(pii =>
+      pii.id === id ? { ...pii, shouldMask: !pii.shouldMask } : pii
+    ))
+  }
+
   // 마스킹 적용 및 전송
   const handleSendMaskedEmail = async () => {
-    if (Object.keys(maskingDecisions).length === 0) {
+    if (!showPIICheckboxList || allPIIList.length === 0) {
       if (!confirm('마스킹 분석을 실행하지 않았습니다. 그대로 전송하시겠습니까?')) {
         return
       }
@@ -309,15 +539,15 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
     // contenteditable에서 수정된 본문 가져오기
     let maskedBody = emailBodyRef.current?.innerText || emailBodyParagraphs.join('\n')
 
-    // 마스킹 적용
-    for (const decision of Object.values(maskingDecisions)) {
-      if (decision.should_mask) {
-        const masked = decision.masked_value || maskValue(decision.value, decision.type)
-        maskedBody = maskedBody.replace(new RegExp(escapeRegex(decision.value), 'g'), masked)
-      }
+    // 체크된 PII만 마스킹 적용
+    const checkedPIIs = allPIIList.filter(pii => pii.shouldMask)
+
+    for (const pii of checkedPIIs) {
+      const masked = pii.maskingDecision?.masked_value || maskValue(pii.value, pii.type)
+      maskedBody = maskedBody.replace(new RegExp(escapeRegex(pii.value), 'g'), masked)
     }
 
-    const maskedCount = Object.values(maskingDecisions).filter((d) => d.should_mask).length
+    const maskedCount = checkedPIIs.length
 
     toast.loading('이메일 전송 중...', { id: 'sending-email' })
 
@@ -375,12 +605,16 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
     account: '계좌번호',
     passport: '여권번호',
     driver_license: '운전면허번호',
+    EMAIL: '이메일 주소',
+    PHONE: '전화번호',
+    PERSON: '개인명',
+    BANK_ACCOUNT: '계좌 번호',
+    CREDIT_CARD: '신용카드 번호',
+    IP_ADDRESS: 'IP 주소',
+    DATE_TIME: '날짜/시간',
+    LOCATION: '위치 정보',
+    ORGANIZATION: '조직명',
   }
-
-  const piiStats = detectedPII.reduce((acc, pii) => {
-    acc[pii.type] = (acc[pii.type] || 0) + 1
-    return acc
-  }, {} as Record<string, number>)
 
   // 첨부파일 렌더링 (MongoDB 데이터 사용)
   const renderAttachment = (attachment: AttachmentInfo | any) => {
@@ -501,21 +735,36 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
           {/* 파일 탭 (FE 방식) */}
           <Card>
             <CardHeader>
-              <CardTitle>이메일 내용 및 첨부파일</CardTitle>
+              <div className="flex gap-2 border-b pb-2">
+                <button
+                  onClick={() => setActiveTab('all')}
+                  className={`px-4 py-2 text-sm font-medium rounded-t ${
+                    activeTab === 'all'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 hover:bg-gray-200'
+                  }`}
+                >
+                  전체
+                </button>
+                {(originalEmailData?.attachments || emailData.attachments).map((att: any, idx: number) => (
+                  <button
+                    key={att.filename || att.file_id || idx}
+                    onClick={() => setActiveTab(att.filename || att.file_id)}
+                    className={`px-4 py-2 text-sm font-medium rounded-t ${
+                      activeTab === (att.filename || att.file_id)
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 hover:bg-gray-200'
+                    }`}
+                  >
+                    {att.filename}
+                  </button>
+                ))}
+              </div>
             </CardHeader>
             <CardContent className="min-h-[400px]">
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="w-full justify-start">
-                  <TabsTrigger value="all">전체</TabsTrigger>
-                  {(originalEmailData?.attachments || emailData.attachments).map((att: any, idx: number) => (
-                    <TabsTrigger key={att.filename || att.file_id || idx} value={att.filename || att.file_id}>
-                      {att.filename}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-
-                {/* 전체 탭 */}
-                <TabsContent value="all" className="space-y-6 mt-4">
+              {/* 전체 탭 */}
+              {activeTab === 'all' && (
+                <div className="space-y-6">
                   {/* 이메일 본문 (contenteditable) */}
                   <div>
                     <h3 className="font-semibold mb-3">{emailData.subject}</h3>
@@ -523,7 +772,7 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                       ref={emailBodyRef}
                       contentEditable
                       suppressContentEditableWarning
-                      className="border rounded-md p-4 min-h-[200px] focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="border rounded p-4 min-h-[200px] focus:outline-none focus:ring-2 focus:ring-blue-500"
                       style={{ whiteSpace: 'pre-wrap' }}
                     >
                       {emailBodyParagraphs.map((para, idx) => (
@@ -536,90 +785,112 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
 
                   {/* 첨부파일 표시 */}
                   {(originalEmailData?.attachments || emailData.attachments).map((att: any, idx: number) => (
-                    <div key={att.filename || att.file_id || idx}>
-                      <Separator className="my-4" />
+                    <div key={att.filename || att.file_id || idx} className="border-t pt-4">
                       <h4 className="font-medium mb-2">📎 {att.filename}</h4>
                       {renderAttachment(att)}
                     </div>
                   ))}
-                </TabsContent>
+                </div>
+              )}
 
-                {/* 개별 파일 탭 */}
-                {(originalEmailData?.attachments || emailData.attachments).map((att: any, idx: number) => (
-                  <TabsContent key={att.filename || att.file_id || idx} value={att.filename || att.file_id} className="mt-4">
-                    <h3 className="font-semibold mb-4">{att.filename}</h3>
-                    {renderAttachment(att)}
-                  </TabsContent>
-                ))}
-              </Tabs>
-            </CardContent>
-          </Card>
-
-          {/* PII 탐지 결과 */}
-          <Card>
-            <CardHeader>
-              <CardTitle>개인정보 탐지</CardTitle>
-              <CardDescription>
-                총 {detectedPII.length}개의 개인정보가 발견되었습니다
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {detectedPII.length === 0 ? (
-                <p className="text-sm text-muted-foreground">개인정보가 발견되지 않았습니다.</p>
-              ) : (
-                <div className="space-y-2">
-                  {Object.entries(piiStats).map(([type, count]) => (
-                    <div key={type} className="flex items-center justify-between">
-                      <span className="text-sm">{typeNames[type] || type}</span>
-                      <Badge variant="secondary">{count}개</Badge>
-                    </div>
-                  ))}
+              {/* 개별 파일 탭 */}
+              {activeTab !== 'all' && (
+                <div>
+                  {(originalEmailData?.attachments || emailData.attachments)
+                    .filter((att: any) => (att.filename || att.file_id) === activeTab)
+                    .map((att: any, idx: number) => (
+                      <div key={att.filename || att.file_id || idx}>
+                        <h3 className="font-semibold mb-4">{att.filename}</h3>
+                        {renderAttachment(att)}
+                      </div>
+                    ))}
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* AI 분석 결과 */}
-          <Card>
-            <CardHeader>
-              <CardTitle>AI 분석 결과</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm mb-4">{aiSummary}</p>
-              {Object.keys(maskingDecisions).length > 0 && (
-                <div className="space-y-3">
-                  {Object.entries(maskingDecisions).map(([piiId, decision]) => (
+          {/* PII 체크박스 리스트 (AI 분석 완료 후 표시) */}
+          {showPIICheckboxList && allPIIList.length > 0 && (
+            <Card className="border-blue-500 bg-blue-50/50">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>✅ 마스킹 대상 PII 선택</span>
+                  <Badge variant="default">
+                    {allPIIList.filter(p => p.shouldMask).length} / {allPIIList.length} 선택됨
+                  </Badge>
+                </CardTitle>
+                <CardDescription>
+                  AI가 마스킹이 필요하다고 판단한 항목은 체크되어 있습니다. 체크박스를 조정하여 마스킹 여부를 변경할 수 있습니다.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                  {allPIIList.map((pii) => (
                     <div
-                      key={piiId}
-                      className={`p-3 border rounded-lg ${
-                        decision.should_mask ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50'
+                      key={pii.id}
+                      className={`p-3 border rounded-lg transition-all ${
+                        pii.shouldMask
+                          ? 'bg-yellow-50 border-yellow-300'
+                          : 'bg-white border-gray-200'
                       }`}
                     >
-                      <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-3">
+                        {/* 체크박스 */}
+                        <input
+                          type="checkbox"
+                          checked={pii.shouldMask}
+                          onChange={() => togglePIIMask(pii.id)}
+                          className="mt-1 h-5 w-5 cursor-pointer"
+                        />
+
+                        {/* PII 정보 */}
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Badge variant="outline">{typeNames[decision.type]}</Badge>
-                            {decision.risk_level && (
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="outline" className="text-xs">
+                              {typeNames[pii.type] || pii.type}
+                            </Badge>
+                            <Badge variant="secondary" className="text-xs">
+                              {pii.source === 'regex' ? '정규식' : pii.source === 'backend_body' ? '이메일 본문' : '첨부파일'}
+                            </Badge>
+                            {pii.filename && (
+                              <Badge variant="outline" className="text-xs">
+                                📎 {pii.filename}
+                              </Badge>
+                            )}
+                            {pii.shouldMask && pii.maskingDecision?.risk_level && (
                               <Badge
-                                variant={decision.risk_level === 'high' ? 'destructive' : 'secondary'}
+                                variant={pii.maskingDecision.risk_level === 'high' ? 'destructive' : 'default'}
+                                className="text-xs"
                               >
-                                {decision.risk_level}
+                                {pii.maskingDecision.risk_level}
                               </Badge>
                             )}
                           </div>
-                          <div className="text-xs font-mono bg-muted p-2 rounded mb-1">
-                            {decision.value}
-                            {decision.masked_value && (
-                              <div className="text-green-600 mt-1">→ {decision.masked_value}</div>
+
+                          {/* PII 값 */}
+                          <div className="font-mono text-sm bg-gray-100 p-2 rounded border mb-2">
+                            {pii.value}
+                            {pii.shouldMask && (
+                              <span className="ml-2 text-green-600">
+                                → {pii.maskingDecision?.masked_value || maskValue(pii.value, pii.type)}
+                              </span>
                             )}
                           </div>
-                          <div className="text-xs text-muted-foreground">{decision.reason}</div>
-                          {decision.cited_guidelines && decision.cited_guidelines.length > 0 && (
-                            <div className="mt-2 text-xs bg-blue-50 p-2 rounded border-l-2 border-blue-500">
-                              <div className="font-semibold mb-1">📚 인용 법령</div>
-                              {decision.cited_guidelines.map((guideline, idx) => (
-                                <div key={idx}>• {guideline}</div>
-                              ))}
+
+                          {/* AI 분석 근거 (마스킹 권장된 경우만) */}
+                          {pii.shouldMask && pii.maskingDecision && (
+                            <div className="text-xs space-y-1">
+                              <p className="text-muted-foreground">
+                                💡 {pii.maskingDecision.reason}
+                              </p>
+                              {pii.maskingDecision.cited_guidelines && pii.maskingDecision.cited_guidelines.length > 0 && (
+                                <div className="bg-blue-50 p-2 rounded border-l-2 border-blue-500 mt-2">
+                                  <div className="font-semibold mb-1">📚 인용 법령</div>
+                                  {pii.maskingDecision.cited_guidelines.map((guideline, idx) => (
+                                    <div key={idx} className="text-xs">• {guideline}</div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -627,9 +898,64 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                     </div>
                   ))}
                 </div>
-              )}
-            </CardContent>
-          </Card>
+
+                {/* 전체 선택/해제 버튼 */}
+                <div className="flex gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAllPIIList(prev => prev.map(pii => ({ ...pii, shouldMask: true })))}
+                  >
+                    전체 선택
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAllPIIList(prev => prev.map(pii => ({ ...pii, shouldMask: false })))}
+                  >
+                    전체 해제
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAllPIIList(prev => prev.map(pii => ({
+                      ...pii,
+                      shouldMask: pii.maskingDecision?.should_mask || false
+                    })))}
+                  >
+                    AI 권장대로 복원
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* AI 분석 진행 상황 */}
+          {isAnalyzing && (
+            <Card className="border-blue-200 bg-blue-50/30">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                  AI 분석 진행 중
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">{aiSummary}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* AI 분석 요약 (완료 후) */}
+          {!isAnalyzing && showPIICheckboxList && (
+            <Card className="border-green-200 bg-green-50/30">
+              <CardHeader>
+                <CardTitle>📊 AI 분석 요약</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">{aiSummary}</p>
+              </CardContent>
+            </Card>
+          )}
 
           {/* 전송 버튼 */}
           <Button onClick={handleSendMaskedEmail} disabled={isSending} className="w-full" size="lg">
@@ -646,7 +972,7 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
             </CardHeader>
             <CardContent className="space-y-4">
               {/* 사내 그룹 */}
-              <div className="pb-4">
+              <div className="border-b pb-4">
                 <button 
                   className="flex items-center justify-between w-full text-sm font-medium mb-3"
                   onClick={() => {/* 토글 기능은 유지 */}}
@@ -656,13 +982,13 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                     <polyline points="8 4 16 12 8 20" />
                   </svg>
                 </button>
-                <div className="space-y-3 pl-2">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="hr-team"
+                <div className="space-y-2 pl-2">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
                       checked={purposes.includes('인사팀(HR)')}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
+                      onChange={(e) => {
+                        if (e.target.checked) {
                           setPurposes([...purposes, '인사팀(HR)'])
                           setSenderContext('사내')
                         } else {
@@ -674,16 +1000,14 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                         }
                       }}
                     />
-                    <Label htmlFor="hr-team" className="text-sm font-normal cursor-pointer">
-                      인사팀(HR)
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="cs-team"
+                    <span className="text-sm">인사팀(HR)</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
                       checked={purposes.includes('고객지원팀(CS)')}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
+                      onChange={(e) => {
+                        if (e.target.checked) {
                           setPurposes([...purposes, '고객지원팀(CS)'])
                           setSenderContext('사내')
                         } else {
@@ -694,16 +1018,14 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                         }
                       }}
                     />
-                    <Label htmlFor="cs-team" className="text-sm font-normal cursor-pointer">
-                      고객지원팀(CS)
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="rd-team"
+                    <span className="text-sm">고객지원팀(CS)</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
                       checked={purposes.includes('R&D팀')}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
+                      onChange={(e) => {
+                        if (e.target.checked) {
                           setPurposes([...purposes, 'R&D팀'])
                           setSenderContext('사내')
                         } else {
@@ -714,16 +1036,14 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                         }
                       }}
                     />
-                    <Label htmlFor="rd-team" className="text-sm font-normal cursor-pointer">
-                      R&D팀
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="external-team"
+                    <span className="text-sm">R&D팀</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
                       checked={purposes.includes('대외협력팀')}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
+                      onChange={(e) => {
+                        if (e.target.checked) {
                           setPurposes([...purposes, '대외협력팀'])
                           setSenderContext('사내')
                         } else {
@@ -734,17 +1054,13 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                         }
                       }}
                     />
-                    <Label htmlFor="external-team" className="text-sm font-normal cursor-pointer">
-                      대외협력팀
-                    </Label>
-                  </div>
+                    <span className="text-sm">대외협력팀</span>
+                  </label>
                 </div>
               </div>
 
-              <Separator />
-
               {/* 사외 그룹 */}
-              <div className="pb-4">
+              <div className="border-b pb-4">
                 <button 
                   className="flex items-center justify-between w-full text-sm font-medium mb-3"
                   onClick={() => {/* 토글 기능은 유지 */}}
@@ -754,13 +1070,13 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                     <polyline points="8 4 16 12 8 20" />
                   </svg>
                 </button>
-                <div className="space-y-3 pl-2">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="partner"
+                <div className="space-y-2 pl-2">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
                       checked={purposes.includes('협력 업체')}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
+                      onChange={(e) => {
+                        if (e.target.checked) {
                           setPurposes([...purposes, '협력 업체'])
                           setReceiverContext('사외')
                         } else {
@@ -771,16 +1087,14 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                         }
                       }}
                     />
-                    <Label htmlFor="partner" className="text-sm font-normal cursor-pointer">
-                      협력 업체
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="client"
+                    <span className="text-sm">협력 업체</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
                       checked={purposes.includes('고객사')}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
+                      onChange={(e) => {
+                        if (e.target.checked) {
                           setPurposes([...purposes, '고객사'])
                           setReceiverContext('사외')
                         } else {
@@ -791,19 +1105,17 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                         }
                       }}
                     />
-                    <Label htmlFor="client" className="text-sm font-normal cursor-pointer">
-                      고객사
-                    </Label>
-                  </div>
+                    <span className="text-sm">고객사</span>
+                  </label>
 
                   {/* 정부 기관 (서브 드롭다운) */}
                   <div>
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="government"
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
                         checked={purposes.includes('정부 기관')}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
+                        onChange={(e) => {
+                          if (e.target.checked) {
                             setPurposes([...purposes, '정부 기관'])
                             setReceiverContext('사외')
                           } else {
@@ -814,83 +1126,71 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                           }
                         }}
                       />
-                      <Label htmlFor="government" className="text-sm font-normal cursor-pointer">
-                        정부 기관
-                      </Label>
-                    </div>
+                      <span className="text-sm">정부 기관</span>
+                    </label>
                     {purposes.includes('정부 기관') && (
-                      <div className="ml-6 mt-3 space-y-3 border-l-2 border-muted pl-3">
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            id="tax-report"
+                      <div className="ml-6 mt-2 space-y-2 border-l-2 border-gray-200 pl-3">
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
                             checked={purposes.includes('세무 신고 / 재무 보고')}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
+                            onChange={(e) => {
+                              if (e.target.checked) {
                                 setPurposes([...purposes, '세무 신고 / 재무 보고'])
                               } else {
                                 setPurposes(purposes.filter((p) => p !== '세무 신고 / 재무 보고'))
                               }
                             }}
                           />
-                          <Label htmlFor="tax-report" className="text-sm font-normal cursor-pointer">
-                            세무 신고 / 재무 보고
-                          </Label>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            id="labor-report"
+                          <span className="text-sm">세무 신고 / 재무 보고</span>
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
                             checked={purposes.includes('노동·고용 관련 보고')}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
+                            onChange={(e) => {
+                              if (e.target.checked) {
                                 setPurposes([...purposes, '노동·고용 관련 보고'])
                               } else {
                                 setPurposes(purposes.filter((p) => p !== '노동·고용 관련 보고'))
                               }
                             }}
                           />
-                          <Label htmlFor="labor-report" className="text-sm font-normal cursor-pointer">
-                            노동·고용 관련 보고
-                          </Label>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            id="privacy-security"
+                          <span className="text-sm">노동·고용 관련 보고</span>
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
                             checked={purposes.includes('개인정보·보안 규제 대응')}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
+                            onChange={(e) => {
+                              if (e.target.checked) {
                                 setPurposes([...purposes, '개인정보·보안 규제 대응'])
                               } else {
                                 setPurposes(purposes.filter((p) => p !== '개인정보·보안 규제 대응'))
                               }
                             }}
                           />
-                          <Label htmlFor="privacy-security" className="text-sm font-normal cursor-pointer">
-                            개인정보·보안 규제 대응
-                          </Label>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            id="gov-support"
+                          <span className="text-sm">개인정보·보안 규제 대응</span>
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
                             checked={purposes.includes('정부 지원사업 / 과제 보고')}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
+                            onChange={(e) => {
+                              if (e.target.checked) {
                                 setPurposes([...purposes, '정부 지원사업 / 과제 보고'])
                               } else {
                                 setPurposes(purposes.filter((p) => p !== '정부 지원사업 / 과제 보고'))
                               }
                             }}
                           />
-                          <Label htmlFor="gov-support" className="text-sm font-normal cursor-pointer">
-                            정부 지원사업 / 과제 보고
-                          </Label>
-                        </div>
+                          <span className="text-sm">정부 지원사업 / 과제 보고</span>
+                        </label>
                       </div>
                     )}
                   </div>
                 </div>
               </div>
-
-              <Separator />
 
               {/* 세부 커스텀 그룹 */}
               <div className="pb-4">
@@ -903,59 +1203,51 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                     <polyline points="8 4 16 12 8 20" />
                   </svg>
                 </button>
-                <div className="space-y-3 pl-2">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="internal-rules"
+                <div className="space-y-2 pl-2">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
                       checked={regulations.includes('사내 규칙 우선')}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
+                      onChange={(e) => {
+                        if (e.target.checked) {
                           setRegulations([...regulations, '사내 규칙 우선'])
                         } else {
                           setRegulations(regulations.filter((r) => r !== '사내 규칙 우선'))
                         }
                       }}
                     />
-                    <Label htmlFor="internal-rules" className="text-sm font-normal cursor-pointer">
-                      사내 규칙 우선
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="domestic-law"
+                    <span className="text-sm">사내 규칙 우선</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
                       checked={regulations.includes('국내 법률 우선')}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
+                      onChange={(e) => {
+                        if (e.target.checked) {
                           setRegulations([...regulations, '국내 법률 우선'])
                         } else {
                           setRegulations(regulations.filter((r) => r !== '국내 법률 우선'))
                         }
                       }}
                     />
-                    <Label htmlFor="domestic-law" className="text-sm font-normal cursor-pointer">
-                      국내 법률 우선
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="gdpr"
+                    <span className="text-sm">국내 법률 우선</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
                       checked={regulations.includes('GDPR 우선')}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
+                      onChange={(e) => {
+                        if (e.target.checked) {
                           setRegulations([...regulations, 'GDPR 우선'])
                         } else {
                           setRegulations(regulations.filter((r) => r !== 'GDPR 우선'))
                         }
                       }}
                     />
-                    <Label htmlFor="gdpr" className="text-sm font-normal cursor-pointer">
-                      GDPR 우선
-                    </Label>
-                  </div>
+                    <span className="text-sm">GDPR 우선</span>
+                  </label>
                 </div>
               </div>
-
-              <Separator />
 
               <div className="pt-4 space-y-2">
                 <Button onClick={analyzeWithRAG} disabled={isAnalyzing} className="w-full">

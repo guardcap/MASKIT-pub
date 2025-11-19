@@ -11,13 +11,21 @@ class AnalyzerEngine:
     규칙 기반(RecognizerRegistry) + NER 기반(NerEngine) 결과를
     하나의 EntityGroup으로 통합하여 반환.
     """
-    def __init__(self):
+    def __init__(self, db_client=None):
         print("...AnalyzerEngine 초기화 중...")
+        self.db_client = db_client
         self.registry = RecognizerRegistry()
         self.registry.load_predefined_recognizers()
 
         self.nlp_engine = NerEngine()
         print("~AnalyzerEngine 준비 완료~")
+
+    async def load_custom_entities(self):
+        """MongoDB에서 커스텀 엔티티 로드 (필요시 구현)"""
+        if self.db_client is not None:
+            print("📋 커스텀 엔티티 로드 중...")
+            # TODO: MongoDB에서 커스텀 엔티티 로드 로직 추가
+            pass
 
     def analyze(self, text: str) -> EntityGroup:
         regex_group = self.registry.regex_analyze(text)
@@ -152,7 +160,7 @@ async def recognize_pii_in_text(text_content: str, ocr_data: Optional[Dict] = No
     analyzer = AnalyzerEngine(db_client=db_client)
 
     # 커스텀 엔티티 로드 (db_client가 있는 경우)
-    if db_client:
+    if db_client is not None:
         await analyzer.load_custom_entities()
 
     result = analyzer.analyze(text_content)
