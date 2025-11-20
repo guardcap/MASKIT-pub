@@ -459,16 +459,17 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
 
         // ==================== 6단계: RAG 결과를 PII 리스트에 반영 ====================
         // RAG가 마스킹 필요하다고 판단한 PII는 shouldMask = true
-        allPII.forEach(pii => {
-          // decisions의 키는 보통 "type_value" 형태 또는 인덱스
-          // 백엔드 응답 구조에 따라 매칭 로직 조정 필요
-          const matchingDecision = Object.values(decisions).find(
-            (d: any) => d.value === pii.value && d.type === pii.type
-          )
+        // 백엔드는 pii_0, pii_1, pii_2... 형식의 키를 사용하므로 인덱스 기반 매칭
+        allPII.forEach((pii, index) => {
+          const decisionKey = `pii_${index}`
+          const matchingDecision = decisions[decisionKey]
 
-          if (matchingDecision && (matchingDecision as MaskingDecision).should_mask) {
+          if (matchingDecision && matchingDecision.should_mask) {
             pii.shouldMask = true
             pii.maskingDecision = matchingDecision as MaskingDecision
+            console.log(`✅ PII ${index} 마스킹 권장:`, pii.value, matchingDecision.reason)
+          } else {
+            console.log(`⚪ PII ${index} 마스킹 불필요:`, pii.value)
           }
         })
 
@@ -809,153 +810,6 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
             </CardContent>
           </Card>
 
-          {/* PII 체크박스 리스트 (AI 분석 완료 후 표시) */}
-          {showPIICheckboxList && allPIIList.length > 0 && (
-            <Card className="border-blue-500 bg-blue-50/50">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>✅ 마스킹 대상 PII 선택</span>
-                  <Badge variant="default">
-                    {allPIIList.filter(p => p.shouldMask).length} / {allPIIList.length} 선택됨
-                  </Badge>
-                </CardTitle>
-                <CardDescription>
-                  AI가 마스킹이 필요하다고 판단한 항목은 체크되어 있습니다. 체크박스를 조정하여 마스킹 여부를 변경할 수 있습니다.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                  {allPIIList.map((pii) => (
-                    <div
-                      key={pii.id}
-                      className={`p-3 border rounded-lg transition-all ${
-                        pii.shouldMask
-                          ? 'bg-yellow-50 border-yellow-300'
-                          : 'bg-white border-gray-200'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        {/* 체크박스 */}
-                        <input
-                          type="checkbox"
-                          checked={pii.shouldMask}
-                          onChange={() => togglePIIMask(pii.id)}
-                          className="mt-1 h-5 w-5 cursor-pointer"
-                        />
-
-                        {/* PII 정보 */}
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge variant="outline" className="text-xs">
-                              {typeNames[pii.type] || pii.type}
-                            </Badge>
-                            <Badge variant="secondary" className="text-xs">
-                              {pii.source === 'regex' ? '정규식' : pii.source === 'backend_body' ? '이메일 본문' : '첨부파일'}
-                            </Badge>
-                            {pii.filename && (
-                              <Badge variant="outline" className="text-xs">
-                                📎 {pii.filename}
-                              </Badge>
-                            )}
-                            {pii.shouldMask && pii.maskingDecision?.risk_level && (
-                              <Badge
-                                variant={pii.maskingDecision.risk_level === 'high' ? 'destructive' : 'default'}
-                                className="text-xs"
-                              >
-                                {pii.maskingDecision.risk_level}
-                              </Badge>
-                            )}
-                          </div>
-
-                          {/* PII 값 */}
-                          <div className="font-mono text-sm bg-gray-100 p-2 rounded border mb-2">
-                            {pii.value}
-                            {pii.shouldMask && (
-                              <span className="ml-2 text-green-600">
-                                → {pii.maskingDecision?.masked_value || maskValue(pii.value, pii.type)}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* AI 분석 근거 (마스킹 권장된 경우만) */}
-                          {pii.shouldMask && pii.maskingDecision && (
-                            <div className="text-xs space-y-1">
-                              <p className="text-muted-foreground">
-                                💡 {pii.maskingDecision.reason}
-                              </p>
-                              {pii.maskingDecision.cited_guidelines && pii.maskingDecision.cited_guidelines.length > 0 && (
-                                <div className="bg-blue-50 p-2 rounded border-l-2 border-blue-500 mt-2">
-                                  <div className="font-semibold mb-1">📚 인용 법령</div>
-                                  {pii.maskingDecision.cited_guidelines.map((guideline, idx) => (
-                                    <div key={idx} className="text-xs">• {guideline}</div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* 전체 선택/해제 버튼 */}
-                <div className="flex gap-2 mt-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setAllPIIList(prev => prev.map(pii => ({ ...pii, shouldMask: true })))}
-                  >
-                    전체 선택
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setAllPIIList(prev => prev.map(pii => ({ ...pii, shouldMask: false })))}
-                  >
-                    전체 해제
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setAllPIIList(prev => prev.map(pii => ({
-                      ...pii,
-                      shouldMask: pii.maskingDecision?.should_mask || false
-                    })))}
-                  >
-                    AI 권장대로 복원
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* AI 분석 진행 상황 */}
-          {isAnalyzing && (
-            <Card className="border-blue-200 bg-blue-50/30">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                  AI 분석 진행 중
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">{aiSummary}</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* AI 분석 요약 (완료 후) */}
-          {!isAnalyzing && showPIICheckboxList && (
-            <Card className="border-green-200 bg-green-50/30">
-              <CardHeader>
-                <CardTitle>📊 AI 분석 요약</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">{aiSummary}</p>
-              </CardContent>
-            </Card>
-          )}
 
           {/* 전송 버튼 */}
           <Button onClick={handleSendMaskedEmail} disabled={isSending} className="w-full" size="lg">
@@ -1256,6 +1110,130 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
               </div>
             </CardContent>
           </Card>
+
+          {/* AI 분석 진행 상황 */}
+          {isAnalyzing && (
+            <Card className="border-blue-200 bg-blue-50/30">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                  AI 분석 진행 중
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground">{aiSummary}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* AI 분석 요약 (완료 후) */}
+          {!isAnalyzing && showPIICheckboxList && (
+            <Card className="border-green-200 bg-green-50/30">
+              <CardHeader>
+                <CardTitle className="text-sm">📊 AI 분석 요약</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground">{aiSummary}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* PII 체크박스 리스트 (AI 분석 완료 후 표시) */}
+          {showPIICheckboxList && allPIIList.length > 0 && (
+            <Card className="border-blue-500 bg-blue-50/50">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between text-sm">
+                  <span>✅ 마스킹 대상 PII</span>
+                  <Badge variant="default" className="text-xs">
+                    {allPIIList.filter(p => p.shouldMask).length} / {allPIIList.length}
+                  </Badge>
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  AI가 마스킹이 필요하다고 판단한 항목은 체크되어 있습니다.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                  {allPIIList.map((pii) => (
+                    <div
+                      key={pii.id}
+                      className={`p-2 border rounded-lg transition-all text-xs ${
+                        pii.shouldMask
+                          ? 'bg-yellow-50 border-yellow-300'
+                          : 'bg-white border-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        {/* 체크박스 */}
+                        <input
+                          type="checkbox"
+                          checked={pii.shouldMask}
+                          onChange={() => togglePIIMask(pii.id)}
+                          className="mt-1 h-4 w-4 cursor-pointer"
+                        />
+
+                        {/* PII 정보 */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1 mb-1 flex-wrap">
+                            <Badge variant="outline" className="text-xs">
+                              {typeNames[pii.type] || pii.type}
+                            </Badge>
+                            {pii.shouldMask && pii.maskingDecision?.risk_level && (
+                              <Badge
+                                variant={pii.maskingDecision.risk_level === 'high' ? 'destructive' : 'default'}
+                                className="text-xs"
+                              >
+                                {pii.maskingDecision.risk_level}
+                              </Badge>
+                            )}
+                          </div>
+
+                          {/* PII 값 */}
+                          <div className="font-mono text-xs bg-gray-100 p-1.5 rounded border mb-1 break-all">
+                            {pii.value}
+                            {pii.shouldMask && (
+                              <div className="text-green-600 mt-1">
+                                → {pii.maskingDecision?.masked_value || maskValue(pii.value, pii.type)}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* AI 분석 근거 (마스킹 권장된 경우만) */}
+                          {pii.shouldMask && pii.maskingDecision && (
+                            <div className="text-xs space-y-1">
+                              <p className="text-muted-foreground">
+                                💡 {pii.maskingDecision.reason}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 전체 선택/해제 버튼 */}
+                <div className="flex gap-1 mt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs flex-1"
+                    onClick={() => setAllPIIList(prev => prev.map(pii => ({ ...pii, shouldMask: true })))}
+                  >
+                    전체 선택
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs flex-1"
+                    onClick={() => setAllPIIList(prev => prev.map(pii => ({ ...pii, shouldMask: false })))}
+                  >
+                    전체 해제
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
