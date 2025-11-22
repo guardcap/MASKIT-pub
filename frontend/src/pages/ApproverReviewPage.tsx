@@ -664,6 +664,11 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
             pii_masked_count: checkedPIIs.length
           })
 
+          // 원본 첨부파일 이름 추출
+          const originalAttachmentFilenames = emailData.attachments.map((att) =>
+            att instanceof File ? att.name : att.filename || ''
+          ).filter(Boolean)
+
           const saveMaskedResponse = await fetch(`${API_BASE_URL}/api/v1/process/masking/save-masked-email`, {
             method: 'POST',
             headers: {
@@ -676,6 +681,7 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
               subject: emailData.subject,
               masked_body: tempMaskedBody,
               masked_attachment_filenames: tempMaskedAttachments,
+              original_attachment_filenames: originalAttachmentFilenames,  // 원본 첨부파일 추가
               masking_decisions: maskingDecisions,
               pii_masked_count: checkedPIIs.length
             })
@@ -727,16 +733,24 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
       }
 
       // 첨부파일: 마스킹된 파일이 있으면 그것을 사용, 없으면 원본 사용
+      console.log('📎 원본 첨부파일 데이터:', emailData.attachments)
+      console.log('📎 마스킹된 파일명 목록:', maskedAttachmentFilenames)
+
       const finalAttachments = emailData.attachments.map((att) => {
+        // File 객체는 .name 속성을 사용
+        const originalFilename = att instanceof File ? att.name : att.filename
         const maskedFilename = maskedAttachmentFilenames.find(masked =>
-          masked === `masked_${att.filename}`
+          masked === `masked_${originalFilename}`
         )
 
-        return {
-          filename: maskedFilename || att.filename,
-          content_type: att.content_type,
-          size: att.size
+        const attachmentData = {
+          filename: maskedFilename || originalFilename,
+          content_type: (att instanceof File ? att.type : (att as any).content_type) || 'application/octet-stream',
+          size: att.size || 0
         }
+
+        console.log('📎 첨부파일 매핑:', { original: originalFilename, masked: maskedFilename, final: attachmentData })
+        return attachmentData
       })
 
       console.log('📤 SMTP 전송 요청:', {
@@ -746,7 +760,7 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
         attachments: finalAttachments
       })
 
-      // SMTP 전송 (DB 저장도 자동으로 처리됨)
+      // SMTP 전송 (MongoDB의 마스킹된 이메일 사용)
       const smtpResponse = await fetch(`${API_BASE_URL}/api/v1/smtp/send`, {
         method: 'POST',
         headers: {
@@ -754,11 +768,12 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
+          masked_email_id: emailData.email_id,  // MongoDB에서 마스킹된 이메일 조회용
           from_email: emailData.from,
           to: emailData.to.join(','),
           subject: emailData.subject,
           body: maskedBody,
-          attachments: finalAttachments,
+          use_masked_email: true,  // 마스킹된 이메일 사용 플래그
         }),
       })
 

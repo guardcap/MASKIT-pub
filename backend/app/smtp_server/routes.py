@@ -41,13 +41,35 @@ async def send_email(
     - **bcc**: 숨은 참조 (옵션)
     """
     try:
-        # 3. DB에서 현재 사용자의 SMTP 설정을 가져옵니다.
-        #    (User 모델이 Pydantic이 아닌 dict일 경우: current_user["smtp_config"])
-        #    (user.smtp_config는 User 모델 정의에 따라 다릅니다)
-        user_smtp_config = current_user.get("smtp_config")
-
         print(f"[SMTP Send] ===== 디버깅 시작 =====")
         print(f"[SMTP Send] 사용자 이메일: {current_user.get('email')}")
+        print(f"[SMTP Send] use_masked_email: {email_data.use_masked_email}")
+        print(f"[SMTP Send] masked_email_id: {email_data.masked_email_id}")
+
+        # 마스킹된 이메일 사용 시 MongoDB에서 첨부파일 가져오기
+        attachments_to_send = email_data.attachments or []
+
+        if email_data.use_masked_email and email_data.masked_email_id:
+            print(f"[SMTP Send] MongoDB에서 마스킹된 이메일 조회 중...")
+            masked_email = await db.masked_emails.find_one({"email_id": email_data.masked_email_id})
+
+            if masked_email and masked_email.get("masked_attachments"):
+                # Base64 첨부파일을 attachments 리스트로 변환
+                attachments_to_send = []
+                for att in masked_email["masked_attachments"]:
+                    attachments_to_send.append({
+                        "filename": att.get("filename"),
+                        "content_type": att.get("content_type"),
+                        "size": att.get("size"),
+                        "data": att.get("data")  # Base64 인코딩된 데이터
+                    })
+                print(f"[SMTP Send] ✅ MongoDB에서 {len(attachments_to_send)}개 마스킹된 첨부파일 로드")
+            else:
+                print(f"[SMTP Send] ⚠️ 마스킹된 이메일을 찾을 수 없음: {email_data.masked_email_id}")
+
+        # 3. DB에서 현재 사용자의 SMTP 설정을 가져옵니다.
+        user_smtp_config = current_user.get("smtp_config")
+
         print(f"[SMTP Send] user_smtp_config: {user_smtp_config}")
         print(f"[SMTP Send] 기본 SMTP_HOST: {SMTP_HOST}")
         print(f"[SMTP Send] 기본 SMTP_USER: {SMTP_USER}")
@@ -92,7 +114,7 @@ async def send_email(
             body=email_data.body,
             cc=email_data.cc,
             bcc=email_data.bcc,
-            attachments=email_data.attachments,
+            attachments=attachments_to_send,  # MongoDB에서 가져온 마스킹된 첨부파일 또는 원본 첨부파일
             smtp_config=smtp_config  # 4번에서 결정된 SMTP 설정 전달
         )
 
@@ -103,6 +125,16 @@ async def send_email(
             )
 
         # MongoDB에 전송 기록 저장
+        # Base64 데이터를 제거한 첨부파일 정보만 저장 (용량 절약)
+        attachments_for_db = []
+        for att in attachments_to_send:
+            attachments_for_db.append({
+                "filename": att.get("filename"),
+                "content_type": att.get("content_type"),
+                "size": att.get("size")
+                # "data" 필드는 제외 (DB 용량 절약)
+            })
+
         email_record = {
             "from_email": email_data.from_email,
             "to_email": email_data.to,
@@ -112,12 +144,13 @@ async def send_email(
             "original_body": email_data.body,
             "masked_body": None,
             "status": "sent",
-            "attachments": email_data.attachments or [],
+            "attachments": attachments_for_db,  # 실제 전송된 첨부파일 정보
             "sent_at": result["sent_at"],
             "created_at": datetime.utcnow(),
             "dlp_verified": False,
             "dlp_token": None,
-            "owner_email": current_user.get("email") # [추가] 누가 보냈는지 기록
+            "owner_email": current_user.get("email"), # [추가] 누가 보냈는지 기록
+            "masked_email_id": email_data.masked_email_id if email_data.use_masked_email else None  # [추가] 마스킹된 이메일 ID 저장
         }
 
         insert_result = await db.emails.insert_one(email_record)

@@ -98,6 +98,7 @@ class SaveMaskedEmailRequest(BaseModel):
     subject: str
     masked_body: str
     masked_attachment_filenames: List[str] = []
+    original_attachment_filenames: List[str] = []  # 원본 첨부파일 목록 추가
     masking_decisions: dict = {}
     pii_masked_count: int = 0
 
@@ -111,11 +112,26 @@ async def save_masked_email(
     마스킹된 이메일을 MongoDB의 masked_emails 컬렉션에 저장
     """
     try:
-        # 마스킹된 첨부파일들을 Base64로 읽어서 저장
+        # 마스킹된 첨부파일과 원본 첨부파일을 모두 Base64로 읽어서 저장
         masked_attachments_data = []
 
-        for filename in request.masked_attachment_filenames:
-            file_path = os.path.join(UPLOAD_DIR, filename)
+        # 마스킹된 파일 목록을 집합으로 변환 (빠른 검색)
+        masked_set = set(request.masked_attachment_filenames)
+
+        # 모든 첨부파일 처리 (원본 파일 목록 기준)
+        for original_filename in request.original_attachment_filenames:
+            # 마스킹된 파일명 생성
+            masked_filename = f"masked_{original_filename}"
+
+            # 마스킹된 파일이 있으면 그것을 사용, 없으면 원본 사용
+            if masked_filename in masked_set:
+                filename_to_use = masked_filename
+                print(f"📦 마스킹된 파일 사용: {masked_filename}")
+            else:
+                filename_to_use = original_filename
+                print(f"📄 원본 파일 사용: {original_filename}")
+
+            file_path = os.path.join(UPLOAD_DIR, filename_to_use)
 
             if os.path.exists(file_path):
                 # 파일 읽기
@@ -127,23 +143,23 @@ async def save_masked_email(
 
                 # 파일 확장자로 content_type 추정
                 content_type = "application/octet-stream"
-                if filename.lower().endswith('.pdf'):
+                if filename_to_use.lower().endswith('.pdf'):
                     content_type = "application/pdf"
-                elif filename.lower().endswith(('.jpg', '.jpeg')):
+                elif filename_to_use.lower().endswith(('.jpg', '.jpeg')):
                     content_type = "image/jpeg"
-                elif filename.lower().endswith('.png'):
+                elif filename_to_use.lower().endswith('.png'):
                     content_type = "image/png"
 
                 masked_attachments_data.append({
-                    "filename": filename,
+                    "filename": filename_to_use,
                     "content_type": content_type,
                     "size": len(file_content),
                     "data": encoded_content
                 })
 
-                print(f"✅ 마스킹된 첨부파일 인코딩: {filename} ({len(file_content)} bytes)")
+                print(f"✅ 첨부파일 인코딩: {filename_to_use} ({len(file_content)} bytes)")
             else:
-                print(f"⚠️ 마스킹된 파일을 찾을 수 없음: {file_path}")
+                print(f"⚠️ 파일을 찾을 수 없음: {file_path}")
 
         # MaskedEmailData 객체 생성
         masked_email = MaskedEmailData(
