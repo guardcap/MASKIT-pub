@@ -52,6 +52,8 @@ export async function getPolicies(
   limit: number = 50,
   authority?: string
 ): Promise<any[]> {
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  
   const params = new URLSearchParams({
     skip: skip.toString(),
     limit: limit.toString(),
@@ -61,11 +63,34 @@ export async function getPolicies(
     params.append('authority', authority)
   }
 
-  const data = await apiRequest<{ policies: any[]; total: number }>(
-    `/api/policies/list?${params.toString()}`
-  )
+  console.log('[API] 정책 목록 조회:', `${API_BASE_URL}/api/policies/list?${params.toString()}`)
 
-  return data.policies
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/policies/list?${params.toString()}`)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[API] 정책 목록 조회 실패:', response.status, errorText)
+      throw new Error(`정책 목록 조회 실패: ${response.status} ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    console.log('[API] 정책 목록 조회 성공:', data)
+
+    // 응답 구조 확인
+    if (data.success && data.data && data.data.policies) {
+      return data.data.policies
+    } else if (Array.isArray(data)) {
+      // 직접 배열이 반환되는 경우
+      return data
+    } else {
+      console.warn('[API] 예상치 못한 응답 구조:', data)
+      return []
+    }
+  } catch (error) {
+    console.error('[API] 정책 목록 조회 오류:', error)
+    throw error
+  }
 }
 
 /**
@@ -85,6 +110,47 @@ export async function deletePolicy(policyId: string): Promise<void> {
       method: 'DELETE',
     }
   )
+}
+
+/**
+ * 정책 텍스트 수정
+ */
+export async function updatePolicyText(
+  policyId: string,
+  extractedText: string
+): Promise<any> {
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  const token = localStorage.getItem('auth_token')
+
+  if (!token) {
+    throw new Error('인증 토큰이 없습니다. 다시 로그인해주세요.')
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/policies/${policyId}/text`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        extracted_text: extractedText,
+      }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        detail: `HTTP ${response.status}: ${response.statusText}`,
+      }))
+      throw new Error(error.detail || '텍스트 수정에 실패했습니다')
+    }
+
+    const data = await response.json()
+    return data
+  } catch (error) {
+    console.error('텍스트 수정 오류:', error)
+    throw error
+  }
 }
 
 /**

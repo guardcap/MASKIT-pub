@@ -78,10 +78,16 @@ export const PolicyListPage: React.FC<PolicyListPageProps> = ({
     try {
       setLoading(true)
       setError(null)
+      
+      console.log('[PolicyList] 정책 로딩 시작, authority:', authorityFilter)
+      
       const data = await getPolicies(0, 50, authorityFilter)
+      
+      console.log('[PolicyList] 정책 로딩 완료:', data)
+      
       setPolicies(data)
     } catch (err) {
-      console.error('Failed to load policies:', err)
+      console.error('[PolicyList] 정책 로딩 실패:', err)
       setError(err instanceof Error ? err.message : '정책 목록을 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
@@ -129,7 +135,7 @@ export const PolicyListPage: React.FC<PolicyListPageProps> = ({
           <div className="flex flex-col md:flex-row gap-4">
             <InputGroup className="flex-1">
               <InputGroupInput
-                placeholder="정책 제목 또는 키워드 검색..."
+                placeholder="     정책 제목 또는 키워드 검색..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />

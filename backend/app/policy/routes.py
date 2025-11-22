@@ -16,6 +16,8 @@ from datetime import datetime
 import hashlib
 import fitz  # PyMuPDF
 from dotenv import load_dotenv
+from app.auth.auth_utils import get_current_policy_admin
+
 
 # OpenAI imports
 try:
@@ -342,13 +344,18 @@ async def list_policies(
 ):
     """정책 목록 조회"""
     try:
+        print(f"\n[Policy List] ===== 정책 목록 조회 시작 =====")
+        print(f"[Policy List] skip={skip}, limit={limit}, authority={authority}")
+        
         # 필터 조건
         query = {}
-        if authority:
+        if authority and authority != 'all':
             query["authority"] = authority
+            print(f"[Policy List] 필터 조건: {query}")
 
         # 총 개수 조회
         total = await db["policies"].count_documents(query)
+        print(f"[Policy List] 총 개수: {total}")
 
         # 정책 목록 조회 (전체 텍스트 제외)
         cursor = db["policies"].find(
@@ -360,9 +367,25 @@ async def list_policies(
 
         policies = []
         async for doc in cursor:
-            # _id를 문자열로 변환
-            doc["_id"] = str(doc["_id"])
-            policies.append(doc)
+            try:
+                # _id를 문자열로 변환
+                doc["_id"] = str(doc["_id"])
+                
+                # created_at이 datetime 객체인 경우 ISO 문자열로 변환
+                if "created_at" in doc and hasattr(doc["created_at"], "isoformat"):
+                    doc["created_at"] = doc["created_at"].isoformat()
+                
+                if "updated_at" in doc and hasattr(doc["updated_at"], "isoformat"):
+                    doc["updated_at"] = doc["updated_at"].isoformat()
+                
+                policies.append(doc)
+                print(f"[Policy List] 정책 추가: {doc.get('title', 'Unknown')}")
+            except Exception as e:
+                print(f"[Policy List] ⚠️ 정책 변환 오류: {e}")
+                continue
+
+        print(f"[Policy List] ✅ {len(policies)}개 정책 조회 완료")
+        print(f"[Policy List] ===== 정책 목록 조회 끝 =====\n")
 
         return JSONResponse({
             "success": True,
@@ -375,8 +398,13 @@ async def list_policies(
         })
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"정책 목록 조회 실패: {str(e)}")
-
+        print(f"[Policy List] ❌ 정책 목록 조회 실패: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"정책 목록 조회 실패: {str(e)}"
+        )
 
 
 # ===== 정책 스키마 로딩 및 캐싱 =====
@@ -481,13 +509,30 @@ async def get_policy_detail(
 ):
     """정책 상세 조회"""
     try:
+        print(f"\n[Policy Detail] ===== 정책 상세 조회 시작 =====")
+        print(f"[Policy Detail] Policy ID: {policy_id}")
+        
         policy = await db["policies"].find_one({"policy_id": policy_id})
 
         if not policy:
-            raise HTTPException(status_code=404, detail="정책을 찾을 수 없습니다")
+            print(f"[Policy Detail] ❌ 정책을 찾을 수 없음: {policy_id}")
+            raise HTTPException(
+                status_code=404, 
+                detail="정책을 찾을 수 없습니다"
+            )
 
         # _id를 문자열로 변환
         policy["_id"] = str(policy["_id"])
+        
+        # ✅ datetime 객체를 ISO 문자열로 변환
+        if "created_at" in policy and hasattr(policy["created_at"], "isoformat"):
+            policy["created_at"] = policy["created_at"].isoformat()
+        
+        if "updated_at" in policy and hasattr(policy["updated_at"], "isoformat"):
+            policy["updated_at"] = policy["updated_at"].isoformat()
+        
+        print(f"[Policy Detail] ✅ 정책 조회 성공: {policy.get('title')}")
+        print(f"[Policy Detail] ===== 정책 상세 조회 끝 =====\n")
 
         return JSONResponse({
             "success": True,
@@ -497,8 +542,13 @@ async def get_policy_detail(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"정책 조회 실패: {str(e)}")
-
+        print(f"[Policy Detail] ❌ 정책 조회 실패: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500, 
+            detail=f"정책 조회 실패: {str(e)}"
+        )
 
 @router.delete("/{policy_id}")
 async def delete_policy(
@@ -537,6 +587,85 @@ async def delete_policy(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"정책 삭제 실패: {str(e)}")
 
+@router.patch("/{policy_id}/text")
+async def update_policy_text(
+    policy_id: str,
+    text_data: dict,
+    current_user = Depends(get_current_policy_admin),
+    db = Depends(get_db)
+):
+    """
+    정책 추출 텍스트 수정
+    """
+    try:
+        print(f"\n[Policy] ===== 텍스트 수정 시작 =====")
+        print(f"[Policy] Policy ID: {policy_id}")
+        
+        # 새 텍스트 가져오기
+        new_text = text_data.get("extracted_text")
+        
+        if not new_text:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="extracted_text 필드가 필요합니다"
+            )
+        
+        print(f"[Policy] 새 텍스트 길이: {len(new_text)} 자")
+        
+        # 정책 존재 확인
+        policy = await db["policies"].find_one({"policy_id": policy_id})
+        
+        if not policy:
+            print(f"[Policy] ❌ 정책을 찾을 수 없음: {policy_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="정책을 찾을 수 없습니다"
+            )
+        
+        # 텍스트 업데이트
+        result = await db["policies"].update_one(
+            {"policy_id": policy_id},
+            {
+                "$set": {
+                    "extracted_text": new_text,
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        print(f"[Policy] matched_count: {result.matched_count}")
+        print(f"[Policy] modified_count: {result.modified_count}")
+        
+        if result.modified_count == 0 and result.matched_count == 0:
+            print(f"[Policy] ❌ 업데이트 실패")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="정책 업데이트에 실패했습니다"
+            )
+        
+        print(f"[Policy] ✅ 텍스트 수정 완료")
+        print(f"[Policy] ===== 텍스트 수정 끝 =====\n")
+        
+        return JSONResponse({
+            "success": True,
+            "message": "텍스트가 성공적으로 수정되었습니다",
+            "data": {
+                "policy_id": policy_id,
+                "text_length": len(new_text),
+                "updated_at": datetime.utcnow().isoformat()
+            }
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Policy] ❌ 텍스트 수정 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"텍스트 수정 중 오류가 발생했습니다: {str(e)}"
+        )
 
 @router.get("/stats/summary")
 async def get_policy_stats(db = Depends(get_db)):

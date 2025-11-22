@@ -1,17 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Trash2 } from 'lucide-react'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { getPolicyDetail, deletePolicy } from '@/lib/api'
+import { Separator } from '@/components/ui/separator'
+import { ArrowLeft, Save, Edit2, X, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { getPolicyDetail, deletePolicy, updatePolicyText } from '@/lib/api'
+
 
 interface PolicyDetailPageProps {
   policyId: string
@@ -19,15 +15,33 @@ interface PolicyDetailPageProps {
   onDelete?: (policyId: string) => void
 }
 
-export const PolicyDetailPage: React.FC<PolicyDetailPageProps> = ({
-  policyId,
-  onBack,
-  onDelete,
-}) => {
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [policy, setPolicy] = useState<any | null>(null)
+interface PolicyData {
+  policy_id: string
+  title: string
+  authority: string
+  description?: string
+  file_type: string
+  file_size_mb: number
+  processing_method: string
+  extracted_text: string
+  metadata?: {
+    summary?: string
+    keywords?: string[]
+    entity_types?: string[]
+    scenarios?: string[]
+    directives?: string[]
+  }
+  created_at: string
+  updated_at: string
+}
+
+export function PolicyDetailPage({ policyId, onBack, onDelete }: PolicyDetailPageProps) {
+  const [policy, setPolicy] = useState<PolicyData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editedText, setEditedText] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     loadPolicyDetail()
@@ -36,43 +50,84 @@ export const PolicyDetailPage: React.FC<PolicyDetailPageProps> = ({
   const loadPolicyDetail = async () => {
     try {
       setLoading(true)
-      setError(null)
       const data = await getPolicyDetail(policyId)
       setPolicy(data)
+      setEditedText(data.extracted_text || '')
+      setError(null)
     } catch (err) {
-      console.error('Failed to load policy detail:', err)
-      setError(err instanceof Error ? err.message : '정책을 불러오는데 실패했습니다.')
+      console.error('Error loading policy detail:', err)
+      setError(err instanceof Error ? err.message : '정책을 불러오는데 실패했습니다')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleDelete = async () => {
+  const handleSaveText = async () => {
+    if (!policy) return
+
     try {
-      await deletePolicy(policyId)
-      setDeleteDialogOpen(false)
-      onDelete?.(policyId)
-      onBack?.()
+      setIsSaving(true)
+
+      // API 함수 사용
+      const result = await updatePolicyText(policyId, editedText)
+
+      if (result.success) {
+        toast.success('텍스트가 저장되었습니다')
+        setPolicy({ ...policy, extracted_text: editedText })
+        setIsEditing(false)
+      } else {
+        throw new Error(result.message || '저장 실패')
+      }
     } catch (err) {
-      console.error('Failed to delete policy:', err)
-      alert(err instanceof Error ? err.message : '정책 삭제에 실패했습니다.')
+      console.error('Error saving text:', err)
+      toast.error(err instanceof Error ? err.message : '텍스트 저장에 실패했습니다')
+    } finally {
+      setIsSaving(false)
     }
   }
 
-  const formatDateTime = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString('ko-KR')
+  const handleCancelEdit = () => {
+    setEditedText(policy?.extracted_text || '')
+    setIsEditing(false)
+  }
+
+  const handleDelete = async () => {
+    if (!policy) return
+
+    if (!confirm('정말 이 정책을 삭제하시겠습니까?')) {
+      return
+    }
+
+    try {
+      await deletePolicy(policyId)
+      toast.success('정책이 삭제되었습니다')
+      onDelete?.(policyId)
+      onBack?.()
+    } catch (err) {
+      console.error('Error deleting policy:', err)
+      toast.error('정책 삭제에 실패했습니다')
+    }
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
   }
 
   if (loading) {
     return (
-      <div className="container mx-auto max-w-4xl p-6">
-        <Button variant="outline" onClick={onBack} className="mb-4">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          목록으로 돌아가기
-        </Button>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold tracking-tight">정책 상세</h1>
+        </div>
         <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">정책을 불러오는 중...</p>
+          <CardContent className="pt-6">
+            <p className="text-center text-muted-foreground">정책을 불러오는 중...</p>
           </CardContent>
         </Card>
       </div>
@@ -81,14 +136,17 @@ export const PolicyDetailPage: React.FC<PolicyDetailPageProps> = ({
 
   if (error || !policy) {
     return (
-      <div className="container mx-auto max-w-4xl p-6">
-        <Button variant="outline" onClick={onBack} className="mb-4">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          목록으로 돌아가기
-        </Button>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold tracking-tight">정책 상세</h1>
+          <Button variant="ghost" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            뒤로 가기
+          </Button>
+        </div>
         <Card className="border-red-200 bg-red-50">
           <CardContent className="pt-6">
-            <p className="text-red-800">{error || '정책을 찾을 수 없습니다.'}</p>
+            <p className="text-red-800">{error}</p>
           </CardContent>
         </Card>
       </div>
@@ -96,197 +154,171 @@ export const PolicyDetailPage: React.FC<PolicyDetailPageProps> = ({
   }
 
   return (
-    <div className="container mx-auto max-w-4xl p-6">
-      <div className="mb-6">
-        <Button variant="outline" onClick={onBack} className="mb-4">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          목록으로 돌아가기
-        </Button>
+    <div className="space-y-6">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{policy.title}</h1>
+          <p className="text-muted-foreground">{policy.authority}</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            뒤로 가기
+          </Button>
+          <Button variant="destructive" onClick={handleDelete}>
+            <Trash2 className="h-4 w-4 mr-2" />
+            삭제
+          </Button>
+        </div>
       </div>
 
-      {/* 정책 헤더 */}
-      <Card className="mb-6">
+      {/* 기본 정보 */}
+      <Card>
         <CardHeader>
-          <CardTitle className="text-2xl mb-4">{policy.title}</CardTitle>
-          <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-4">
-            <div className="flex items-center gap-2">
-              <strong>기관:</strong> {policy.authority}
-            </div>
-            <div className="flex items-center gap-2">
-              <strong>파일 타입:</strong>
-              <Badge variant={policy.file_type === '.pdf' ? 'destructive' : 'secondary'}>
-                {policy.file_type === '.pdf' ? 'PDF' : '이미지'}
-              </Badge>
-            </div>
-            {policy.file_size_mb && (
-              <div className="flex items-center gap-2">
-                <strong>파일 크기:</strong> {policy.file_size_mb.toFixed(2)} MB
-              </div>
-            )}
-            {policy.processing_method && (
-              <div className="flex items-center gap-2">
-                <strong>처리 방법:</strong> {policy.processing_method}
-              </div>
-            )}
-            <div className="flex items-center gap-2">
-              <strong>생성일:</strong> {formatDateTime(policy.created_at)}
-            </div>
-          </div>
-          {policy.description && (
-            <p className="text-muted-foreground">{policy.description}</p>
-          )}
+          <CardTitle>기본 정보</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex justify-end">
-            <Button
-              variant="destructive"
-              onClick={() => setDeleteDialogOpen(true)}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              삭제
-            </Button>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm text-muted-foreground">정책 ID</p>
+              <p className="font-mono text-sm">{policy.policy_id}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">발행 기관</p>
+              <p className="font-medium">{policy.authority}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">파일 형식</p>
+              <Badge variant="outline">{policy.file_type}</Badge>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">파일 크기</p>
+              <p className="font-medium">{policy.file_size_mb.toFixed(2)} MB</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">처리 방법</p>
+              <Badge variant="secondary">{policy.processing_method}</Badge>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">생성일</p>
+              <p className="text-sm">{formatDate(policy.created_at)}</p>
+            </div>
           </div>
+
+          {policy.description && (
+            <>
+              <Separator />
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">설명</p>
+                <p className="text-sm">{policy.description}</p>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
       {/* 메타데이터 */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>정책 정보</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <div className="text-sm font-medium text-muted-foreground">정책 ID</div>
-              <div className="font-mono text-sm">{policy.policy_id}</div>
-            </div>
-            <div className="space-y-2">
-              <div className="text-sm font-medium text-muted-foreground">원본 파일명</div>
-              <div className="text-sm">{policy.original_filename}</div>
-            </div>
-            <div className="space-y-2">
-              <div className="text-sm font-medium text-muted-foreground">저장된 파일명</div>
-              <div className="text-sm">{policy.saved_filename}</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 요약 */}
-      {policy.metadata?.summary && (
-        <Card className="mb-6">
+      {policy.metadata && (
+        <Card>
           <CardHeader>
-            <CardTitle>요약</CardTitle>
+            <CardTitle>메타데이터</CardTitle>
+            <CardDescription>AI가 추출한 정책 메타데이터</CardDescription>
           </CardHeader>
-          <CardContent>
-            <p>{policy.metadata.summary}</p>
+          <CardContent className="space-y-4">
+            {policy.metadata.summary && (
+              <div>
+                <p className="text-sm font-medium mb-2">요약</p>
+                <p className="text-sm text-muted-foreground">{policy.metadata.summary}</p>
+              </div>
+            )}
+
+            {policy.metadata.keywords && policy.metadata.keywords.length > 0 && (
+              <div>
+                <p className="text-sm font-medium mb-2">키워드</p>
+                <div className="flex flex-wrap gap-2">
+                  {policy.metadata.keywords.map((keyword, index) => (
+                    <Badge key={index} variant="secondary">
+                      {keyword}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {policy.metadata.entity_types && policy.metadata.entity_types.length > 0 && (
+              <div>
+                <p className="text-sm font-medium mb-2">개인정보 유형</p>
+                <div className="flex flex-wrap gap-2">
+                  {policy.metadata.entity_types.map((type, index) => (
+                    <Badge key={index} variant="outline">
+                      {type}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* 키워드 */}
-      {policy.metadata?.keywords && policy.metadata.keywords.length > 0 && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>키워드</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {policy.metadata.keywords.map((keyword, idx) => (
-                <Badge key={idx} variant="secondary">
-                  {keyword}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 개인정보 유형 */}
-      {policy.metadata?.entity_types && policy.metadata.entity_types.length > 0 && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>개인정보 유형</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {policy.metadata.entity_types.map((type, idx) => (
-                <Badge key={idx} variant="outline">
-                  {type}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 적용 시나리오 */}
-      {policy.metadata?.scenarios && policy.metadata.scenarios.length > 0 && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>적용 시나리오</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="list-disc list-inside space-y-2">
-              {policy.metadata.scenarios.map((scenario, idx) => (
-                <li key={idx} className="text-muted-foreground">
-                  {scenario}
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 실행 지침 */}
-      {policy.metadata?.directives && policy.metadata.directives.length > 0 && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>실행 지침</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="list-disc list-inside space-y-2">
-              {policy.metadata.directives.map((directive, idx) => (
-                <li key={idx} className="text-muted-foreground">
-                  {directive}
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 추출된 텍스트 */}
+      {/* 추출된 텍스트 (수정 가능) */}
       <Card>
         <CardHeader>
-          <CardTitle>추출된 텍스트</CardTitle>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>추출된 텍스트</CardTitle>
+              <CardDescription>
+                {isEditing
+                  ? '텍스트를 수정하고 저장하세요'
+                  : '정책 문서에서 추출된 전체 텍스트'}
+              </CardDescription>
+            </div>
+            <div className="flex gap-2">
+              {isEditing ? (
+                <>
+                  <Button variant="outline" size="sm" onClick={handleCancelEdit}>
+                    <X className="h-4 w-4 mr-2" />
+                    취소
+                  </Button>
+                  <Button size="sm" onClick={handleSaveText} disabled={isSaving}>
+                    <Save className="h-4 w-4 mr-2" />
+                    {isSaving ? '저장 중...' : '저장'}
+                  </Button>
+                </>
+              ) : (
+                <Button size="sm" onClick={() => setIsEditing(true)}>
+                  <Edit2 className="h-4 w-4 mr-2" />
+                  수정
+                </Button>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="bg-muted p-4 rounded-lg max-h-96 overflow-y-auto">
-            <pre className="whitespace-pre-wrap text-sm">{policy.extracted_text}</pre>
+          {isEditing ? (
+            <Textarea
+              value={editedText}
+              onChange={(e) => setEditedText(e.target.value)}
+              className="min-h-[500px] font-mono text-sm"
+              placeholder="추출된 텍스트를 입력하세요..."
+            />
+          ) : (
+            <div className="bg-muted/30 rounded-lg p-4">
+              <pre className="whitespace-pre-wrap text-sm font-mono max-h-[500px] overflow-y-auto">
+                {policy.extracted_text}
+              </pre>
+            </div>
+          )}
+
+          <div className="mt-4 text-sm text-muted-foreground">
+            {editedText.length.toLocaleString()} 자
+            {isEditing && editedText !== policy.extracted_text && (
+              <span className="ml-2 text-orange-600">• 수정됨</span>
+            )}
           </div>
         </CardContent>
       </Card>
-
-      {/* 삭제 확인 다이얼로그 */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>정책 삭제</DialogTitle>
-            <DialogDescription>
-              정말로 이 정책을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              취소
-            </Button>
-            <Button variant="destructive" onClick={handleDelete}>
-              삭제
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
