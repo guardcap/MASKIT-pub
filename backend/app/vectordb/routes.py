@@ -216,7 +216,7 @@ async def search_with_assistant(query: str, context: Dict = None) -> List[Dict]:
             for output_item in response.output:
                 # file_search_call 타입 처리
                 if hasattr(output_item, 'type') and output_item.type == 'file_search_call':
-                    if hasattr(output_item, 'results'):
+                    if hasattr(output_item, 'results') and output_item.results is not None:
                         for result in output_item.results:
                             results.append({
                                 'content': result.get('text', ''),

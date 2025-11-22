@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { ArrowLeft, Save, Edit2, X, Trash2, Cloud, CloudOff, ChevronDown, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Save, Edit2, X, Trash2, Cloud, CloudOff, ChevronDown, ChevronRight, Plus } from 'lucide-react'
 import { toast } from 'sonner'
-import { getPolicyDetail, deletePolicy, updatePolicyText } from '@/lib/api'
+import { getPolicyDetail, deletePolicy, updatePolicyText, updatePolicyGuidelines } from '@/lib/api'
+import { Input } from '@/components/ui/input'
 
 
 interface PolicyDetailPageProps {
@@ -67,6 +68,10 @@ export function PolicyDetailPage({ policyId, onBack, onDelete }: PolicyDetailPag
   const [isEditing, setIsEditing] = useState(false)
   const [editedText, setEditedText] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  // 가이드라인 편집 상태
+  const [isEditingGuidelines, setIsEditingGuidelines] = useState(false)
+  const [editedGuidelines, setEditedGuidelines] = useState<Guideline[]>([])
+  const [isSavingGuidelines, setIsSavingGuidelines] = useState(false)
 
   useEffect(() => {
     loadPolicyDetail()
@@ -78,6 +83,7 @@ export function PolicyDetailPage({ policyId, onBack, onDelete }: PolicyDetailPag
       const data = await getPolicyDetail(policyId)
       setPolicy(data)
       setEditedText(data.extracted_text || '')
+      setEditedGuidelines(data.guidelines || [])
       setError(null)
     } catch (err) {
       console.error('Error loading policy detail:', err)
@@ -114,6 +120,66 @@ export function PolicyDetailPage({ policyId, onBack, onDelete }: PolicyDetailPag
   const handleCancelEdit = () => {
     setEditedText(policy?.extracted_text || '')
     setIsEditing(false)
+  }
+
+  // 가이드라인 저장
+  const handleSaveGuidelines = async () => {
+    if (!policy) return
+
+    try {
+      setIsSavingGuidelines(true)
+      const result = await updatePolicyGuidelines(policyId, editedGuidelines)
+
+      if (result.success) {
+        toast.success('가이드라인이 저장되었습니다. Vector Store 재동기화가 필요합니다.')
+        // 동기화 상태 초기화 반영
+        setPolicy({
+          ...policy,
+          guidelines: editedGuidelines,
+          guidelines_count: editedGuidelines.length,
+          vector_store_file_id: undefined,
+          vector_store_synced_at: undefined
+        })
+        setIsEditingGuidelines(false)
+      } else {
+        throw new Error(result.message || '저장 실패')
+      }
+    } catch (err) {
+      console.error('Error saving guidelines:', err)
+      toast.error(err instanceof Error ? err.message : '가이드라인 저장에 실패했습니다')
+    } finally {
+      setIsSavingGuidelines(false)
+    }
+  }
+
+  const handleCancelGuidelinesEdit = () => {
+    setEditedGuidelines(policy?.guidelines || [])
+    setIsEditingGuidelines(false)
+  }
+
+  // 가이드라인 업데이트 핸들러
+  const handleGuidelineChange = (index: number, field: keyof Guideline, value: any) => {
+    const updated = [...editedGuidelines]
+    updated[index] = { ...updated[index], [field]: value }
+    setEditedGuidelines(updated)
+  }
+
+  // 가이드라인 삭제
+  const handleDeleteGuideline = (index: number) => {
+    const updated = editedGuidelines.filter((_, i) => i !== index)
+    setEditedGuidelines(updated)
+  }
+
+  // 새 가이드라인 추가
+  const handleAddGuideline = () => {
+    const newGuideline: Guideline = {
+      guide_id: `guide_${Date.now()}`,
+      scenario: '',
+      actionable_directive: '',
+      keywords: [],
+      context: {}
+    }
+    setEditedGuidelines([...editedGuidelines, newGuideline])
   }
 
   const handleDelete = async () => {
@@ -328,34 +394,76 @@ export function PolicyDetailPage({ policyId, onBack, onDelete }: PolicyDetailPag
       )}
 
       {/* 가이드라인/스키마 */}
-      {policy.guidelines && policy.guidelines.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>추출된 가이드라인 ({policy.guidelines.length}개)</CardTitle>
-            <CardDescription>AI가 정책 문서에서 추출한 실무 가이드라인</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {policy.guidelines.map((guide, index) => (
-              <GuidelineItem key={guide.guide_id || index} guide={guide} index={index} />
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 가이드라인이 아직 추출되지 않은 경우 */}
-      {(!policy.guidelines || policy.guidelines.length === 0) && (
-        <Card className="border-dashed">
-          <CardContent className="pt-6">
-            <div className="text-center text-muted-foreground">
-              <p className="mb-2">아직 가이드라인이 추출되지 않았습니다.</p>
-              <p className="text-sm">
-                정책 업로드 후 백그라운드에서 가이드라인이 추출됩니다.
-                잠시 후 새로고침해 주세요.
-              </p>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>
+                추출된 가이드라인 ({isEditingGuidelines ? editedGuidelines.length : (policy.guidelines?.length || 0)}개)
+              </CardTitle>
+              <CardDescription>
+                {isEditingGuidelines
+                  ? '가이드라인을 수정하고 저장하세요. 저장 시 Vector Store 동기화가 초기화됩니다.'
+                  : 'AI가 정책 문서에서 추출한 실무 가이드라인'}
+              </CardDescription>
             </div>
-          </CardContent>
-        </Card>
-      )}
+            <div className="flex gap-2">
+              {isEditingGuidelines ? (
+                <>
+                  <Button variant="outline" size="sm" onClick={handleCancelGuidelinesEdit}>
+                    <X className="h-4 w-4 mr-2" />
+                    취소
+                  </Button>
+                  <Button size="sm" onClick={handleSaveGuidelines} disabled={isSavingGuidelines}>
+                    <Save className="h-4 w-4 mr-2" />
+                    {isSavingGuidelines ? '저장 중...' : '저장'}
+                  </Button>
+                </>
+              ) : (
+                <Button size="sm" onClick={() => setIsEditingGuidelines(true)}>
+                  <Edit2 className="h-4 w-4 mr-2" />
+                  수정
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isEditingGuidelines ? (
+            <>
+              {editedGuidelines.map((guide, index) => (
+                <EditableGuidelineItem
+                  key={guide.guide_id || index}
+                  guide={guide}
+                  index={index}
+                  onChange={handleGuidelineChange}
+                  onDelete={handleDeleteGuideline}
+                />
+              ))}
+              <Button variant="outline" className="w-full" onClick={handleAddGuideline}>
+                <Plus className="h-4 w-4 mr-2" />
+                새 가이드라인 추가
+              </Button>
+            </>
+          ) : (
+            <>
+              {policy.guidelines && policy.guidelines.length > 0 ? (
+                policy.guidelines.map((guide, index) => (
+                  <GuidelineItem key={guide.guide_id || index} guide={guide} index={index} />
+                ))
+              ) : (
+                <div className="text-center text-muted-foreground py-8">
+                  <p className="mb-2">아직 가이드라인이 추출되지 않았습니다.</p>
+                  <p className="text-sm">
+                    정책 업로드 후 백그라운드에서 가이드라인이 추출됩니다.
+                    잠시 후 새로고침해 주세요.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* 추출된 텍스트 (수정 가능) */}
       <Card>
@@ -559,6 +667,96 @@ function GuidelineItem({ guide, index }: { guide: Guideline; index: number }) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// 편집 가능한 가이드라인 아이템 컴포넌트
+function EditableGuidelineItem({
+  guide,
+  index,
+  onChange,
+  onDelete
+}: {
+  guide: Guideline
+  index: number
+  onChange: (index: number, field: keyof Guideline, value: any) => void
+  onDelete: (index: number) => void
+}) {
+  return (
+    <div className="border rounded-lg p-4 space-y-4 bg-muted/20">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-muted-foreground">
+          가이드라인 #{index + 1}
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+          onClick={() => onDelete(index)}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* 시나리오 */}
+      <div>
+        <label className="text-sm font-medium mb-1 block">시나리오 *</label>
+        <Input
+          value={guide.scenario || ''}
+          onChange={(e) => onChange(index, 'scenario', e.target.value)}
+          placeholder="예: 외부 고객에게 계약서 전송 시"
+        />
+      </div>
+
+      {/* 실행 지침 */}
+      <div>
+        <label className="text-sm font-medium mb-1 block">실행 지침 *</label>
+        <Textarea
+          value={guide.actionable_directive || ''}
+          onChange={(e) => onChange(index, 'actionable_directive', e.target.value)}
+          placeholder="예: 개인정보(이름, 전화번호, 주소)를 마스킹 처리합니다."
+          className="min-h-[80px]"
+        />
+      </div>
+
+      {/* 법적 해석 */}
+      <div>
+        <label className="text-sm font-medium mb-1 block">법적 해석</label>
+        <Textarea
+          value={guide.interpretation || ''}
+          onChange={(e) => onChange(index, 'interpretation', e.target.value)}
+          placeholder="예: 개인정보보호법 제17조에 따라..."
+          className="min-h-[60px]"
+        />
+      </div>
+
+      {/* 키워드 */}
+      <div>
+        <label className="text-sm font-medium mb-1 block">키워드 (쉼표로 구분)</label>
+        <Input
+          value={(guide.keywords || []).join(', ')}
+          onChange={(e) => {
+            const keywords = e.target.value.split(',').map(k => k.trim()).filter(k => k)
+            onChange(index, 'keywords', keywords)
+          }}
+          placeholder="예: 계약서, 외부전송, 마스킹"
+        />
+      </div>
+
+      {/* 신뢰도 점수 */}
+      <div>
+        <label className="text-sm font-medium mb-1 block">신뢰도 점수 (0-1)</label>
+        <Input
+          type="number"
+          min="0"
+          max="1"
+          step="0.1"
+          value={guide.confidence_score || 0.8}
+          onChange={(e) => onChange(index, 'confidence_score', parseFloat(e.target.value))}
+        />
+      </div>
     </div>
   )
 }

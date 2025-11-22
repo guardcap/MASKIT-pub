@@ -31,7 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { getPolicies, deletePolicy, syncPoliciesToVectorStore, getSyncStatus } from '@/lib/api'
+import { getPolicies, deletePolicy, syncPoliciesToVectorStore, getSyncStatus, removePolicyFromVectorStore } from '@/lib/api'
 import { toast } from 'sonner'
 
 interface Policy {
@@ -167,14 +167,25 @@ export const PolicyListPage: React.FC<PolicyListPageProps> = ({
     if (!policyToDelete) return
 
     try {
+      // Vector Store에서 먼저 제거
+      try {
+        await removePolicyFromVectorStore(policyToDelete)
+      } catch (err) {
+        console.log('Vector Store 제거 스킵 (동기화되지 않은 정책일 수 있음):', err)
+      }
+
+      // MongoDB에서 정책 삭제
       await deletePolicy(policyToDelete)
       setDeleteDialogOpen(false)
       setPolicyToDelete(null)
+      toast.success('정책이 삭제되었습니다')
       // Reload policies after deletion
       await loadPolicies()
+      // 동기화 상태도 새로고침
+      await loadSyncStatus()
     } catch (err) {
       console.error('Failed to delete policy:', err)
-      alert(err instanceof Error ? err.message : '정책 삭제에 실패했습니다.')
+      toast.error(err instanceof Error ? err.message : '정책 삭제에 실패했습니다.')
     }
   }
 
@@ -332,19 +343,14 @@ export const PolicyListPage: React.FC<PolicyListPageProps> = ({
                     <TableCell>
                       <div className="flex items-center gap-1">
                         {policy.vector_store_file_id ? (
-                          <Badge variant="default" className="bg-green-500 text-xs">
+                          <Badge variant="default" className="bg-green-500 text-xs whitespace-nowrap">
                             <Cloud className="h-3 w-3 mr-1" />
                             동기화됨
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="text-xs text-muted-foreground">
+                          <Badge variant="outline" className="text-xs text-muted-foreground whitespace-nowrap">
                             <CloudOff className="h-3 w-3 mr-1" />
                             미동기화
-                          </Badge>
-                        )}
-                        {policy.guidelines_count !== undefined && policy.guidelines_count > 0 && (
-                          <Badge variant="secondary" className="text-xs">
-                            {policy.guidelines_count}개 가이드
                           </Badge>
                         )}
                       </div>
