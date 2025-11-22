@@ -22,7 +22,7 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from '@/components/ui/input-group'
-import { Search, Plus, Trash2, Eye } from 'lucide-react'
+import { Search, Plus, Trash2, Eye, Cloud, RefreshCw, CloudOff } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -31,7 +31,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { getPolicies, deletePolicy } from '@/lib/api'
+import { getPolicies, deletePolicy, syncPoliciesToVectorStore, getSyncStatus, removePolicyFromVectorStore } from '@/lib/api'
+import { toast } from 'sonner'
 
 interface Policy {
   policy_id: string
@@ -43,6 +44,28 @@ interface Policy {
   metadata?: {
     keywords?: string[]
   }
+  vector_store_file_id?: string
+  guidelines_count?: number
+}
+
+interface SyncStatus {
+  mongodb: {
+    total_policies: number
+    synced_to_vector_store: number
+    not_synced: number
+  }
+  vector_store: {
+    id: string
+    name: string
+    status: string
+    file_counts: {
+      total: number
+      completed: number
+      in_progress: number
+      failed: number
+    }
+  } | null
+  sync_needed: boolean
 }
 
 interface PolicyListPageProps {
@@ -61,9 +84,12 @@ export const PolicyListPage: React.FC<PolicyListPageProps> = ({
   const [policies, setPolicies] = useState<Policy[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
+  const [isSyncing, setIsSyncing] = useState(false)
 
   useEffect(() => {
     loadPolicies()
+    loadSyncStatus()
   }, [authorityFilter])
 
   const formatDate = (dateString: string) => {
@@ -72,6 +98,36 @@ export const PolicyListPage: React.FC<PolicyListPageProps> = ({
       month: '2-digit',
       day: '2-digit',
     })
+  }
+
+  const loadSyncStatus = async () => {
+    try {
+      const status = await getSyncStatus()
+      setSyncStatus(status)
+    } catch (err) {
+      console.error('[PolicyList] 동기화 상태 로딩 실패:', err)
+    }
+  }
+
+  const handleSync = async () => {
+    try {
+      setIsSyncing(true)
+      toast.loading('Vector Store 동기화 중...', { id: 'sync' })
+
+      const result = await syncPoliciesToVectorStore()
+
+      toast.dismiss('sync')
+      toast.success(`동기화 완료: ${result.synced?.length || 0}개 추가, ${result.skipped?.length || 0}개 스킵`)
+
+      // 상태 새로고침
+      await loadSyncStatus()
+      await loadPolicies()
+    } catch (err) {
+      toast.dismiss('sync')
+      toast.error(err instanceof Error ? err.message : '동기화 실패')
+    } finally {
+      setIsSyncing(false)
+    }
   }
 
   const loadPolicies = async () => {
@@ -111,23 +167,84 @@ export const PolicyListPage: React.FC<PolicyListPageProps> = ({
     if (!policyToDelete) return
 
     try {
+      // Vector Store에서 먼저 제거
+      try {
+        await removePolicyFromVectorStore(policyToDelete)
+      } catch (err) {
+        console.log('Vector Store 제거 스킵 (동기화되지 않은 정책일 수 있음):', err)
+      }
+
+      // MongoDB에서 정책 삭제
       await deletePolicy(policyToDelete)
       setDeleteDialogOpen(false)
       setPolicyToDelete(null)
+      toast.success('정책이 삭제되었습니다')
       // Reload policies after deletion
       await loadPolicies()
+      // 동기화 상태도 새로고침
+      await loadSyncStatus()
     } catch (err) {
       console.error('Failed to delete policy:', err)
-      alert(err instanceof Error ? err.message : '정책 삭제에 실패했습니다.')
+      toast.error(err instanceof Error ? err.message : '정책 삭제에 실패했습니다.')
     }
   }
 
   return (
     <div className="container mx-auto max-w-6xl p-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">정책 목록</h1>
-        <p className="text-muted-foreground">등록된 정책 문서를 관리합니다</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">정책 목록</h1>
+            <p className="text-muted-foreground">등록된 정책 문서를 관리합니다</p>
+          </div>
+        </div>
       </div>
+
+      {/* Vector Store 동기화 상태 카드 */}
+      <Card className="mb-6">
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                {syncStatus?.sync_needed ? (
+                  <CloudOff className="h-5 w-5 text-orange-500" />
+                ) : (
+                  <Cloud className="h-5 w-5 text-green-500" />
+                )}
+                <span className="font-medium">Vector Store 동기화</span>
+              </div>
+              {syncStatus && (
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <span>
+                    MongoDB: <strong>{syncStatus.mongodb.total_policies}</strong>개
+                  </span>
+                  <span>
+                    동기화됨: <strong className="text-green-600">{syncStatus.mongodb.synced_to_vector_store}</strong>개
+                  </span>
+                  {syncStatus.mongodb.not_synced > 0 && (
+                    <Badge variant="outline" className="text-orange-600 border-orange-300">
+                      {syncStatus.mongodb.not_synced}개 미동기화
+                    </Badge>
+                  )}
+                  {syncStatus.vector_store && (
+                    <span className="text-xs">
+                      Vector Store: {syncStatus.vector_store.file_counts.total}개 파일
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            <Button
+              onClick={handleSync}
+              disabled={isSyncing}
+              variant={syncStatus?.sync_needed ? 'default' : 'outline'}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? '동기화 중...' : '동기화 실행'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* 검색 및 필터 */}
       <Card className="mb-6">
@@ -198,6 +315,7 @@ export const PolicyListPage: React.FC<PolicyListPageProps> = ({
                   <TableHead>정책명</TableHead>
                   <TableHead>기관</TableHead>
                   <TableHead>파일 타입</TableHead>
+                  <TableHead>동기화</TableHead>
                   <TableHead>등록일</TableHead>
                   <TableHead>키워드</TableHead>
                   <TableHead className="text-right">작업</TableHead>
@@ -221,6 +339,21 @@ export const PolicyListPage: React.FC<PolicyListPageProps> = ({
                       <Badge variant={policy.file_type === '.pdf' ? 'destructive' : 'secondary'}>
                         {policy.file_type === '.pdf' ? 'PDF' : '이미지'}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        {policy.vector_store_file_id ? (
+                          <Badge variant="default" className="bg-green-500 text-xs whitespace-nowrap">
+                            <Cloud className="h-3 w-3 mr-1" />
+                            동기화됨
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-xs text-muted-foreground whitespace-nowrap">
+                            <CloudOff className="h-3 w-3 mr-1" />
+                            미동기화
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>{formatDate(policy.created_at)}</TableCell>
                     <TableCell>

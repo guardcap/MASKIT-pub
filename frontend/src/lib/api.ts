@@ -287,3 +287,141 @@ export async function pollTaskStatus(
     poll()
   })
 }
+
+/**
+ * Vector Store 동기화 상태 조회
+ */
+export async function getSyncStatus(): Promise<{
+  mongodb: {
+    total_policies: number
+    synced_to_vector_store: number
+    not_synced: number
+  }
+  vector_store: {
+    id: string
+    name: string
+    status: string
+    file_counts: {
+      total: number
+      completed: number
+      in_progress: number
+      failed: number
+    }
+  } | null
+  sync_needed: boolean
+}> {
+  return await apiRequest<{
+    mongodb: {
+      total_policies: number
+      synced_to_vector_store: number
+      not_synced: number
+    }
+    vector_store: {
+      id: string
+      name: string
+      status: string
+      file_counts: {
+        total: number
+        completed: number
+        in_progress: number
+        failed: number
+      }
+    } | null
+    sync_needed: boolean
+  }>('/api/policies/sync/status')
+}
+
+/**
+ * 모든 정책을 Vector Store에 동기화
+ */
+export async function syncPoliciesToVectorStore(): Promise<{
+  synced: Array<{ policy_id: string; title: string; file_id: string }>
+  skipped: Array<{ policy_id: string; title: string; reason: string }>
+  failed: Array<{ policy_id: string; title: string; reason: string }>
+  total_in_mongodb: number
+  total_in_vector_store: number
+  vector_store_id: string
+}> {
+  const token = localStorage.getItem('auth_token')
+
+  const response = await fetch(`${API_BASE_URL}/api/policies/sync/vector-store`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      detail: `HTTP ${response.status}: ${response.statusText}`,
+    }))
+    throw new Error(error.detail || '동기화 실패')
+  }
+
+  const data = await response.json()
+  return data.data
+}
+
+/**
+ * Vector Store에서 정책 제거
+ */
+export async function removePolicyFromVectorStore(policyId: string): Promise<void> {
+  const token = localStorage.getItem('auth_token')
+
+  const response = await fetch(`${API_BASE_URL}/api/policies/sync/vector-store/${policyId}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({
+      detail: `HTTP ${response.status}: ${response.statusText}`,
+    }))
+    throw new Error(error.detail || 'Vector Store에서 정책 제거 실패')
+  }
+}
+
+/**
+ * 정책 가이드라인 수정
+ */
+export async function updatePolicyGuidelines(
+  policyId: string,
+  guidelines: any[]
+): Promise<any> {
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  const token = localStorage.getItem('auth_token')
+
+  if (!token) {
+    throw new Error('인증 토큰이 없습니다. 다시 로그인해주세요.')
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/policies/${policyId}/guidelines`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        guidelines: guidelines,
+      }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        detail: `HTTP ${response.status}: ${response.statusText}`,
+      }))
+      throw new Error(error.detail || '가이드라인 수정에 실패했습니다')
+    }
+
+    const data = await response.json()
+    return data
+  } catch (error) {
+    console.error('가이드라인 수정 오류:', error)
+    throw error
+  }
+}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { ModernAppLayout } from '@/components/ModernAppLayout'
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
@@ -33,7 +33,8 @@ interface User {
   userRole: string
 }
 
-interface EmailData {
+// WriteEmailPage에서 사용하는 타입 (File 객체 사용)
+interface EmailDraftData {
   from: string
   to: string[]
   subject: string
@@ -74,7 +75,7 @@ function App() {
   const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null)
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
-  const [emailDraftData, setEmailDraftData] = useState<EmailData | null>(null)
+  const [emailDraftData, setEmailDraftData] = useState<EmailDraftData | null>(null)
 
   // 앱 초기화: localStorage에서 로그인 상태 복원
   useEffect(() => {
@@ -131,6 +132,7 @@ function App() {
     ]
 
     // Policy Admin 전용 메뉴
+    console.log('현재 userRole:', userRole, '| policy_admin 여부:', userRole === 'policy_admin')
     if (userRole === 'policy_admin') {
       baseMenu.push(
         {
@@ -151,6 +153,12 @@ function App() {
           icon: <Plus className="h-4 w-4" />,
           onClick: () => setCurrentView('policy-add'),
         },
+        {
+          id: 'entity-management',
+          label: '엔티티 관리',
+          icon: <Shield className="h-4 w-4" />,
+          onClick: () => setCurrentView('entity-management'),
+        },
       )
     }
 
@@ -168,12 +176,7 @@ function App() {
 
     // 공통 메뉴
     baseMenu.push(
-      {
-        id: 'entity-management',
-        label: '엔티티 관리',
-        icon: <Shield className="h-4 w-4" />,
-        onClick: () => setCurrentView('entity-management'),
-      },
+      
       {
         id: 'dlp-statistics',
         label: 'DLP 통계',
