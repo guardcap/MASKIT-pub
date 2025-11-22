@@ -91,17 +91,83 @@ class SMTPEmailClient:
 
             # 첨부파일 추가
             if attachments:
-                for file_path in attachments:
-                    if os.path.exists(file_path):
-                        with open(file_path, 'rb') as f:
+                print(f"[SMTP Client] 📎 첨부파일 처리 시작: {len(attachments)}개")
+
+                for idx, attachment in enumerate(attachments):
+                    try:
+                        # Base64 데이터가 있는 경우 (MongoDB에서 온 경우)
+                        if isinstance(attachment, dict) and attachment.get('data'):
+                            import base64
+                            from email.utils import encode_rfc2231
+                            filename = attachment.get('filename', f'attachment_{idx}')
+                            content_type = attachment.get('content_type', 'application/octet-stream')
+                            base64_data = attachment.get('data')
+
+                            print(f"[SMTP Client] 📦 Base64 첨부파일: {filename}")
+
+                            # Base64 디코딩
+                            file_data = base64.b64decode(base64_data)
+
+                            # MIME part 생성
                             part = MIMEBase('application', 'octet-stream')
-                            part.set_payload(f.read())
+                            part.set_payload(file_data)
                             encoders.encode_base64(part)
+
+                            # RFC 2231 형식으로 한글 파일명 인코딩
+                            encoded_filename = encode_rfc2231(filename, charset='utf-8')
                             part.add_header(
                                 'Content-Disposition',
-                                f'attachment; filename={os.path.basename(file_path)}'
+                                'attachment',
+                                filename=('utf-8', '', filename)
                             )
                             msg.attach(part)
+                            print(f"[SMTP Client] ✅ Base64 첨부파일 추가: {filename} ({len(file_data)} bytes)")
+
+                        # 파일 경로가 있는 경우
+                        else:
+                            # dict 형태 또는 string 형태 모두 지원
+                            if isinstance(attachment, dict):
+                                file_path = attachment.get('filename')
+                            else:
+                                file_path = attachment
+
+                            # file_path가 None이거나 빈 문자열이면 스킵
+                            if not file_path:
+                                print(f"[SMTP Client] ⚠️ 첨부파일 경로가 없음: {attachment}")
+                                continue
+
+                            # 프로젝트 루트 디렉토리 기준으로 uploads 경로 설정
+                            project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                            uploads_dir = os.path.join(project_root, 'uploads')
+
+                            # 절대 경로 생성
+                            if os.path.isabs(file_path):
+                                full_path = file_path
+                            elif file_path.startswith('uploads/') or file_path.startswith('uploads\\'):
+                                full_path = os.path.join(project_root, file_path)
+                            else:
+                                full_path = os.path.join(uploads_dir, file_path)
+
+                            print(f"[SMTP Client] 📁 파일 경로: {full_path}")
+
+                            if os.path.exists(full_path):
+                                with open(full_path, 'rb') as f:
+                                    part = MIMEBase('application', 'octet-stream')
+                                    part.set_payload(f.read())
+                                    encoders.encode_base64(part)
+                                    part.add_header(
+                                        'Content-Disposition',
+                                        f'attachment; filename={os.path.basename(file_path)}'
+                                    )
+                                    msg.attach(part)
+                                print(f"[SMTP Client] ✅ 파일 첨부파일 추가: {os.path.basename(file_path)} ({os.path.getsize(full_path)} bytes)")
+                            else:
+                                print(f"[SMTP Client] ❌ 첨부파일 없음: {full_path}")
+
+                    except Exception as e:
+                        print(f"[SMTP Client] ❌ 첨부파일 처리 오류: {e}")
+                        import traceback
+                        traceback.print_exc()
 
             # 수신자 리스트 생성
             recipients = [email.strip() for email in to.split(',')]

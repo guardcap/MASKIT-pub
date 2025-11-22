@@ -28,7 +28,7 @@ interface EmailDetail {
   sent_at?: string
   read_at?: string
   attachments?: Array<{
-    file_id: string
+    file_id?: string  // Optional - GridFS attachments have this, SMTP attachments don't
     filename: string
     size: number
     content_type: string
@@ -118,19 +118,26 @@ export function EmailDetailPage({ emailId, onBack }: EmailDetailPageProps) {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
   }
 
-  const handleDownloadAttachment = async (fileId: string, filename: string) => {
+  const handleDownloadAttachment = async (fileId: string | undefined, filename: string) => {
     try {
       const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
       const token = localStorage.getItem('auth_token')
 
-      const response = await fetch(
-        `${API_BASE}/api/v1/emails/email/${emailId}/attachments/${fileId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      )
+      let downloadUrl: string
+
+      // fileId가 있으면 GridFS 다운로드 (기존 방식)
+      // fileId가 없으면 filename으로 MongoDB Base64 다운로드 (SMTP로 전송된 이메일)
+      if (fileId) {
+        downloadUrl = `${API_BASE}/api/v1/emails/email/${emailId}/attachments/${fileId}`
+      } else {
+        downloadUrl = `${API_BASE}/api/v1/emails/email/${emailId}/attachments/by-filename/${encodeURIComponent(filename)}`
+      }
+
+      const response = await fetch(downloadUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
 
       if (!response.ok) {
         throw new Error('파일 다운로드에 실패했습니다.')

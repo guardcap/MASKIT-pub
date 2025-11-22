@@ -209,43 +209,43 @@ async def download_email_attachment(
     """
     try:
         email = await db.emails.find_one({"_id": ObjectId(email_id)})
-        
+
         if not email:
             raise HTTPException(status_code=404, detail="이메일을 찾을 수 없습니다")
-        
+
         if email["from_email"] != current_user["email"] and email["to_email"] != current_user["email"]:
             raise HTTPException(status_code=403, detail="첨부파일 다운로드 권한이 없습니다")
-        
+
         attachment_exists = False
         for att in email.get("attachments", []):
             if isinstance(att, dict) and att.get("file_id") == file_id:
                 attachment_exists = True
                 break
-        
+
         if not attachment_exists:
             raise HTTPException(status_code=404, detail="이메일에 해당 첨부파일이 없습니다")
-        
+
         fs = AsyncIOMotorGridFSBucket(db)
-        
+
         try:
             object_id = ObjectId(file_id)
         except:
             raise HTTPException(status_code=400, detail="잘못된 파일 ID입니다")
-        
+
         try:
             grid_out = await fs.open_download_stream(object_id)
             filename = grid_out.filename
             content_type = grid_out.metadata.get("content_type", "application/octet-stream")
-            
+
             async def file_iterator():
                 while True:
                     chunk = await grid_out.readchunk()
                     if not chunk:
                         break
                     yield chunk
-            
+
             print(f"✅ 이메일 첨부파일 다운로드 시작: {filename} (Email: {email_id}, User: {current_user['email']})")
-            
+
             return StreamingResponse(
                 file_iterator(),
                 media_type=content_type,
@@ -253,14 +253,103 @@ async def download_email_attachment(
                     "Content-Disposition": f'attachment; filename="{filename}"'
                 }
             )
-            
+
         except Exception as e:
             raise HTTPException(status_code=404, detail=f"파일을 찾을 수 없습니다: {str(e)}")
-        
+
     except HTTPException:
         raise
     except Exception as e:
         print(f"❌ 이메일 첨부파일 다운로드 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"첨부파일 다운로드 실패: {str(e)}")
+
+
+@router.get("/email/{email_id}/attachments/by-filename/{filename}")
+async def download_email_attachment_by_filename(
+    email_id: str,
+    filename: str,
+    current_user: dict = Depends(get_current_user),
+    db = Depends(get_db)
+):
+    """
+    특정 이메일의 첨부파일을 파일명으로 다운로드 (SMTP로 전송된 이메일용)
+    MongoDB masked_emails 컬렉션에서 Base64 데이터를 가져와서 반환
+    """
+    try:
+        import base64
+        from io import BytesIO
+
+        # 1. 이메일 권한 확인
+        email = await db.emails.find_one({"_id": ObjectId(email_id)})
+
+        if not email:
+            raise HTTPException(status_code=404, detail="이메일을 찾을 수 없습니다")
+
+        if email["from_email"] != current_user["email"] and email["to_email"] != current_user["email"]:
+            raise HTTPException(status_code=403, detail="첨부파일 다운로드 권한이 없습니다")
+
+        # 2. 첨부파일이 이메일에 존재하는지 확인
+        attachment_exists = False
+        for att in email.get("attachments", []):
+            if isinstance(att, dict) and att.get("filename") == filename:
+                attachment_exists = True
+                break
+
+        if not attachment_exists:
+            raise HTTPException(status_code=404, detail="이메일에 해당 첨부파일이 없습니다")
+
+        # 3. MongoDB masked_emails 컬렉션에서 Base64 데이터 조회
+        # email 레코드에서 masked_email_id를 가져와서 사용
+        masked_email_id = email.get("masked_email_id")
+
+        if not masked_email_id:
+            # masked_email_id가 없으면 현재 email_id로 시도 (구버전 호환성)
+            masked_email_id = email_id
+
+        masked_email = await db.masked_emails.find_one({"email_id": masked_email_id})
+
+        if not masked_email or not masked_email.get("masked_attachments"):
+            raise HTTPException(status_code=404, detail="마스킹된 이메일 데이터를 찾을 수 없습니다")
+
+        # 4. 파일명으로 첨부파일 찾기
+        file_data = None
+        content_type = "application/octet-stream"
+
+        for att in masked_email["masked_attachments"]:
+            if att.get("filename") == filename:
+                base64_data = att.get("data")
+                if not base64_data:
+                    raise HTTPException(status_code=404, detail="첨부파일 데이터가 없습니다")
+
+                # Base64 디코딩
+                file_data = base64.b64decode(base64_data)
+                content_type = att.get("content_type", "application/octet-stream")
+                break
+
+        if not file_data:
+            raise HTTPException(status_code=404, detail=f"파일을 찾을 수 없습니다: {filename}")
+
+        print(f"✅ Base64 첨부파일 다운로드: {filename} ({len(file_data)} bytes, Email: {email_id}, User: {current_user['email']})")
+
+        # 5. 파일 다운로드 응답
+        # RFC 2231 인코딩으로 한글 파일명 처리
+        from urllib.parse import quote
+        encoded_filename = quote(filename)
+
+        return StreamingResponse(
+            BytesIO(file_data),
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Base64 첨부파일 다운로드 오류: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"첨부파일 다운로드 실패: {str(e)}")
 
 

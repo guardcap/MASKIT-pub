@@ -28,7 +28,9 @@ class EmailSendRequest(BaseModel):
     cc: Optional[str] = None
     bcc: Optional[str] = None
     attachments: Optional[List[dict]] = None
-    
+    masked_email_id: Optional[str] = None  # 마스킹된 이메일 ID (MongoDB)
+    use_masked_email: bool = False  # 마스킹된 이메일 사용 여부
+
     # [제거] 이 필드는 더 이상 클라이언트가 보내지 않음
     # smtp_config: Optional[SMTPSettings] = None 
 
