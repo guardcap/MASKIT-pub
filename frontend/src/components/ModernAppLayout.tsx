@@ -44,7 +44,7 @@ export function ModernAppLayout({
     ['write-email', 'approver-review'].includes(item.id)
   )
   const policyMenuItems = sidebarMenu.filter((item) =>
-    ['policy-dashboard', 'policy-list', 'policy-add'].includes(item.id)
+    ['policy-dashboard', 'policy-list', 'policy-add', 'entity-management'].includes(item.id)
   )
   const systemMenuItems = sidebarMenu.filter((item) =>
     ['users', 'logs', 'mypage', 'settings'].includes(item.id)
