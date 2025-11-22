@@ -140,8 +140,12 @@ class EntityType(BaseModel):
     regex_pattern: Optional[str] = None  # 정규식 패턴
     keywords: List[str] = []  # 키워드 (컨텍스트 분석용)
     examples: List[str] = []  # 예시
-    masking_rule: str = "full"  # full, partial, hash
+    masking_rule: str = "full"  # full, partial, hash (레거시)
     sensitivity_level: str = "high"  # low, medium, high, critical
+    # 마스킹 상세 설정
+    masking_type: str = "full"      # full(전체), partial(부분), custom(커스텀 패턴)
+    masking_char: str = "*"          # 마스킹 문자 (*, #, X, ●)
+    masking_pattern: Optional[str] = None  # 커스텀 패턴 (예: "###-##-*****")
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

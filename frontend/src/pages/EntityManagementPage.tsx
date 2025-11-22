@@ -14,6 +14,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Table,
   TableBody,
   TableCell,
@@ -80,6 +87,9 @@ export default function EntityManagementPage() {
     regex_pattern: '',
     keywords: '',
     examples: '',
+    masking_type: 'full',  // full, partial, custom
+    masking_char: '*',
+    masking_pattern: '',   // 커스텀 마스킹 패턴 (예: "###-##-*****")
   })
 
   const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -126,18 +136,13 @@ export default function EntityManagementPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    const params = new URLSearchParams()
-    Object.entries(formData).forEach(([key, value]) => {
-      params.append(key, value)
-    })
-
     try {
       const response = await fetch(`${API_BASE}/api/entities/`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/json',
         },
-        body: params.toString(),
+        body: JSON.stringify(formData),
       })
 
       const result = await response.json()
@@ -156,6 +161,9 @@ export default function EntityManagementPage() {
         regex_pattern: '',
         keywords: '',
         examples: '',
+        masking_type: 'full',
+        masking_char: '*',
+        masking_pattern: '',
       })
       loadData()
     } catch (error: any) {
@@ -656,6 +664,61 @@ export default function EntityManagementPage() {
                   onChange={(e) => setFormData({ ...formData, examples: e.target.value })}
                   placeholder="예: 123-45-67890"
                 />
+              </div>
+
+              {/* 마스킹 설정 섹션 */}
+              <div className="border-t pt-4 mt-4">
+                <h4 className="font-medium mb-3">마스킹 설정</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="masking_type">마스킹 방식</Label>
+                    <Select
+                      value={formData.masking_type}
+                      onValueChange={(value) => setFormData({ ...formData, masking_type: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="마스킹 방식 선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="full">전체 마스킹 (***)</SelectItem>
+                        <SelectItem value="partial">부분 마스킹 (홍*동)</SelectItem>
+                        <SelectItem value="custom">커스텀 패턴</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="masking_char">마스킹 문자</Label>
+                    <Select
+                      value={formData.masking_char}
+                      onValueChange={(value) => setFormData({ ...formData, masking_char: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="마스킹 문자 선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="*">* (별표)</SelectItem>
+                        <SelectItem value="#"># (샵)</SelectItem>
+                        <SelectItem value="X">X (엑스)</SelectItem>
+                        <SelectItem value="●">● (원)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {formData.masking_type === 'custom' && (
+                  <div className="mt-3">
+                    <Label htmlFor="masking_pattern">커스텀 마스킹 패턴</Label>
+                    <Input
+                      id="masking_pattern"
+                      value={formData.masking_pattern}
+                      onChange={(e) => setFormData({ ...formData, masking_pattern: e.target.value })}
+                      placeholder="예: ###-##-***** (마스킹 문자 위치에 원본 유지)"
+                      className="font-mono"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      # = 원본 유지, 마스킹 문자 = 마스킹 처리 (예: 123-45-67890 → 123-45-*****)
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
             <DialogFooter className="mt-6">

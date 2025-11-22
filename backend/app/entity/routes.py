@@ -126,45 +126,60 @@ async def get_current_policy_admin(db = Depends(get_db)):
     # 임시로 모든 요청 허용
     return None
 
+from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException
+# (기타 필요한 import 구문들...)
+
+# 1. 입력받을 데이터의 형태를 정의하는 DTO(Data Transfer Object) 클래스 생성
+class EntityCreateRequest(BaseModel):
+    entity_id: str
+    name: str
+    category: str
+    description: str = ""
+    regex_pattern: str = ""
+    keywords: str = ""
+    examples: str = ""
+    masking_rule: str = "full"
+    sensitivity_level: str = "high"
+    # 마스킹 설정
+    masking_type: str = "full"      # full, partial, custom
+    masking_char: str = "*"          # *, #, X, ●
+    masking_pattern: str = ""        # 커스텀 패턴 (예: "###-##-*****")
 
 @router.post("/")
 async def create_entity(
-    entity_id: str,
-    name: str,
-    category: str,
-    description: str = "",
-    regex_pattern: str = "",
-    keywords: str = "",  # 쉼표로 구분된 키워드
-    examples: str = "",  # 쉼표로 구분된 예시
-    masking_rule: str = "full",
-    sensitivity_level: str = "high",
+    item: EntityCreateRequest,  # <--- 2. 이렇게 모델 하나로 통째로 받습니다 (Body로 인식됨)
     db = Depends(get_db),
     current_user = Depends(get_current_policy_admin)
 ):
     """엔티티 생성"""
     try:
-        # 중복 확인
-        existing = await db["entities"].find_one({"entity_id": entity_id})
+        # item.entity_id 처럼 접근합니다.
+        existing = await db["entities"].find_one({"entity_id": item.entity_id})
         if existing:
             raise HTTPException(status_code=400, detail="이미 존재하는 엔티티 ID입니다")
 
         # 키워드 파싱
-        keywords_list = [kw.strip() for kw in keywords.split(",") if kw.strip()]
+        keywords_list = [kw.strip() for kw in item.keywords.split(",") if kw.strip()]
 
         # 예시 파싱
-        examples_list = [ex.strip() for ex in examples.split(",") if ex.strip()]
+        examples_list = [ex.strip() for ex in item.examples.split(",") if ex.strip()]
 
-        # 엔티티 생성
+        # 엔티티 생성 (DB 저장용 모델)
         entity = EntityType(
-            entity_id=entity_id,
-            name=name,
-            category=category,
-            description=description or None,
-            regex_pattern=regex_pattern or None,
+            entity_id=item.entity_id,
+            name=item.name,
+            category=item.category,
+            description=item.description or None,
+            regex_pattern=item.regex_pattern or None,
             keywords=keywords_list,
             examples=examples_list,
-            masking_rule=masking_rule,
-            sensitivity_level=sensitivity_level,
+            masking_rule=item.masking_rule,
+            sensitivity_level=item.sensitivity_level,
+            # 마스킹 상세 설정
+            masking_type=item.masking_type,
+            masking_char=item.masking_char,
+            masking_pattern=item.masking_pattern or None,
             is_active=True
         )
 
@@ -181,7 +196,6 @@ async def create_entity(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"엔티티 생성 실패: {str(e)}")
-
 
 @router.get("/list")
 async def list_entities(

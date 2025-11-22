@@ -1,6 +1,9 @@
 from transformers import pipeline
 
 class KoreanNER:
+    MAX_LENGTH = 512  # ELECTRA 모델 최대 토큰 길이
+    CHUNK_SIZE = 400  # 청크 크기 (여유분 확보)
+
     def __init__(self):
         # ELECTRA NER 파이프라인 로딩
         print("✅ Hugging Face ELECTRA NER 모델 로드 중...")
@@ -68,18 +71,58 @@ class KoreanNER:
             merged.append(cur)
         return merged
 
+    # 텍스트를 청크로 분할
+    def _split_into_chunks(self, text: str):
+        """긴 텍스트를 청크로 분할 (문장 단위로 끊어서)"""
+        if len(text) <= self.CHUNK_SIZE:
+            return [(0, text)]
+
+        chunks = []
+        start = 0
+        while start < len(text):
+            end = start + self.CHUNK_SIZE
+            if end >= len(text):
+                chunks.append((start, text[start:]))
+                break
+
+            # 문장 끝 또는 공백에서 끊기
+            split_pos = end
+            for sep in ['. ', '.\n', '? ', '! ', '\n', ' ']:
+                pos = text[start:end].rfind(sep)
+                if pos > 0:
+                    split_pos = start + pos + len(sep)
+                    break
+
+            chunks.append((start, text[start:split_pos]))
+            start = split_pos
+
+        return chunks
+
     # NER 분석 함수
     def detect_korean_ner(self, text: str):
-        raw = self.model(text)
-        print("[DEBUG] 원시 모델 출력:", raw)
+        chunks = self._split_into_chunks(text)
+        all_merged = []
 
-        merged = self.merge_iob(raw)
-        print("[DEBUG] 병합된 엔티티:", merged)
+        for offset, chunk in chunks:
+            try:
+                raw = self.model(chunk, truncation=True, max_length=self.MAX_LENGTH)
+                merged = self.merge_iob(raw)
+
+                # offset 적용하여 원본 텍스트 위치로 변환
+                for ent in merged:
+                    ent["start"] += offset
+                    ent["end"] += offset
+                    all_merged.append(ent)
+            except Exception as e:
+                print(f"[WARN] NER 청크 처리 실패 (offset={offset}): {e}")
+                continue
+
+        print(f"[DEBUG] 총 {len(chunks)}개 청크에서 {len(all_merged)}개 엔티티 발견")
 
         # PER, LOC, ORG만 리턴 (스코어 포함)
         label_map = {"PER": "PERSON", "LOC": "LOCATION", "ORG": "ORGANIZATION"}
         results = []
-        for ent in merged:
+        for ent in all_merged:
             label = label_map.get(ent["entity_group"])
             if label:
                 results.append({

@@ -103,7 +103,7 @@ class RecognizerRegistry:
 
     async def load_custom_recognizers(self):
         """MongoDB의 커스텀 엔티티를 동적 Recognizer로 로드"""
-        if not self.db_client:
+        if self.db_client is None:
             print("⚠️  DB 클라이언트가 없어 커스텀 엔티티를 로드할 수 없습니다.")
             return
 

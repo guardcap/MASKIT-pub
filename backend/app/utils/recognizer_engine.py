@@ -14,18 +14,17 @@ class AnalyzerEngine:
     def __init__(self, db_client=None):
         print("...AnalyzerEngine 초기화 중...")
         self.db_client = db_client
-        self.registry = RecognizerRegistry()
+        self.registry = RecognizerRegistry(db_client=db_client)
         self.registry.load_predefined_recognizers()
 
         self.nlp_engine = NerEngine()
         print("~AnalyzerEngine 준비 완료~")
 
     async def load_custom_entities(self):
-        """MongoDB에서 커스텀 엔티티 로드 (필요시 구현)"""
+        """MongoDB에서 커스텀 엔티티 로드"""
         if self.db_client is not None:
             print("📋 커스텀 엔티티 로드 중...")
-            # TODO: MongoDB에서 커스텀 엔티티 로드 로직 추가
-            pass
+            await self.registry.load_custom_recognizers()
 
     def analyze(self, text: str) -> EntityGroup:
         regex_group = self.registry.regex_analyze(text)
