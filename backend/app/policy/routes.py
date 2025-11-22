@@ -367,18 +367,16 @@ async def list_policies(
 
         policies = []
         async for doc in cursor:
-<<<<<<< HEAD
             try:
                 # _id를 문자열로 변환
                 doc["_id"] = str(doc["_id"])
-                
-                # created_at이 datetime 객체인 경우 ISO 문자열로 변환
-                if "created_at" in doc and hasattr(doc["created_at"], "isoformat"):
-                    doc["created_at"] = doc["created_at"].isoformat()
-                
-                if "updated_at" in doc and hasattr(doc["updated_at"], "isoformat"):
-                    doc["updated_at"] = doc["updated_at"].isoformat()
-                
+
+                # datetime 필드를 ISO 문자열로 변환
+                for key in ["created_at", "updated_at", "processed_at"]:
+                    if key in doc and doc[key] is not None:
+                        if hasattr(doc[key], 'isoformat'):
+                            doc[key] = doc[key].isoformat()
+
                 policies.append(doc)
                 print(f"[Policy List] 정책 추가: {doc.get('title', 'Unknown')}")
             except Exception as e:
@@ -387,16 +385,6 @@ async def list_policies(
 
         print(f"[Policy List] ✅ {len(policies)}개 정책 조회 완료")
         print(f"[Policy List] ===== 정책 목록 조회 끝 =====\n")
-=======
-            # _id를 문자열로 변환
-            doc["_id"] = str(doc["_id"])
-            # datetime 필드를 ISO 문자열로 변환
-            for key in ["created_at", "updated_at", "processed_at"]:
-                if key in doc and doc[key] is not None:
-                    if hasattr(doc[key], 'isoformat'):
-                        doc[key] = doc[key].isoformat()
-            policies.append(doc)
->>>>>>> e726e60 (엔티티 관리 페이지 추가(추후 수정 필요))
 
         return JSONResponse({
             "success": True,
