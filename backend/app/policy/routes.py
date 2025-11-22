@@ -367,6 +367,7 @@ async def list_policies(
 
         policies = []
         async for doc in cursor:
+<<<<<<< HEAD
             try:
                 # _id를 문자열로 변환
                 doc["_id"] = str(doc["_id"])
@@ -386,6 +387,16 @@ async def list_policies(
 
         print(f"[Policy List] ✅ {len(policies)}개 정책 조회 완료")
         print(f"[Policy List] ===== 정책 목록 조회 끝 =====\n")
+=======
+            # _id를 문자열로 변환
+            doc["_id"] = str(doc["_id"])
+            # datetime 필드를 ISO 문자열로 변환
+            for key in ["created_at", "updated_at", "processed_at"]:
+                if key in doc and doc[key] is not None:
+                    if hasattr(doc[key], 'isoformat'):
+                        doc[key] = doc[key].isoformat()
+            policies.append(doc)
+>>>>>>> e726e60 (엔티티 관리 페이지 추가(추후 수정 필요))
 
         return JSONResponse({
             "success": True,
@@ -723,6 +734,82 @@ async def get_background_task_status(task_id: str):
     return JSONResponse({
         "success": True,
         "data": status
+    })
+
+
+@router.post("/batch/process")
+async def batch_process_policies(
+    policy_ids: List[str],
+    background_tasks: BackgroundTasks,
+    db = Depends(get_db)
+):
+    """
+    여러 정책을 배치로 백그라운드 처리
+    - 페이지를 나가도 백엔드에서 계속 처리됨
+    """
+    try:
+        batch_task_id = f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        processed = []
+        failed = []
+
+        for policy_id in policy_ids:
+            # 정책 조회
+            policy = await db["policies"].find_one({"policy_id": policy_id})
+            if not policy:
+                failed.append({"policy_id": policy_id, "reason": "정책을 찾을 수 없음"})
+                continue
+
+            # ObjectId 변환
+            policy["_id"] = str(policy["_id"])
+
+            # datetime 변환
+            for key in ["created_at", "updated_at", "processed_at"]:
+                if key in policy and policy[key] is not None:
+                    if hasattr(policy[key], 'isoformat'):
+                        policy[key] = policy[key].isoformat()
+
+            # 백그라운드 작업 추가
+            background_tasks.add_task(
+                process_policy_background,
+                policy_id,
+                policy,
+                db
+            )
+            processed.append({
+                "policy_id": policy_id,
+                "task_id": f"policy_{policy_id}",
+                "title": policy.get("title", "")
+            })
+
+        return JSONResponse({
+            "success": True,
+            "message": f"{len(processed)}개 정책이 백그라운드에서 처리 중입니다. 페이지를 나가도 처리가 계속됩니다.",
+            "data": {
+                "batch_task_id": batch_task_id,
+                "processed": processed,
+                "failed": failed,
+                "total_queued": len(processed)
+            }
+        })
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"배치 처리 시작 실패: {str(e)}")
+
+
+@router.get("/tasks/all")
+async def get_all_task_status():
+    """모든 백그라운드 작업 상태 조회"""
+    from app.policy.background_tasks import task_status
+
+    # 오래된 작업 정리
+    clear_old_tasks()
+
+    return JSONResponse({
+        "success": True,
+        "data": {
+            "tasks": list(task_status.values()),
+            "total": len(task_status)
+        }
     })
 
 

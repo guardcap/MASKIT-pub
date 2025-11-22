@@ -18,7 +18,7 @@ interface EmailData {
   to: string[]
   subject: string
   body: string
-  attachments: AttachmentInfo[]
+  attachments: (AttachmentInfo | File)[]
   email_id?: string // MongoDB에 저장된 원본 이메일 ID
 }
 

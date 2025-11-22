@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(source venv/bin/activate)",
+      "Bash(pip install:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)",
+      "Bash(/Users/6kiity/Documents/enterprise-guardcap/venv/bin/python -m uvicorn:*)",
+      "Bash(/Users/6kiity/Documents/enterprise-guardcap/venv/bin/pip install:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
