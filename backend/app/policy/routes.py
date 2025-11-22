@@ -5,7 +5,7 @@
 - 임베딩 생성 및 VectorDB 저장
 """
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, status
 from fastapi.responses import JSONResponse
 from typing import List, Optional
 import os
@@ -372,7 +372,7 @@ async def list_policies(
                 doc["_id"] = str(doc["_id"])
 
                 # datetime 필드를 ISO 문자열로 변환
-                for key in ["created_at", "updated_at", "processed_at"]:
+                for key in ["created_at", "updated_at", "processed_at", "vector_store_synced_at"]:
                     if key in doc and doc[key] is not None:
                         if hasattr(doc[key], 'isoformat'):
                             doc[key] = doc[key].isoformat()
