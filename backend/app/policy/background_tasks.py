@@ -33,12 +33,13 @@ load_dotenv()
 # 작업 상태 저장
 task_status: Dict[str, Dict] = {}
 
-# VectorDB 설정 - backend/app/rag/data로 통일
-CHROMA_DB_DIR = Path("backend/app/rag/data/chromadb")
+# VectorDB 설정 - 절대 경로 사용
+BASE_DIR = Path(__file__).parent.parent.parent.parent  # enterprise-guardcap 루트
+CHROMA_DB_DIR = BASE_DIR / "backend" / "app" / "rag" / "data" / "chromadb"
 CHROMA_DB_DIR.mkdir(parents=True, exist_ok=True)
 
-# JSONL 저장 디렉토리 (RAG staging) - backend/app/rag/data로 통일
-STAGING_DIR = Path("backend/app/rag/data/staging")
+# JSONL 저장 디렉토리 (RAG staging) - 절대 경로 사용
+STAGING_DIR = BASE_DIR / "backend" / "app" / "rag" / "data" / "staging"
 STAGING_DIR.mkdir(parents=True, exist_ok=True)
 
 # 환경 변수에서 설정값 로드

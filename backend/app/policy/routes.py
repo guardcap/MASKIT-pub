@@ -38,10 +38,12 @@ load_dotenv()
 router = APIRouter(prefix="/api/policies", tags=["Policy Management"])
 
 # 설정
-UPLOAD_DIR = Path("backend/app/uploads/policies")
-TEMP_DIR = Path("backend/app/uploads/temp")
-PROCESSED_DIR = Path("backend/app/uploads/processed")
-STAGING_DIR = Path("backend/app/rag/data/staging")  # backend/app/rag/data로 통일
+# 절대 경로 사용
+BASE_DIR = Path(__file__).parent.parent.parent.parent  # enterprise-guardcap 루트
+UPLOAD_DIR = BASE_DIR / "backend" / "app" / "uploads" / "policies"
+TEMP_DIR = BASE_DIR / "backend" / "app" / "uploads" / "temp"
+PROCESSED_DIR = BASE_DIR / "backend" / "app" / "uploads" / "processed"
+STAGING_DIR = BASE_DIR / "backend" / "app" / "rag" / "data" / "staging"
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
