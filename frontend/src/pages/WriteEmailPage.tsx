@@ -247,7 +247,7 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
             </Button>
             <Button onClick={handleSend}>
               <Send className="mr-2 h-4 w-4" />
-              보내기
+              마스킹 진행
             </Button>
             <Button variant="outline" onClick={handleSaveDraft}>
               <Save className="mr-2 h-4 w-4" />

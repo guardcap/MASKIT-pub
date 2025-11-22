@@ -103,6 +103,11 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
   const [aiSummary, setAiSummary] = useState('커스텀 설정을 선택하고 분석을 시작하세요.')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isSending, setIsSending] = useState(false)
+  const [isMasking, setIsMasking] = useState(false)
+  const [maskedBody, setMaskedBody] = useState<string>('')
+  const [maskedAttachmentFilenames, setMaskedAttachmentFilenames] = useState<string[]>([])
+  const [showMaskedPreview, setShowMaskedPreview] = useState(false)
+  const [maskedAttachmentUrls, setMaskedAttachmentUrls] = useState<Map<string, string>>(new Map())
 
   // 원본 이메일 데이터 (MongoDB에서 불러온)
   const [originalEmailData, setOriginalEmailData] = useState<any>(null)
@@ -235,8 +240,9 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
   useEffect(() => {
     return () => {
       attachmentUrls.forEach(url => URL.revokeObjectURL(url))
+      maskedAttachmentUrls.forEach(url => URL.revokeObjectURL(url))
     }
-  }, [attachmentUrls])
+  }, [attachmentUrls, maskedAttachmentUrls])
 
   // detectPII는 analyzeWithRAG 내부에서 실행되므로 별도 함수 불필요
   // (초기화 시 호출하던 부분은 제거)
@@ -340,6 +346,9 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
 
         const attachmentResults = await Promise.all(attachmentPromises)
         attachmentPIIList = attachmentResults
+
+        // 첨부파일 분석 결과를 전역 변수에 저장 (마스킹 시 coordinates 참조용)
+        ;(window as any).__attachmentAnalysisResults = attachmentResults
 
         console.log('✅ 첨부파일 PII:', attachmentResults.reduce((sum, r) => sum + r.entities.length, 0), '개')
       }
@@ -527,37 +536,215 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
     ))
   }
 
+  // 마스킹만 실행 (전송은 별도)
+  const handleMaskOnly = async () => {
+    if (!showPIICheckboxList || allPIIList.length === 0) {
+      toast.error('먼저 AI 분석을 실행해주세요.')
+      return
+    }
+
+    const checkedPIIs = allPIIList.filter(pii => pii.shouldMask)
+    if (checkedPIIs.length === 0) {
+      toast.error('마스킹할 PII를 선택해주세요.')
+      return
+    }
+
+    setIsMasking(true)
+    toast.loading('마스킹 처리 중...', { id: 'masking-only' })
+
+    try {
+      // ==================== 1단계: 이메일 본문 마스킹 ====================
+      let tempMaskedBody = emailBodyRef.current?.innerText || emailBodyParagraphs.join('\n')
+
+      for (const pii of checkedPIIs) {
+        if (pii.source === 'regex' || pii.source === 'backend_body') {
+          const masked = pii.maskingDecision?.masked_value || maskValue(pii.value, pii.type)
+          tempMaskedBody = tempMaskedBody.replace(new RegExp(escapeRegex(pii.value), 'g'), masked)
+        }
+      }
+
+      setMaskedBody(tempMaskedBody)
+
+      // ==================== 2단계: 첨부파일 마스킹 ====================
+      const attachmentPIIs = checkedPIIs.filter(pii => pii.source === 'backend_attachment' && pii.filename)
+
+      let tempMaskedAttachments: string[] = []
+
+      if (attachmentPIIs.length > 0) {
+        console.log('📎 첨부파일 마스킹 시작:', attachmentPIIs.length, '개 PII')
+
+        // PIIItemFromAnalysis 형식으로 변환
+        const piiItemsForBackend = attachmentPIIs.map((pii, index) => {
+          const fileResult = (window as any).__attachmentAnalysisResults?.find(
+            (r: any) => r.filename === pii.filename
+          )
+
+          const entity = fileResult?.analysis_data?.pii_entities?.find(
+            (e: any) => e.text === pii.value && e.type === pii.type
+          )
+
+          const coordinates = entity?.coordinates || []
+
+          if (coordinates.length > 0) {
+            return coordinates.map((coord: PIICoordinate, coordIndex: number) => ({
+              filename: pii.filename!,
+              pii_type: pii.type,
+              text: pii.value,
+              pageIndex: coord.pageIndex,
+              instance_index: coordIndex,
+              bbox: coord.bbox
+            }))
+          } else {
+            return [{
+              filename: pii.filename!,
+              pii_type: pii.type,
+              text: pii.value,
+              pageIndex: 0,
+              instance_index: index,
+              bbox: null
+            }]
+          }
+        }).flat()
+
+        console.log('📤 백엔드로 전송할 PII 항목:', piiItemsForBackend)
+
+        const maskingResponse = await fetch(`${API_BASE_URL}/api/v1/process/masking/pdf`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(piiItemsForBackend)
+        })
+
+        if (!maskingResponse.ok) {
+          const error = await maskingResponse.json()
+          console.error('❌ 첨부파일 마스킹 실패:', error)
+          throw new Error('첨부파일 마스킹 실패: ' + (error.detail || '알 수 없는 오류'))
+        }
+
+        const maskingResult = await maskingResponse.json()
+        console.log('✅ 첨부파일 마스킹 완료:', maskingResult)
+
+        if (maskingResult.masked_files) {
+          tempMaskedAttachments = Object.entries(maskingResult.masked_files)
+            .filter(([_, path]) => typeof path === 'string' && path.startsWith('/uploads/masked_'))
+            .map(([_, path]) => (path as string).replace('/uploads/', ''))
+        }
+      }
+
+      setMaskedAttachmentFilenames(tempMaskedAttachments)
+
+      // ==================== 마스킹된 첨부파일 Blob URL 생성 ====================
+      const maskedUrlMap = new Map<string, string>()
+      for (const maskedFilename of tempMaskedAttachments) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/uploads/${maskedFilename}`)
+          if (response.ok) {
+            const blob = await response.blob()
+            const url = URL.createObjectURL(blob)
+            maskedUrlMap.set(maskedFilename, url)
+            console.log(`✅ 마스킹된 파일 URL 생성: ${maskedFilename}`)
+          }
+        } catch (error) {
+          console.error(`❌ 마스킹된 파일 로드 실패: ${maskedFilename}`, error)
+        }
+      }
+      setMaskedAttachmentUrls(maskedUrlMap)
+      setShowMaskedPreview(true)
+
+      toast.dismiss('masking-only')
+      toast.success(`마스킹 완료! (본문: ${checkedPIIs.length - attachmentPIIs.length}개, 첨부파일: ${attachmentPIIs.length}개)`)
+
+      // ==================== 3단계: MongoDB 저장 ====================
+      if (emailData.email_id) {
+        try {
+          console.log('📤 마스킹된 이메일 저장 요청:', {
+            email_id: emailData.email_id,
+            masked_attachment_count: tempMaskedAttachments.length,
+            pii_masked_count: checkedPIIs.length
+          })
+
+          const saveMaskedResponse = await fetch(`${API_BASE_URL}/api/v1/process/masking/save-masked-email`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email_id: emailData.email_id,
+              from_email: emailData.from,
+              to_emails: emailData.to,
+              subject: emailData.subject,
+              masked_body: tempMaskedBody,
+              masked_attachment_filenames: tempMaskedAttachments,
+              masking_decisions: maskingDecisions,
+              pii_masked_count: checkedPIIs.length
+            })
+          })
+
+          if (saveMaskedResponse.ok) {
+            const saveResult = await saveMaskedResponse.json()
+            console.log('✅ 마스킹된 이메일 MongoDB 저장 성공:', saveResult)
+            toast.success('마스킹된 이메일이 MongoDB에 저장되었습니다!')
+          } else {
+            const errorData = await saveMaskedResponse.json()
+            console.error('⚠️ 마스킹된 이메일 저장 실패:', errorData)
+            toast.warning('마스킹은 완료되었지만 MongoDB 저장에 실패했습니다.')
+          }
+        } catch (saveError) {
+          console.error('⚠️ 마스킹된 이메일 저장 중 오류:', saveError)
+          toast.warning('마스킹은 완료되었지만 MongoDB 저장에 실패했습니다.')
+        }
+      } else {
+        console.warn('⚠️ email_id가 없어서 마스킹된 이메일을 저장하지 못했습니다.')
+      }
+
+    } catch (error: any) {
+      toast.dismiss('masking-only')
+      console.error('❌ 마스킹 오류:', error)
+      toast.error(`마스킹 실패: ${error.message}`)
+    } finally {
+      setIsMasking(false)
+    }
+  }
+
   // 마스킹 적용 및 전송
   const handleSendMaskedEmail = async () => {
-    if (!showPIICheckboxList || allPIIList.length === 0) {
-      if (!confirm('마스킹 분석을 실행하지 않았습니다. 그대로 전송하시겠습니까?')) {
-        return
-      }
+    if (!showMaskedPreview) {
+      toast.error('먼저 마스킹을 실행해주세요.')
+      return
     }
 
     setIsSending(true)
-
-    // contenteditable에서 수정된 본문 가져오기
-    let maskedBody = emailBodyRef.current?.innerText || emailBodyParagraphs.join('\n')
-
-    // 체크된 PII만 마스킹 적용
-    const checkedPIIs = allPIIList.filter(pii => pii.shouldMask)
-
-    for (const pii of checkedPIIs) {
-      const masked = pii.maskingDecision?.masked_value || maskValue(pii.value, pii.type)
-      maskedBody = maskedBody.replace(new RegExp(escapeRegex(pii.value), 'g'), masked)
-    }
-
-    const maskedCount = checkedPIIs.length
-
     toast.loading('이메일 전송 중...', { id: 'sending-email' })
 
     try {
+      // ==================== 이메일 전송 ====================
+
       const token = localStorage.getItem('auth_token')
 
       if (!token) {
         throw new Error('인증이 필요합니다. 다시 로그인해주세요.')
       }
+
+      // 첨부파일: 마스킹된 파일이 있으면 그것을 사용, 없으면 원본 사용
+      const finalAttachments = emailData.attachments.map((att) => {
+        const maskedFilename = maskedAttachmentFilenames.find(masked =>
+          masked === `masked_${att.filename}`
+        )
+
+        return {
+          filename: maskedFilename || att.filename,
+          content_type: att.content_type,
+          size: att.size
+        }
+      })
+
+      console.log('📤 SMTP 전송 요청:', {
+        from_email: emailData.from,
+        to: emailData.to.join(','),
+        subject: emailData.subject,
+        attachments: finalAttachments
+      })
 
       // SMTP 전송 (DB 저장도 자동으로 처리됨)
       const smtpResponse = await fetch(`${API_BASE_URL}/api/v1/smtp/send`, {
@@ -571,7 +758,7 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
           to: emailData.to.join(','),
           subject: emailData.subject,
           body: maskedBody,
-          attachments: emailData.attachments.map((att) => att.filename),
+          attachments: finalAttachments,
         }),
       })
 
@@ -585,7 +772,9 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
 
       const result = await smtpResponse.json()
       console.log('✅ SMTP 전송 성공:', result)
-      toast.success(`이메일 전송 완료! (마스킹: ${maskedCount}개)`)
+
+      toast.dismiss('sending-email')
+      toast.success(`이메일 전송 완료!`)
 
       if (onSendComplete) {
         onSendComplete()
@@ -811,11 +1000,97 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
           </Card>
 
 
+          {/* 마스킹 미리보기 */}
+          {showMaskedPreview && (
+            <Card className="border-green-500 bg-green-50/30">
+              <CardHeader>
+                <CardTitle className="text-green-700 flex items-center gap-2">
+                  ✅ 마스킹 완료 - 미리보기
+                </CardTitle>
+                <CardDescription>
+                  마스킹된 결과를 확인하세요. 문제없으면 아래 전송 버튼을 클릭하세요.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* 마스킹된 본문 */}
+                <div>
+                  <h4 className="font-semibold mb-2 text-sm">📝 마스킹된 본문</h4>
+                  <div className="bg-white border rounded p-4 text-sm whitespace-pre-wrap max-h-[200px] overflow-y-auto">
+                    {maskedBody || '본문이 없습니다'}
+                  </div>
+                </div>
+
+                {/* 마스킹된 첨부파일 */}
+                {maskedAttachmentFilenames.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold mb-2 text-sm">
+                      📎 마스킹된 첨부파일 ({maskedAttachmentFilenames.length}개)
+                    </h4>
+                    <div className="space-y-3">
+                      {maskedAttachmentFilenames.map((filename, idx) => {
+                        const url = maskedAttachmentUrls.get(filename)
+                        const isImage = filename.toLowerCase().match(/\.(jpg|jpeg|png|gif)$/)
+                        const isPDF = filename.toLowerCase().endsWith('.pdf')
+
+                        return (
+                          <div key={idx} className="bg-white border rounded p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-medium text-sm">{filename}</span>
+                              {url && (
+                                <a
+                                  href={url}
+                                  download={filename}
+                                  className="text-blue-500 text-xs underline"
+                                >
+                                  다운로드
+                                </a>
+                              )}
+                            </div>
+
+                            {url && isImage && (
+                              <img
+                                src={url}
+                                alt={filename}
+                                className="max-w-full h-auto border rounded"
+                              />
+                            )}
+
+                            {url && isPDF && (
+                              <object
+                                data={url}
+                                type="application/pdf"
+                                className="w-full h-[400px] border rounded"
+                              >
+                                <p className="text-sm text-gray-500">
+                                  PDF를 표시할 수 없습니다.
+                                </p>
+                              </object>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* 전송 버튼 */}
-          <Button onClick={handleSendMaskedEmail} disabled={isSending} className="w-full" size="lg">
+          <Button
+            onClick={handleSendMaskedEmail}
+            disabled={isSending || !showMaskedPreview}
+            className="w-full"
+            size="lg"
+          >
             <Send className="mr-2 h-4 w-4" />
-            {isSending ? '전송 중...' : '마스킹 완료 & 전송'}
+            {isSending ? '전송 중...' : showMaskedPreview ? '마스킹된 이메일 전송' : '먼저 마스킹을 실행하세요'}
           </Button>
+          {!showMaskedPreview && (
+            <p className="text-xs text-center text-muted-foreground mt-2">
+              ⚠️ 마스킹을 먼저 실행한 후 전송할 수 있습니다
+            </p>
+          )}
         </div>
 
         {/* 우측: 컨텍스트 설정 */}
@@ -1230,6 +1505,21 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                   >
                     전체 해제
                   </Button>
+                </div>
+
+                {/* 마스킹 실행 버튼 */}
+                <div className="mt-4">
+                  <Button
+                    onClick={handleMaskOnly}
+                    disabled={isMasking || allPIIList.filter(p => p.shouldMask).length === 0}
+                    className="w-full bg-orange-500 hover:bg-orange-600"
+                    size="lg"
+                  >
+                    {isMasking ? '마스킹 처리 중...' : `🎭 선택된 PII 마스킹 (${allPIIList.filter(p => p.shouldMask).length}개)`}
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center mt-2">
+                    마스킹 후 MongoDB에 자동 저장됩니다
+                  </p>
                 </div>
               </CardContent>
             </Card>
