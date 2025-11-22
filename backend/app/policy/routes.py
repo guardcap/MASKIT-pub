@@ -801,3 +801,284 @@ async def get_all_task_status():
     })
 
 
+# ===== OpenAI Vector Store 동기화 =====
+
+from openai import OpenAI
+import tempfile
+
+# OpenAI 동기 클라이언트 (Vector Store 관리용)
+_openai_sync_client = None
+
+def get_openai_sync_client():
+    """OpenAI 동기 클라이언트 반환"""
+    global _openai_sync_client
+    if _openai_sync_client is None:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if api_key:
+            _openai_sync_client = OpenAI(api_key=api_key)
+    return _openai_sync_client
+
+
+@router.post("/sync/vector-store")
+async def sync_policies_to_vector_store(
+    db = Depends(get_db),
+    current_user = Depends(get_current_policy_admin)
+):
+    """
+    MongoDB의 모든 정책을 OpenAI Vector Store와 동기화
+    - MongoDB에 있지만 Vector Store에 없는 정책 추가
+    - 동기화 상태 반환
+    """
+    try:
+        client = get_openai_sync_client()
+        if not client:
+            raise HTTPException(status_code=500, detail="OpenAI API 키가 설정되지 않았습니다")
+
+        vector_store_id = os.getenv("OPENAI_VECTOR_STORE_ID")
+        if not vector_store_id:
+            raise HTTPException(status_code=500, detail="OPENAI_VECTOR_STORE_ID가 설정되지 않았습니다")
+
+        print(f"\n[Sync] ===== Vector Store 동기화 시작 =====")
+        print(f"[Sync] Vector Store ID: {vector_store_id}")
+
+        # 1. Vector Store의 기존 파일 목록 조회
+        existing_files = {}
+        try:
+            vs_files = client.vector_stores.files.list(vector_store_id=vector_store_id)
+            for f in vs_files.data:
+                # 파일 정보에서 policy_id 추출 시도
+                try:
+                    file_info = client.files.retrieve(f.id)
+                    existing_files[file_info.filename] = f.id
+                except:
+                    pass
+            print(f"[Sync] Vector Store 기존 파일: {len(existing_files)}개")
+        except Exception as e:
+            print(f"[Sync] ⚠️ Vector Store 파일 목록 조회 실패: {e}")
+
+        # 2. MongoDB에서 모든 정책 조회
+        cursor = db["policies"].find({})
+        policies = []
+        async for doc in cursor:
+            doc["_id"] = str(doc["_id"])
+            policies.append(doc)
+
+        print(f"[Sync] MongoDB 정책: {len(policies)}개")
+
+        # 3. 동기화 실행
+        synced = []
+        skipped = []
+        failed = []
+
+        for policy in policies:
+            policy_id = policy.get("policy_id", "")
+            title = policy.get("title", "Unknown")
+            filename = f"policy_{policy_id}.txt"
+
+            # 이미 Vector Store에 있으면 스킵
+            if filename in existing_files:
+                skipped.append({
+                    "policy_id": policy_id,
+                    "title": title,
+                    "reason": "이미 동기화됨",
+                    "file_id": existing_files[filename]
+                })
+                continue
+
+            # 텍스트 준비
+            extracted_text = policy.get("extracted_text", "")
+            if not extracted_text:
+                failed.append({
+                    "policy_id": policy_id,
+                    "title": title,
+                    "reason": "추출된 텍스트 없음"
+                })
+                continue
+
+            # 메타데이터와 함께 텍스트 구성
+            policy_content = f"""정책 제목: {title}
+발행 기관: {policy.get('authority', 'Unknown')}
+정책 ID: {policy_id}
+
+=== 정책 내용 ===
+{extracted_text[:50000]}
+"""
+
+            try:
+                # 임시 파일 생성 및 업로드
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as tmp:
+                    tmp.write(policy_content)
+                    tmp_path = tmp.name
+
+                # OpenAI에 파일 업로드
+                with open(tmp_path, 'rb') as f:
+                    uploaded_file = client.files.create(
+                        file=f,
+                        purpose="assistants"
+                    )
+
+                # Vector Store에 파일 추가
+                client.vector_stores.files.create(
+                    vector_store_id=vector_store_id,
+                    file_id=uploaded_file.id
+                )
+
+                # 임시 파일 삭제
+                os.unlink(tmp_path)
+
+                # MongoDB에 동기화 상태 업데이트
+                await db["policies"].update_one(
+                    {"policy_id": policy_id},
+                    {"$set": {
+                        "vector_store_file_id": uploaded_file.id,
+                        "vector_store_synced_at": datetime.utcnow()
+                    }}
+                )
+
+                synced.append({
+                    "policy_id": policy_id,
+                    "title": title,
+                    "file_id": uploaded_file.id
+                })
+                print(f"[Sync] ✅ 동기화 완료: {title}")
+
+            except Exception as e:
+                failed.append({
+                    "policy_id": policy_id,
+                    "title": title,
+                    "reason": str(e)
+                })
+                print(f"[Sync] ❌ 동기화 실패: {title} - {e}")
+
+        print(f"[Sync] ===== 동기화 완료 =====")
+        print(f"[Sync] 동기화: {len(synced)}개, 스킵: {len(skipped)}개, 실패: {len(failed)}개\n")
+
+        return JSONResponse({
+            "success": True,
+            "message": f"동기화 완료: {len(synced)}개 추가, {len(skipped)}개 스킵, {len(failed)}개 실패",
+            "data": {
+                "synced": synced,
+                "skipped": skipped,
+                "failed": failed,
+                "total_in_mongodb": len(policies),
+                "total_in_vector_store": len(existing_files) + len(synced),
+                "vector_store_id": vector_store_id
+            }
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[Sync] ❌ 동기화 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"동기화 실패: {str(e)}")
+
+
+@router.get("/sync/status")
+async def get_sync_status(db = Depends(get_db)):
+    """
+    MongoDB와 OpenAI Vector Store 동기화 상태 확인
+    """
+    try:
+        client = get_openai_sync_client()
+        vector_store_id = os.getenv("OPENAI_VECTOR_STORE_ID")
+
+        # MongoDB 정책 수
+        mongo_count = await db["policies"].count_documents({})
+        mongo_synced = await db["policies"].count_documents({"vector_store_file_id": {"$exists": True}})
+
+        # Vector Store 정보
+        vs_info = None
+        vs_file_count = 0
+        if client and vector_store_id:
+            try:
+                vs = client.vector_stores.retrieve(vector_store_id)
+                vs_info = {
+                    "id": vs.id,
+                    "name": vs.name,
+                    "status": vs.status,
+                    "file_counts": {
+                        "total": vs.file_counts.total if hasattr(vs.file_counts, 'total') else 0,
+                        "completed": vs.file_counts.completed if hasattr(vs.file_counts, 'completed') else 0,
+                        "in_progress": vs.file_counts.in_progress if hasattr(vs.file_counts, 'in_progress') else 0,
+                        "failed": vs.file_counts.failed if hasattr(vs.file_counts, 'failed') else 0
+                    }
+                }
+                vs_file_count = vs.file_counts.total if hasattr(vs.file_counts, 'total') else 0
+            except Exception as e:
+                print(f"Vector Store 조회 실패: {e}")
+
+        return JSONResponse({
+            "success": True,
+            "data": {
+                "mongodb": {
+                    "total_policies": mongo_count,
+                    "synced_to_vector_store": mongo_synced,
+                    "not_synced": mongo_count - mongo_synced
+                },
+                "vector_store": vs_info,
+                "sync_needed": mongo_count - mongo_synced > 0
+            }
+        })
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"동기화 상태 조회 실패: {str(e)}")
+
+
+@router.delete("/sync/vector-store/{policy_id}")
+async def remove_policy_from_vector_store(
+    policy_id: str,
+    db = Depends(get_db),
+    current_user = Depends(get_current_policy_admin)
+):
+    """
+    특정 정책을 Vector Store에서 제거
+    """
+    try:
+        client = get_openai_sync_client()
+        if not client:
+            raise HTTPException(status_code=500, detail="OpenAI API 키가 설정되지 않았습니다")
+
+        vector_store_id = os.getenv("OPENAI_VECTOR_STORE_ID")
+
+        # MongoDB에서 정책 조회
+        policy = await db["policies"].find_one({"policy_id": policy_id})
+        if not policy:
+            raise HTTPException(status_code=404, detail="정책을 찾을 수 없습니다")
+
+        file_id = policy.get("vector_store_file_id")
+        if not file_id:
+            return JSONResponse({
+                "success": True,
+                "message": "이 정책은 Vector Store에 동기화되지 않았습니다"
+            })
+
+        # Vector Store에서 파일 제거
+        try:
+            client.vector_stores.files.delete(
+                vector_store_id=vector_store_id,
+                file_id=file_id
+            )
+            # OpenAI 파일도 삭제
+            client.files.delete(file_id)
+        except Exception as e:
+            print(f"Vector Store 파일 삭제 오류: {e}")
+
+        # MongoDB 업데이트
+        await db["policies"].update_one(
+            {"policy_id": policy_id},
+            {"$unset": {"vector_store_file_id": "", "vector_store_synced_at": ""}}
+        )
+
+        return JSONResponse({
+            "success": True,
+            "message": f"정책 '{policy.get('title')}'이(가) Vector Store에서 제거되었습니다"
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Vector Store 제거 실패: {str(e)}")
+
+
