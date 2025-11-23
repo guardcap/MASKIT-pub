@@ -1,4 +1,5 @@
 from transformers import pipeline
+import re
 
 class KoreanNER:
     def __init__(self):
@@ -69,6 +70,9 @@ class KoreanNER:
         return merged
 
     # NER 분석 함수
+# backend/app/utils/ner/korean_ner.py
+# detect_korean_ner 함수 수정:
+
     def detect_korean_ner(self, text: str):
         raw = self.model(text)
         print("[DEBUG] 원시 모델 출력:", raw)
@@ -82,11 +86,35 @@ class KoreanNER:
         for ent in merged:
             label = label_map.get(ent["entity_group"])
             if label:
+                entity_text = text[ent["start"]:ent["end"]]
+                
+                # ===== 필터링 로직 추가 =====
+                # 1. 괄호만 있는 경우 제외
+                if entity_text.strip() in ['(', ')', '()', '( )', '[]', '{}','<','>']:
+                    print(f"[DEBUG] 괄호 필터링: '{entity_text}'")
+                    continue
+                
+                # 2. 괄호로만 구성된 경우 제외
+                if re.match(r'^[\(\)\[\]\{\}\s]*$', entity_text):
+                    print(f"[DEBUG] 괄호 패턴 필터링: '{entity_text}'")
+                    continue
+                
+                # 3. LOC인데 길이가 1자 이하인 경우 제외
+                if label == "LOCATION" and len(entity_text.strip()) <= 1:
+                    print(f"[DEBUG] 짧은 LOC 필터링: '{entity_text}'")
+                    continue
+                
+                # 4. LOC인데 숫자/기호만 있는 경우 제외
+                if label == "LOCATION" and re.match(r'^[\d\s\(\)\[\]\{\}\-\.,;:]+$', entity_text):
+                    print(f"[DEBUG] 숫자/기호만 있는 LOC 필터링: '{entity_text}'")
+                    continue
+                # ===========================
+                
                 results.append({
                     "entity_type": label,
                     "start": ent["start"],
                     "end": ent["end"],
-                    "text": text[ent["start"]:ent["end"]],
+                    "text": entity_text,
                     "score": ent["score"]
                 })
         return results

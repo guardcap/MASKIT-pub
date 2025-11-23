@@ -804,19 +804,17 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
   }
 
   const typeNames: Record<string, string> = {
-    email: '이메일',
-    phone: '전화번호',
-    jumin: '주민등록번호',
-    account: '계좌번호',
-    passport: '여권번호',
-    driver_license: '운전면허번호',
-    EMAIL: '이메일 주소',
+    EMAIL: '이메일',
+    GPS: 'GPS',
+    MAC: 'MAC 주소',
+    RESIDENT_ID: '주민등록번호',
+    PASSPORT: '여권번호',
+    DRIVE: '운전면허번호',
     PHONE: '전화번호',
-    PERSON: '개인명',
     BANK_ACCOUNT: '계좌 번호',
-    CREDIT_CARD: '신용카드 번호',
-    IP_ADDRESS: 'IP 주소',
-    DATE_TIME: '날짜/시간',
+    CREDIT_CARD: '카드 번호',
+    IP: 'IP 주소',
+    PERSON: '개인명',
     LOCATION: '위치 정보',
     ORGANIZATION: '조직명',
   }
