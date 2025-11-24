@@ -4,9 +4,14 @@ class KoreanNER:
     def __init__(self):
         # ELECTRA NER 파이프라인 로딩
         print("✅ Hugging Face ELECTRA NER 모델 로드 중...")
+        from transformers import AutoTokenizer
+
+        self.tokenizer = AutoTokenizer.from_pretrained("monologg/koelectra-base-v3-naver-ner")
+
         self.model = pipeline(
             "token-classification",
             model="monologg/koelectra-base-v3-naver-ner",
+            tokenizer=self.tokenizer,
             aggregation_strategy="none",
         )
 
@@ -70,6 +75,16 @@ class KoreanNER:
 
     # NER 분석 함수
     def detect_korean_ner(self, text: str):
+        # ELECTRA 모델의 최대 토큰 길이는 512
+        # 먼저 토크나이저로 길이 체크 후 필요시 자르기
+        tokens = self.tokenizer.encode(text, add_special_tokens=True)
+
+        if len(tokens) > 512:
+            print(f"[WARNING] 토큰 길이 {len(tokens)}가 512를 초과하여 잘라서 분석합니다.")
+            # 512 토큰으로 자르고 다시 디코딩
+            truncated_tokens = tokens[:512]
+            text = self.tokenizer.decode(truncated_tokens, skip_special_tokens=True)
+
         raw = self.model(text)
         print("[DEBUG] 원시 모델 출력:", raw)
 

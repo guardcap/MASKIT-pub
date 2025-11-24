@@ -157,13 +157,24 @@ async def recognize_pii_in_text(text_content: str, ocr_data: Optional[Dict] = No
     OCR 데이터가 있으면 PII의 좌표 정보도 함께 반환
     db_client를 전달하면 MongoDB의 커스텀 엔티티도 사용
     """
+    import re
+
+    # HTML 태그 제거 (이메일 본문에서 온 경우)
+    cleaned_text = re.sub(r'<[^>]+>', ' ', text_content)
+    # 연속된 공백을 하나로
+    cleaned_text = re.sub(r'\s+', ' ', cleaned_text)
+    # 앞뒤 공백 제거
+    cleaned_text = cleaned_text.strip()
+
+    print(f"[DEBUG] 원본 텍스트 길이: {len(text_content)}, 정리 후: {len(cleaned_text)}")
+
     analyzer = AnalyzerEngine(db_client=db_client)
 
     # 커스텀 엔티티 로드 (db_client가 있는 경우)
     if db_client is not None:
         await analyzer.load_custom_entities()
 
-    result = analyzer.analyze(text_content)
+    result = analyzer.analyze(cleaned_text)
 
     # FastAPI가 인식할 수 있는 딕셔너리 형태로 변환
     pii_entities_list = []

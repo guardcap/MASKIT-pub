@@ -979,13 +979,8 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
                       suppressContentEditableWarning
                       className="border rounded p-4 min-h-[200px] focus:outline-none focus:ring-2 focus:ring-blue-500"
                       style={{ whiteSpace: 'pre-wrap' }}
-                    >
-                      {emailBodyParagraphs.map((para, idx) => (
-                        <p key={idx} className="mb-2">
-                          {para}
-                        </p>
-                      ))}
-                    </div>
+                      dangerouslySetInnerHTML={{ __html: emailData.body || '' }}
+                    />
                   </div>
 
                   {/* 첨부파일 표시 */}
