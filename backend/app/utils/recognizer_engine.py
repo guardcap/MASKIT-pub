@@ -14,18 +14,17 @@ class AnalyzerEngine:
     def __init__(self, db_client=None):
         print("...AnalyzerEngine 초기화 중...")
         self.db_client = db_client
-        self.registry = RecognizerRegistry()
+        self.registry = RecognizerRegistry(db_client=db_client)
         self.registry.load_predefined_recognizers()
 
         self.nlp_engine = NerEngine()
         print("~AnalyzerEngine 준비 완료~")
 
     async def load_custom_entities(self):
-        """MongoDB에서 커스텀 엔티티 로드 (필요시 구현)"""
+        """MongoDB에서 커스텀 엔티티 로드"""
         if self.db_client is not None:
             print("📋 커스텀 엔티티 로드 중...")
-            # TODO: MongoDB에서 커스텀 엔티티 로드 로직 추가
-            pass
+            await self.registry.load_custom_recognizers()
 
     def analyze(self, text: str) -> EntityGroup:
         regex_group = self.registry.regex_analyze(text)
@@ -158,12 +157,30 @@ async def recognize_pii_in_text(text_content: str, ocr_data: Optional[Dict] = No
     db_client를 전달하면 MongoDB의 커스텀 엔티티도 사용
     """
     import re
+    from html import unescape
 
-    # HTML 태그 제거 (이메일 본문에서 온 경우)
-    cleaned_text = re.sub(r'<[^>]+>', ' ', text_content)
-    # 연속된 공백을 하나로
-    cleaned_text = re.sub(r'\s+', ' ', cleaned_text)
-    # 앞뒤 공백 제거
+    # HTML을 텍스트로 변환 (구조 유지)
+    cleaned_text = text_content
+
+    # 1. HTML 엔티티 디코딩 (&nbsp; → 공백 등)
+    cleaned_text = unescape(cleaned_text)
+
+    # 2. 블록 레벨 태그는 줄바꿈으로 변환
+    block_tags = ['</div>', '</p>', '<br>', '<br/>', '<br />', '</li>', '</h1>', '</h2>', '</h3>', '</h4>', '</h5>', '</h6>']
+    for tag in block_tags:
+        cleaned_text = cleaned_text.replace(tag, '\n')
+
+    # 3. 모든 HTML 태그 제거
+    cleaned_text = re.sub(r'<[^>]+>', '', cleaned_text)
+
+    # 4. 3개 이상의 연속된 줄바꿈은 2개로
+    cleaned_text = re.sub(r'\n{3,}', '\n\n', cleaned_text)
+
+    # 5. 각 줄의 앞뒤 공백 제거
+    lines = [line.strip() for line in cleaned_text.split('\n')]
+    cleaned_text = '\n'.join(lines)
+
+    # 6. 앞뒤 공백 제거
     cleaned_text = cleaned_text.strip()
 
     print(f"[DEBUG] 원본 텍스트 길이: {len(text_content)}, 정리 후: {len(cleaned_text)}")

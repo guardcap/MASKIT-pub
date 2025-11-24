@@ -1,6 +1,10 @@
 from transformers import pipeline
+import re
 
 class KoreanNER:
+    MAX_LENGTH = 512  # ELECTRA 모델 최대 토큰 길이
+    CHUNK_SIZE = 400  # 청크 크기 (여유분 확보)
+
     def __init__(self):
         # ELECTRA NER 파이프라인 로딩
         print("✅ Hugging Face ELECTRA NER 모델 로드 중...")
@@ -73,35 +77,94 @@ class KoreanNER:
             merged.append(cur)
         return merged
 
-    # NER 분석 함수
+    # 텍스트를 청크로 분할
+    def _split_into_chunks(self, text: str):
+        """긴 텍스트를 청크로 분할 (문장 단위로 끊어서)"""
+        if len(text) <= self.CHUNK_SIZE:
+            return [(0, text)]
+
+        chunks = []
+        start = 0
+        while start < len(text):
+            end = start + self.CHUNK_SIZE
+            if end >= len(text):
+                chunks.append((start, text[start:]))
+                break
+
+            # 문장 끝 또는 공백에서 끊기
+            split_pos = end
+            for sep in ['. ', '.\n', '? ', '! ', '\n', ' ']:
+                pos = text[start:end].rfind(sep)
+                if pos > 0:
+                    split_pos = start + pos + len(sep)
+                    break
+
+            chunks.append((start, text[start:split_pos]))
+            start = split_pos
+
+        return chunks
+
     def detect_korean_ner(self, text: str):
-        # ELECTRA 모델의 최대 토큰 길이는 512
-        # 먼저 토크나이저로 길이 체크 후 필요시 자르기
-        tokens = self.tokenizer.encode(text, add_special_tokens=True)
+        chunks = self._split_into_chunks(text)
+        all_merged = []
 
-        if len(tokens) > 512:
-            print(f"[WARNING] 토큰 길이 {len(tokens)}가 512를 초과하여 잘라서 분석합니다.")
-            # 512 토큰으로 자르고 다시 디코딩
-            truncated_tokens = tokens[:512]
-            text = self.tokenizer.decode(truncated_tokens, skip_special_tokens=True)
+        for offset, chunk in chunks:
+            try:
+                # 청크가 512 토큰을 초과하면 자르기
+                tokens = self.tokenizer.encode(chunk, add_special_tokens=True)
+                if len(tokens) > self.MAX_LENGTH:
+                    truncated_tokens = tokens[:self.MAX_LENGTH]
+                    chunk = self.tokenizer.decode(truncated_tokens, skip_special_tokens=True)
 
-        raw = self.model(text)
-        print("[DEBUG] 원시 모델 출력:", raw)
+                raw = self.model(chunk)
+                merged = self.merge_iob(raw)
 
-        merged = self.merge_iob(raw)
-        print("[DEBUG] 병합된 엔티티:", merged)
+                # offset 적용하여 원본 텍스트 위치로 변환
+                for ent in merged:
+                    ent["start"] += offset
+                    ent["end"] += offset
+                    all_merged.append(ent)
+            except Exception as e:
+                print(f"[WARN] NER 청크 처리 실패 (offset={offset}): {e}")
+                continue
+
+        print(f"[DEBUG] 총 {len(chunks)}개 청크에서 {len(all_merged)}개 엔티티 발견")
 
         # PER, LOC, ORG만 리턴 (스코어 포함)
         label_map = {"PER": "PERSON", "LOC": "LOCATION", "ORG": "ORGANIZATION"}
         results = []
-        for ent in merged:
+        for ent in all_merged:
             label = label_map.get(ent["entity_group"])
             if label:
+                entity_text = text[ent["start"]:ent["end"]]
+                
+                # ===== 필터링 로직 추가 =====
+                # 1. 괄호만 있는 경우 제외
+                if entity_text.strip() in ['(', ')', '()', '( )', '[]', '{}','<','>']:
+                    print(f"[DEBUG] 괄호 필터링: '{entity_text}'")
+                    continue
+                
+                # 2. 괄호로만 구성된 경우 제외
+                if re.match(r'^[\(\)\[\]\{\}\s]*$', entity_text):
+                    print(f"[DEBUG] 괄호 패턴 필터링: '{entity_text}'")
+                    continue
+                
+                # 3. LOC인데 길이가 1자 이하인 경우 제외
+                if label == "LOCATION" and len(entity_text.strip()) <= 1:
+                    print(f"[DEBUG] 짧은 LOC 필터링: '{entity_text}'")
+                    continue
+                
+                # 4. LOC인데 숫자/기호만 있는 경우 제외
+                if label == "LOCATION" and re.match(r'^[\d\s\(\)\[\]\{\}\-\.,;:]+$', entity_text):
+                    print(f"[DEBUG] 숫자/기호만 있는 LOC 필터링: '{entity_text}'")
+                    continue
+                # ===========================
+                
                 results.append({
                     "entity_type": label,
                     "start": ent["start"],
                     "end": ent["end"],
-                    "text": text[ent["start"]:ent["end"]],
+                    "text": entity_text,
                     "score": ent["score"]
                 })
         return results
