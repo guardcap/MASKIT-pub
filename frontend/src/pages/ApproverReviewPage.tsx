@@ -353,10 +353,17 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
         console.log('✅ 첨부파일 PII:', attachmentResults.reduce((sum, r) => sum + r.entities.length, 0), '개')
       }
 
-      // ==================== 3단계: 정규식 기반 PII 검출 ====================
-      setAiSummary('3단계: 정규식 기반 PII 검출 중...')
+// ==================== 3단계: 정규식 기반 PII 검출 (백엔드에서 못 잡은 것만) ====================
+      setAiSummary('3단계: 추가 PII 검출 중...')
 
-      // detectPII() 로직 재실행
+      // 백엔드에서 이미 검출한 값들 수집
+      const alreadyDetected = new Set<string>()
+      bodyPIIEntities.forEach(entity => alreadyDetected.add(entity.text.trim()))
+      attachmentPIIList.forEach(fileResult => {
+        fileResult.entities.forEach(entity => alreadyDetected.add(entity.text.trim()))
+      })
+
+      // detectPII() 로직 재실행 (백엔드에서 못 잡은 것만)
       const text = (emailData.body || '').replace(/<[^>]*>/g, ' ')
       const patterns = {
         email: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
@@ -372,14 +379,14 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
         const matches = text.match(regex)
         if (matches) {
           matches.forEach((value) => {
-            if (!regexPII.some((item) => item.value === value)) {
+            // 백엔드에서 이미 검출한 값은 제외
+            if (!regexPII.some((item) => item.value === value) && !alreadyDetected.has(value.trim())) {
               regexPII.push({ type, value })
             }
           })
         }
       }
-      console.log('✅ 정규식 PII:', regexPII.length, '개')
-
+      console.log('✅ 정규식 PII (백엔드 중복 제외):', regexPII.length, '개')
       // ==================== 4단계: 모든 PII 통합 ====================
       setAiSummary('4단계: 모든 PII 통합 중...')
 
@@ -820,6 +827,14 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
     PERSON: '개인명',
     LOCATION: '위치 정보',
     ORGANIZATION: '조직명',
+
+    // 정규식 엔티티 (영어 소문자) ✨ 추가
+    email: '이메일',
+    phone: '전화번호',
+    jumin: '주민등록번호',
+    account: '계좌번호',
+    passport: '여권번호',
+    driver_license: '운전면허번호',
   }
 
   // 첨부파일 렌더링 (MongoDB 데이터 사용)
