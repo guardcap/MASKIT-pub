@@ -774,26 +774,65 @@ async def decide_masking_with_llm(
 
 
 def _generate_masked_preview(value: str, pii_type: str, method: str) -> str:
-    """마스킹 미리보기 생성"""
+    """마스킹 미리보기 생성 - 특수문자는 유지하고 문자/숫자만 *로 치환"""
+    import re
+
+    # 타입 정규화 (대소문자 통일)
+    normalized_type = pii_type.lower()
+
     if method == "full":
-        return "***"
+        # full 마스킹: 특수문자 제외하고 모두 *로 치환
+        return re.sub(r'[a-zA-Z0-9가-힣]', '*', value)
     elif method == "partial":
-        if pii_type == "email":
+        if normalized_type in ['email']:
+            # 이메일: local 부분만 마스킹, @와 도메인은 유지
             parts = value.split("@")
             if len(parts) == 2:
-                return parts[0][:2] + "***@" + parts[1]
-        elif pii_type == "phone":
-            if "-" in value:
-                return value[:3] + "-***-" + value[-4:]
-            else:
-                return value[:3] + "***" + value[-4:]
-        elif pii_type == "jumin":
-            return value[:6] + "-*******"
-        elif pii_type == "account":
-            parts = value.split("-")
-            if len(parts) == 3:
-                return parts[0] + "-***-" + parts[2]
-        return value[:3] + "***"
+                local_masked = re.sub(r'[a-zA-Z0-9]', '*', parts[0])
+                return f"{local_masked}@{parts[1]}"
+            return re.sub(r'[a-zA-Z0-9]', '*', value)
+        elif normalized_type in ['phone', 'phone_number']:
+            # 전화번호: 지역번호(02, 010 등) 유지하고 나머지만 마스킹
+            if '-' in value:
+                parts = value.split('-')
+                if len(parts) >= 2:
+                    # 첫 번째 부분(지역번호)은 유지, 나머지는 마스킹
+                    area_code = parts[0]
+                    masked_parts = [re.sub(r'\d', '*', part) for part in parts[1:]]
+                    return '-'.join([area_code] + masked_parts)
+            # 하이픈이 없으면 앞 3자리만 유지
+            if len(value) > 3:
+                return value[:3] + re.sub(r'\d', '*', value[3:])
+            return re.sub(r'\d', '*', value)
+        elif normalized_type in ['jumin', 'resident_id']:
+            # 주민등록번호: 하이픈 유지하고 숫자만 마스킹
+            return re.sub(r'\d', '*', value)
+        elif normalized_type in ['account', 'bank_account']:
+            # 계좌번호: 하이픈 유지하고 숫자만 마스킹
+            return re.sub(r'\d', '*', value)
+        elif normalized_type in ['passport']:
+            # 여권번호: 영문+숫자 마스킹
+            return re.sub(r'[a-zA-Z0-9]', '*', value)
+        elif normalized_type in ['driver_license', 'drive']:
+            # 운전면허: 하이픈 유지하고 숫자만 마스킹
+            return re.sub(r'\d', '*', value)
+        elif normalized_type in ['card', 'card_number']:
+            # 카드번호: 하이픈/공백 유지하고 숫자만 마스킹
+            return re.sub(r'\d', '*', value)
+        elif normalized_type in ['person', 'organization', 'location']:
+            # 개인명, 조직명, 위치: 한글, 영문, 숫자 모두 마스킹
+            return re.sub(r'[a-zA-Z0-9가-힣]', '*', value)
+        elif normalized_type in ['ip']:
+            # IP 주소: 점(.) 유지하고 숫자만 마스킹
+            return re.sub(r'\d', '*', value)
+        elif normalized_type in ['mac']:
+            # MAC 주소: 콜론(:) 또는 하이픈(-) 유지하고 영숫자만 마스킹
+            return re.sub(r'[a-fA-F0-9]', '*', value)
+        elif normalized_type in ['gps']:
+            # GPS: 점(.), 쉼표(,) 유지하고 숫자만 마스킹
+            return re.sub(r'\d', '*', value)
+        # 기본: 알파벳, 숫자, 한글 마스킹, 특수문자 유지
+        return re.sub(r'[a-zA-Z0-9가-힣]', '*', value)
     elif method == "redact":
         return "[REDACTED]"
     elif method == "hash":

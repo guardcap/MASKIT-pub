@@ -98,6 +98,8 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
     filename?: string
     shouldMask: boolean
     maskingDecision?: MaskingDecision
+    coordinate?: PIICoordinate  // 첨부파일 PII의 좌표 정보
+    entityIndex?: number  // 원본 entity 인덱스
   }>>([])
   const [showPIICheckboxList, setShowPIICheckboxList] = useState(false)
   const [aiSummary, setAiSummary] = useState('커스텀 설정을 선택하고 분석을 시작하세요.')
@@ -455,15 +457,35 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
       // 백엔드 첨부파일 PII
       attachmentPIIList.forEach((fileResult) => {
         fileResult.entities.forEach((entity, idx) => {
-          allPII.push({
-            id: `attachment_${fileResult.filename}_${idx}`,
-            type: entity.type,
-            value: entity.text,
-            source: 'backend_attachment',
-            filename: fileResult.filename,
-            shouldMask: false,
-            maskingDecision: undefined
-          })
+          // coordinates가 있으면 각 좌표별로 개별 PII 항목 생성
+          if (entity.coordinates && entity.coordinates.length > 0) {
+            entity.coordinates.forEach((coord: any, coordIdx: number) => {
+              allPII.push({
+                id: `attachment_${fileResult.filename}_${idx}_coord${coordIdx}`,
+                type: entity.type,
+                value: entity.text,
+                source: 'backend_attachment',
+                filename: fileResult.filename,
+                shouldMask: false,
+                maskingDecision: undefined,
+                // 좌표 정보 저장
+                coordinate: coord,
+                entityIndex: idx
+              })
+            })
+          } else {
+            // coordinates가 없으면 기존 방식대로
+            allPII.push({
+              id: `attachment_${fileResult.filename}_${idx}`,
+              type: entity.type,
+              value: entity.text,
+              source: 'backend_attachment',
+              filename: fileResult.filename,
+              shouldMask: false,
+              maskingDecision: undefined,
+              entityIndex: idx
+            })
+          }
         })
       })
 
@@ -552,24 +574,71 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
   }
 
   const maskValue = (value: string, type: string): string => {
-    switch (type) {
+    // 특수문자는 유지하고 문자/숫자만 *로 치환
+    const normalizedType = type.toLowerCase()
+
+    switch (normalizedType) {
       case 'email':
-        const [local, domain] = value.split('@')
-        return `${local.substring(0, 2)}***@${domain}`
+        // 이메일: local 부분만 마스킹, @와 도메인은 유지
+        const parts = value.split('@')
+        if (parts.length === 2) {
+          const localMasked = parts[0].replace(/[a-zA-Z0-9]/g, '*')
+          return `${localMasked}@${parts[1]}`
+        }
+        return value.replace(/[a-zA-Z0-9]/g, '*')
       case 'phone':
-        return value.substring(0, 3) + '-****-' + value.substring(value.length - 4)
+      case 'phone_number':
+        // 전화번호: 지역번호(02, 010 등) 유지하고 나머지만 마스킹
+        if (value.includes('-')) {
+          const parts = value.split('-')
+          if (parts.length >= 2) {
+            // 첫 번째 부분(지역번호)은 유지, 나머지는 마스킹
+            const areaCode = parts[0]
+            const maskedParts = parts.slice(1).map(part => part.replace(/\d/g, '*'))
+            return [areaCode, ...maskedParts].join('-')
+          }
+        }
+        // 하이픈이 없으면 앞 3자리만 유지
+        if (value.length > 3) {
+          return value.substring(0, 3) + value.substring(3).replace(/\d/g, '*')
+        }
+        return value.replace(/\d/g, '*')
       case 'jumin':
-        return value.substring(0, 6) + '-*******'
+      case 'resident_id':
+        // 주민등록번호: 하이픈 유지하고 숫자만 마스킹
+        return value.replace(/\d/g, '*')
       case 'account':
-        return '****-****-****'
+      case 'bank_account':
+        // 계좌번호: 하이픈 유지하고 숫자만 마스킹
+        return value.replace(/\d/g, '*')
       case 'passport':
-        return value.substring(0, 2) + '******'
+        // 여권번호: 영문+숫자 마스킹
+        return value.replace(/[a-zA-Z0-9]/g, '*')
       case 'driver_license':
-        return '**-******-**'
+      case 'drive':
+        // 운전면허: 하이픈 유지하고 숫자만 마스킹
+        return value.replace(/\d/g, '*')
       case 'card':
-        return '****-****-****-****'
+      case 'card_number':
+        // 카드번호: 하이픈/공백/점 유지하고 숫자만 마스킹
+        return value.replace(/\d/g, '*')
+      case 'person':
+      case 'organization':
+      case 'location':
+        // 개인명, 조직명, 위치: 한글, 영문, 숫자 모두 마스킹
+        return value.replace(/[a-zA-Z0-9가-힣]/g, '*')
+      case 'ip':
+        // IP 주소: 점(.) 유지하고 숫자만 마스킹
+        return value.replace(/\d/g, '*')
+      case 'mac':
+        // MAC 주소: 콜론(:) 또는 하이픈(-) 유지하고 영숫자만 마스킹
+        return value.replace(/[a-fA-F0-9]/g, '*')
+      case 'gps':
+        // GPS: 점(.), 쉼표(,) 유지하고 숫자만 마스킹
+        return value.replace(/\d/g, '*')
       default:
-        return '***'
+        // 기본: 알파벳, 숫자, 한글 마스킹, 특수문자 유지
+        return value.replace(/[a-zA-Z0-9가-힣]/g, '*')
     }
   }
 
@@ -629,36 +698,61 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
 
         // PIIItemFromAnalysis 형식으로 변환
         const piiItemsForBackend = attachmentPIIs.map((pii, index) => {
+          // coordinate 정보가 이미 PII 객체에 저장되어 있으면 그것을 사용
+          if (pii.coordinate) {
+            return {
+              filename: pii.filename!,
+              pii_type: pii.type,
+              text: pii.value,
+              pageIndex: pii.coordinate.pageIndex,
+              instance_index: index,  // 백엔드에서 사용할 인스턴스 인덱스
+              bbox: pii.coordinate.bbox
+            }
+          }
+
+          // coordinate가 없으면 전체 분석 결과에서 찾기 (fallback)
           const fileResult = (window as any).__attachmentAnalysisResults?.find(
             (r: any) => r.filename === pii.filename
           )
+
+          if (!fileResult) {
+            console.warn(`⚠️ 파일 분석 결과를 찾을 수 없음: ${pii.filename}`)
+            return {
+              filename: pii.filename!,
+              pii_type: pii.type,
+              text: pii.value,
+              pageIndex: 0,
+              instance_index: 0,
+              bbox: null
+            }
+          }
 
           const entity = fileResult?.analysis_data?.pii_entities?.find(
             (e: any) => e.text === pii.value && e.type === pii.type
           )
 
-          const coordinates = entity?.coordinates || []
-
-          if (coordinates.length > 0) {
-            return coordinates.map((coord: PIICoordinate, coordIndex: number) => ({
+          if (entity && entity.coordinates && entity.coordinates.length > 0) {
+            // 첫 번째 좌표 사용
+            const coord = entity.coordinates[0]
+            return {
               filename: pii.filename!,
               pii_type: pii.type,
               text: pii.value,
               pageIndex: coord.pageIndex,
-              instance_index: coordIndex,
+              instance_index: 0,
               bbox: coord.bbox
-            }))
-          } else {
-            return [{
-              filename: pii.filename!,
-              pii_type: pii.type,
-              text: pii.value,
-              pageIndex: 0,
-              instance_index: index,
-              bbox: null
-            }]
+            }
           }
-        }).flat()
+
+          return {
+            filename: pii.filename!,
+            pii_type: pii.type,
+            text: pii.value,
+            pageIndex: 0,
+            instance_index: index,
+            bbox: null
+          }
+        })
 
         console.log('📤 백엔드로 전송할 PII 항목:', piiItemsForBackend)
 

@@ -31,35 +31,50 @@ class UnifiedMaskingEngine:
         try:
             print(f"[PDF 마스킹] 파일 열기: {pdf_path}")
             doc = fitz.open(pdf_path)
-            
+
             for entity in entities:
                 pii_text = entity.get("text", "")
                 entity_type = entity.get("entity", "")
                 target_page = entity.get("pageIndex", 0)
-                instance_index = entity.get("instance_index", None)  # bbox 대신
-                
-                print(f"[PDF 마스킹] 검색 중: '{pii_text}' (타입: {entity_type}, 페이지: {target_page}, 인스턴스: {instance_index})")
-                
+                bbox = entity.get("bbox", None)
+                instance_index = entity.get("instance_index", None)
+
+                print(f"[PDF 마스킹] 검색 중: '{pii_text}' (타입: {entity_type}, 페이지: {target_page}, bbox: {bbox}, 인스턴스: {instance_index})")
+
                 if not pii_text.strip():
                     print(f"[PDF 마스킹] 빈 텍스트 스킵: {entity}")
                     continue
-                
+
                 if target_page < len(doc):
                     page = doc[target_page]
-                    self._mask_text_in_pdf_page(page, pii_text, entity_type, instance_index=instance_index)
+                    # bbox가 있으면 bbox로 직접 마스킹
+                    if bbox and len(bbox) == 4:
+                        self._mask_by_bbox(page, bbox, pii_text)
+                    else:
+                        # bbox가 없으면 텍스트 검색 + instance_index 사용
+                        self._mask_text_in_pdf_page(page, pii_text, entity_type, instance_index=instance_index)
                 else:
                     print(f"[PDF 마스킹] 잘못된 페이지 번호 {target_page}")
-            
+
             print(f"[PDF 마스킹] 저장 중: {out_pdf_path}")
             doc.save(out_pdf_path)
             doc.close()
             print(f"[✔] PDF 저장 완료: {out_pdf_path}")
-            
+
         except Exception as e:
             print(f"[PDF 마스킹 오류] {e}")
             import traceback
             traceback.print_exc()
             raise e
+
+    def _mask_by_bbox(self, page, bbox: List[float], pii_text: str):
+        """
+        bbox 좌표를 사용하여 직접 마스킹합니다.
+        """
+        x1, y1, x2, y2 = bbox
+        rect = fitz.Rect(x1, y1, x2, y2)
+        print(f"[PDF 마스킹] bbox로 마스킹: '{pii_text}' at {rect}")
+        page.draw_rect(rect, color=self.mask_color, fill=self.mask_color)
     
     def _mask_image_file(self, image_path: str, entities: List[Dict], out_image_path: str):
         """
