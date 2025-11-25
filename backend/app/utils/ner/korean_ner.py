@@ -150,15 +150,15 @@ class KoreanNER:
                     continue
                 
                 # 3. LOC인데 길이가 1자 이하인 경우 제외
-                if label == "LOCATION" and len(entity_text.strip()) <= 1:
-                    print(f"[DEBUG] 짧은 LOC 필터링: '{entity_text}'")
+                if len(entity_text.strip()) <= 1:
+                    print(f"[DEBUG] 짧은 단어 필터링: '{entity_text}'")
                     continue
                 
                 # 4. LOC인데 숫자/기호만 있는 경우 제외
                 if label == "LOCATION" and re.match(r'^[\d\s\(\)\[\]\{\}\-\.,;:]+$', entity_text):
                     print(f"[DEBUG] 숫자/기호만 있는 LOC 필터링: '{entity_text}'")
                     continue
-# PERSON 필터링 (추가된 코드)
+                # PERSON 필터링 (추가된 코드)
                 if label == "PERSON" and re.match(r'^[\d\s\(\)\[\]\{\}\-\.,;:]+$', entity_text):
                     print(f"[DEBUG] 숫자/기호만 있는 PER 필터링: '{entity_text}'")
                     continue
