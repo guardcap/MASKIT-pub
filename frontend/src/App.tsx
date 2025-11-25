@@ -7,7 +7,7 @@ import { PolicyListPage } from '@/pages/PolicyListPage'
 import { PolicyAddPage } from '@/pages/PolicyAddPage'
 import { PolicyDetailPage } from '@/pages/PolicyDetailPage'
 import { WriteEmailPage } from '@/pages/WriteEmailPage'
-import { ApproverReviewPage } from '@/pages/ApproverReviewPage'
+import { MaskingPage } from '@/pages/MaskingPage'
 import { MyPage } from '@/pages/MyPage'
 import { EmailDetailPage } from '@/pages/EmailDetailPage'
 import { SentEmailDetailPage } from '@/pages/SentEmailDetailPage'
@@ -316,7 +316,7 @@ function App() {
       )}
 
       {currentView === 'approver-review' && emailDraftData && (
-        <ApproverReviewPage
+        <MaskingPage
           emailData={emailDraftData}
           onBack={() => setCurrentView('write-email')}
           onSendComplete={() => {

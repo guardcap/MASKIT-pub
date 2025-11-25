@@ -7,7 +7,7 @@ import { Send } from 'lucide-react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
-interface ApproverReviewPageProps {
+interface MaskingPageProps {
   emailData: EmailData
   onBack?: () => void
   onSendComplete?: () => void
@@ -79,7 +79,7 @@ interface FileAnalysisResult {
   ocr_data?: any
 }
 
-export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
+export const MaskingPage: React.FC<MaskingPageProps> = ({
   emailData,
   onBack,
   onSendComplete,
