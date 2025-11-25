@@ -428,6 +428,8 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
         filename?: string
         shouldMask: boolean
         maskingDecision?: MaskingDecision
+        coordinate?: PIICoordinate  // 첨부파일 PII의 좌표 정보
+        entityIndex?: number  // 원본 entity 인덱스
       }> = []
 
       // 정규식 PII
