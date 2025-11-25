@@ -135,17 +135,18 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
   return (
     <div className="space-y-6">
       {/* 헤더 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">보낸 메일함</h1>
-          <p className="text-muted-foreground">내가 보낸 메일 목록</p>
+      <div>
+        <div className="flex items-center gap-3">
+          {onBack && (
+            <Button variant="ghost" size="icon" onClick={onBack}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          )}
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">보낸 메일함</h1>
+            <p className="text-muted-foreground">내가 보낸 메일 목록</p>
+          </div>
         </div>
-        {onBack && (
-          <Button variant="ghost" onClick={onBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            뒤로 가기
-          </Button>
-        )}
       </div>
 
       {/* 통계 카드 */}
