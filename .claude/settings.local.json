@@ -7,7 +7,15 @@
       "Bash(xargs kill:*)",
       "Bash(/Users/6kiity/Documents/enterprise-guardcap/venv/bin/python -m uvicorn:*)",
       "Bash(/Users/6kiity/Documents/enterprise-guardcap/venv/bin/pip install:*)",
-      "Bash(npx shadcn@latest add:*)"
+      "Bash(npx shadcn@latest add:*)",
+      "Bash(/Users/6kiity/Documents/enterprise-guardcap/venv/bin/python:*)",
+      "Bash(/Users/6kiity/Documents/enterprise-guardcap/venv/bin/python3.11:*)",
+      "Bash(python3:*)",
+      "Bash(python3.11:*)",
+      "Bash(curl:*)",
+      "Bash(rm:*)",
+      "Bash(kill:*)",
+      "Bash(/Users/6kiity/Documents/enterprise-guardcap/venv/bin/pip uninstall:*)"
     ],
     "deny": [],
     "ask": []

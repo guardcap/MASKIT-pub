@@ -562,13 +562,21 @@ async def analyze_email_with_rag(request: RAGAnalysisRequest):
         # AI 요약 생성
         summary = generate_summary(request.context, masking_decisions, relevant_guides)
 
+        # 실제 인용된 가이드라인만 추출
+        cited_guide_texts = set()
+        for decision in masking_decisions.values():
+            if decision.get('cited_guidelines'):
+                cited_guide_texts.update(decision['cited_guidelines'])
+
         return JSONResponse({
             "success": True,
             "data": {
                 "masking_decisions": masking_decisions,
                 "summary": summary,
-                "relevant_guides": relevant_guides[:3],
+                "relevant_guides": relevant_guides[:5],  # 상위 5개 표시
+                "cited_guidelines": list(cited_guide_texts),  # 실제 인용된 규정 목록
                 "total_guides_found": len(relevant_guides),
+                "total_cited": len(cited_guide_texts),
                 "vector_store_id": VECTOR_STORE_ID
             }
         })
@@ -592,12 +600,19 @@ async def decide_masking_with_llm(
     decisions = {}
     receiver_type = context.get('receiver_type', 'unknown')
 
-    # 가이드라인에서 키워드 추출
+    # 가이드라인에서 키워드 추출 (상위 5개 사용)
     guideline_keywords = set()
     guideline_texts = []
-    for guide in guides[:3]:
+    guideline_sources = []  # 출처 정보 저장
+
+    for guide in guides[:5]:  # 3개 -> 5개로 증가
         content = guide.get('content', '')
-        guideline_texts.append(content[:200])
+        filename = guide.get('filename', '정책 문서')
+
+        # 파일명에서 정책명 추출
+        policy_name = filename.replace('.pdf', '').replace('.jsonl', '')
+        guideline_texts.append(content[:300])  # 200 -> 300자로 증가
+        guideline_sources.append(policy_name)
 
         if '마스킹' in content or 'mask' in content.lower():
             guideline_keywords.add('mask_required')
@@ -605,6 +620,10 @@ async def decide_masking_with_llm(
             guideline_keywords.add('external_sensitive')
         if '내부' in content or 'internal' in content.lower():
             guideline_keywords.add('internal_allowed')
+        if '제3자' in content or '제공' in content:
+            guideline_keywords.add('third_party')
+        if '고유식별' in content:
+            guideline_keywords.add('unique_identifier')
 
     for i, pii in enumerate(detected_pii):
         pii_type = pii.get('type', '')
@@ -613,6 +632,8 @@ async def decide_masking_with_llm(
         masking_method = "none"
         reasoning_steps = []
         cited_guidelines = []
+
+        print(f"[DEBUG] PII #{i}: type={pii_type}, receiver={receiver_type}, keywords={guideline_keywords}")
 
         # PII 유형 한글명
         pii_type_kr = {
@@ -631,9 +652,10 @@ async def decide_masking_with_llm(
         # Step 3: 가이드라인 검토
         if guideline_texts:
             reasoning_steps.append(f"3. OpenAI Vector Store에서 {len(guideline_texts)}개 가이드라인 검토:")
-            for idx, text in enumerate(guideline_texts[:2], 1):
-                reasoning_steps.append(f"   - 가이드 {idx}: {text[:80]}...")
-                cited_guidelines.append(text[:100])
+            for idx, (text, source) in enumerate(zip(guideline_texts[:3], guideline_sources[:3]), 1):
+                reasoning_steps.append(f"   - [{source}]: {text[:80]}...")
+                # 실제 정책명을 인용 목록에 추가
+                cited_guidelines.append(f"{source}")
 
         # 규칙 1: 외부 전송이면 대부분 마스킹
         if receiver_type == 'external':
@@ -644,16 +666,27 @@ async def decide_masking_with_llm(
                 masking_method = "full"
                 reasoning_steps.append(f"   - 개인정보보호법 제24조: 고유식별정보({pii_type_kr})는 외부 전송 시 필수 마스킹")
                 reason = "고유식별정보 외부 전송 금지 (개인정보보호법 제24조)"
-                cited_guidelines.append("개인정보보호법 제24조: 고유식별정보 처리 제한")
+                cited_guidelines.append("개인정보보호법 제24조 (고유식별정보 처리 제한)")
             elif pii_type == 'email':
                 masking_method = "partial"
                 reasoning_steps.append(f"   - 개인정보보호법 제17조: 개인정보 제3자 제공 시 최소화")
                 reason = "개인정보 최소화 원칙 (개인정보보호법 제17조)"
-                cited_guidelines.append("개인정보보호법 제17조: 개인정보 제공 시 최소화")
+                cited_guidelines.append("개인정보보호법 제17조 (개인정보 제3자 제공)")
             else:
                 masking_method = "partial"
-                reasoning_steps.append(f"   - 외부 전송 시 {pii_type_kr} 부분 마스킹 권장")
-                reason = "외부 전송 시 개인정보 마스킹 필수"
+                reasoning_steps.append(f"   - 개인정보보호법 제17조: 외부 전송 시 {pii_type_kr} 최소화 필요")
+
+                # Vector Store에서 관련 가이드라인 찾기
+                for idx, (text, source) in enumerate(zip(guideline_texts, guideline_sources)):
+                    if pii_type in text.lower() or pii_type_kr in text:
+                        reasoning_steps.append(f"   - [{source}]: 관련 규정 확인")
+                        cited_guidelines.append(f"{source}")
+                        break
+
+                if not any('제17조' in g for g in cited_guidelines):
+                    cited_guidelines.append("개인정보보호법 제17조 (개인정보 제3자 제공)")
+
+                reason = f"외부 전송 시 {pii_type_kr} 마스킹 필수"
 
             reasoning_steps.append(f"5. 최종 결정: {masking_method.upper()} 마스킹 적용")
 
@@ -664,15 +697,27 @@ async def decide_masking_with_llm(
             reasoning_steps.append(f"   - 개인정보보호법 제24조: 고유식별정보는 내부 전송이라도 최소 처리")
             reasoning_steps.append(f"5. 최종 결정: FULL 마스킹 적용")
             reason = "고유식별정보는 내부 전송에도 최소 처리 (개인정보보호법 제24조)"
-            cited_guidelines.append("개인정보보호법 제24조: 고유식별정보 처리 제한")
+            cited_guidelines.append("개인정보보호법 제24조 (고유식별정보 처리 제한)")
 
         elif 'mask_required' in guideline_keywords:
             should_mask = True
             masking_method = "partial"
             reasoning_steps.append("4. 판단 근거:")
-            reasoning_steps.append(f"   - Vector Store 가이드라인에서 마스킹 지시 발견")
+
+            # 마스킹을 요구하는 가이드라인 찾기
+            for idx, (text, source) in enumerate(zip(guideline_texts, guideline_sources)):
+                if '마스킹' in text or 'mask' in text.lower():
+                    reasoning_steps.append(f"   - [{source}]: {pii_type_kr} 마스킹 권장")
+                    cited_guidelines.append(f"{source}")
+                    break
+
+            if not cited_guidelines:
+                # 키워드만 있고 구체적 출처가 없으면 기본 규정 적용
+                reasoning_steps.append(f"   - 개인정보보호법 제29조: 안전조치 의무")
+                cited_guidelines.append("개인정보보호법 제29조 (안전조치 의무)")
+
             reasoning_steps.append(f"5. 최종 결정: PARTIAL 마스킹 적용")
-            reason = "정책 가이드라인에 따라 마스킹 필요"
+            reason = f"정책 가이드라인에 따라 {pii_type_kr} 마스킹 필요"
 
         else:
             should_mask = False
@@ -793,12 +838,12 @@ def fallback_analysis(request: RAGAnalysisRequest) -> JSONResponse:
                 masking_method = "full"
                 reasoning_steps.append(f"   - 개인정보보호법 제24조: 고유식별정보는 외부 전송 시 원칙적 금지")
                 reason = "고유식별정보 외부 전송 금지 (개인정보보호법 제24조)"
-                cited_guidelines.append("개인정보보호법 제24조: 고유식별정보 처리 제한")
+                cited_guidelines.append("개인정보보호법 제24조 (고유식별정보 처리 제한)")
             else:
                 masking_method = "partial"
                 reasoning_steps.append(f"   - 개인정보보호법 제17조: 제3자 제공 시 최소화")
                 reason = "개인정보 최소화 원칙 (개인정보보호법 제17조)"
-                cited_guidelines.append("개인정보보호법 제17조: 개인정보 제공 시 최소화")
+                cited_guidelines.append("개인정보보호법 제17조 (개인정보 제3자 제공)")
 
             reasoning_steps.append(f"5. 최종 결정: {masking_method.upper()} 마스킹 적용")
         else:
@@ -809,7 +854,7 @@ def fallback_analysis(request: RAGAnalysisRequest) -> JSONResponse:
                 reasoning_steps.append(f"   - 내부 전송이나 고유식별정보는 최소 처리")
                 reasoning_steps.append(f"5. 최종 결정: FULL 마스킹 적용")
                 reason = "민감정보 최소 처리 (개인정보보호법 제24조)"
-                cited_guidelines.append("개인정보보호법 제24조: 고유식별정보 최소 처리")
+                cited_guidelines.append("개인정보보호법 제24조 (고유식별정보 최소 처리)")
             else:
                 should_mask = False
                 masking_method = "none"
