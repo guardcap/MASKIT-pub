@@ -2,10 +2,55 @@ import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { toast } from 'sonner'
-import { ArrowLeft, Mail, Calendar, Paperclip, Users, Eye, EyeOff } from 'lucide-react'
+import { ArrowLeft, Mail, Calendar, Paperclip, Users, Eye, EyeOff, Shield, AlertTriangle, Info } from 'lucide-react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+
+// PII 타입 한글명 변환
+const getPIITypeKorean = (type: string): string => {
+  const typeMap: Record<string, string> = {
+    'email': '이메일 주소',
+    'phone': '전화번호',
+    'jumin': '주민등록번호',
+    'account': '계좌번호',
+    'passport': '여권번호',
+    'driver_license': '운전면허번호',
+    'name': '이름',
+    'address': '주소',
+    'company': '회사명',
+  }
+  return typeMap[type] || type
+}
+
+// Risk level에 따른 색상 반환
+const getRiskBadgeColor = (riskLevel: string) => {
+  switch (riskLevel) {
+    case 'high':
+      return 'bg-red-100 text-red-800 border-red-300'
+    case 'medium':
+      return 'bg-orange-100 text-orange-800 border-orange-300'
+    case 'low':
+      return 'bg-green-100 text-green-800 border-green-300'
+    default:
+      return 'bg-gray-100 text-gray-800 border-gray-300'
+  }
+}
+
+// Risk level에 따른 아이콘 반환
+const getRiskIcon = (riskLevel: string) => {
+  switch (riskLevel) {
+    case 'high':
+      return <AlertTriangle className="h-3 w-3" />
+    case 'medium':
+      return <Shield className="h-3 w-3" />
+    case 'low':
+      return <Info className="h-3 w-3" />
+    default:
+      return null
+  }
+}
 
 interface SentEmailDetailPageProps {
   emailId: string
@@ -42,9 +87,138 @@ interface MaskedEmailData {
   subject: string
   masked_body: string
   masked_attachments: AttachmentInfo[]
-  masking_decisions: any
+  masking_decisions: Record<string, PIIDecision>
   pii_masked_count: number
   created_at: string
+}
+
+interface PIIDecision {
+  pii_id: string
+  type: string
+  value: string
+  should_mask: boolean
+  masking_method: string
+  masked_value?: string
+  reason: string
+  reasoning: string
+  cited_guidelines: string[]
+  guideline_matched: boolean
+  confidence: number
+  risk_level: 'low' | 'medium' | 'high'
+}
+
+// 마스킹된 텍스트를 hover card와 함께 렌더링하는 컴포넌트
+function MaskedTextWithMetadata({ text, decisions }: {
+  text: string
+  decisions: Record<string, PIIDecision>
+}) {
+  if (!text || !decisions || Object.keys(decisions).length === 0) {
+    return <span>{text}</span>
+  }
+
+  // 마스킹된 값들과 해당 결정사항을 매핑
+  const decisionsArray = Object.values(decisions).filter(d => d.should_mask && d.masked_value)
+
+  if (decisionsArray.length === 0) {
+    return <span>{text}</span>
+  }
+
+  // 텍스트를 분할하여 마스킹된 부분을 찾기
+  let remainingText = text
+  const parts: React.ReactNode[] = []
+  let lastIndex = 0
+
+  decisionsArray.forEach((decision, idx) => {
+    const maskedValue = decision.masked_value || '***'
+    const position = remainingText.indexOf(maskedValue, lastIndex)
+
+    if (position !== -1) {
+      // 마스킹 이전 텍스트 추가
+      if (position > lastIndex) {
+        parts.push(
+          <span key={`text-${idx}`}>
+            {remainingText.substring(lastIndex, position)}
+          </span>
+        )
+      }
+
+      // 마스킹된 텍스트를 HoverCard로 감싸기
+      parts.push(
+        <HoverCard key={`masked-${idx}`}>
+          <HoverCardTrigger asChild>
+            <span className="cursor-help bg-yellow-100 border-b-2 border-yellow-400 px-1 rounded">
+              {maskedValue}
+            </span>
+          </HoverCardTrigger>
+          <HoverCardContent className="w-80" side="top">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold flex items-center gap-1">
+                  {getRiskIcon(decision.risk_level)}
+                  마스킹된 PII 정보
+                </h4>
+                <Badge className={`text-xs ${getRiskBadgeColor(decision.risk_level)}`}>
+                  {decision.risk_level.toUpperCase()}
+                </Badge>
+              </div>
+
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">PII 유형:</span>
+                  <span className="font-medium">{getPIITypeKorean(decision.type)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">원본 값:</span>
+                  <span className="font-mono text-red-600">{decision.value}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">마스킹 방법:</span>
+                  <Badge variant="outline" className="text-xs">
+                    {decision.masking_method === 'full' ? '전체' : '부분'}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t">
+                <p className="text-xs font-medium mb-1">마스킹 이유:</p>
+                <p className="text-xs text-muted-foreground">{decision.reason}</p>
+              </div>
+
+              {decision.cited_guidelines && decision.cited_guidelines.length > 0 && (
+                <div className="pt-2 border-t">
+                  <p className="text-xs font-medium mb-1">적용된 규정:</p>
+                  <ul className="text-xs text-muted-foreground space-y-1">
+                    {decision.cited_guidelines.slice(0, 3).map((guideline, i) => (
+                      <li key={i} className="flex items-start gap-1">
+                        <span className="text-blue-600">•</span>
+                        <span>{guideline}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="pt-2 border-t flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">신뢰도:</span>
+                <span className="font-medium">{(decision.confidence * 100).toFixed(0)}%</span>
+              </div>
+            </div>
+          </HoverCardContent>
+        </HoverCard>
+      )
+
+      lastIndex = position + maskedValue.length
+    }
+  })
+
+  // 남은 텍스트 추가
+  if (lastIndex < remainingText.length) {
+    parts.push(
+      <span key="text-end">{remainingText.substring(lastIndex)}</span>
+    )
+  }
+
+  return <>{parts}</>
 }
 
 export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
@@ -285,43 +459,43 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
               </Badge>
             )}
           </CardTitle>
-          <CardDescription>
-            <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
-              <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4" />
-                <div>
-                  <span className="font-medium">발신:</span>{' '}
-                  <span className="text-foreground">{originalEmail.from_email}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                <div>
-                  <span className="font-medium">수신:</span>{' '}
-                  <span className="text-foreground">
-                    {originalEmail.to_emails?.join(', ') || originalEmail.to_email}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                <div>
-                  <span className="font-medium">작성:</span>{' '}
-                  <span className="text-foreground">{formatDate(originalEmail.created_at)}</span>
-                </div>
-              </div>
-              {originalEmail.attachments && originalEmail.attachments.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <Paperclip className="h-4 w-4" />
-                  <div>
-                    <span className="font-medium">첨부파일:</span>{' '}
-                    <span className="text-foreground">{originalEmail.attachments.length}개</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </CardDescription>
         </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4" />
+              <div>
+                <span className="font-medium">발신:</span>{' '}
+                <span className="text-foreground">{originalEmail.from_email}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              <div>
+                <span className="font-medium">수신:</span>{' '}
+                <span className="text-foreground">
+                  {originalEmail.to_emails?.join(', ') || originalEmail.to_email}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              <div>
+                <span className="font-medium">작성:</span>{' '}
+                <span className="text-foreground">{formatDate(originalEmail.created_at)}</span>
+              </div>
+            </div>
+            {originalEmail.attachments && originalEmail.attachments.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Paperclip className="h-4 w-4" />
+                <div>
+                  <span className="font-medium">첨부파일:</span>{' '}
+                  <span className="text-foreground">{originalEmail.attachments.length}개</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
       </Card>
 
       {/* 마스킹 통계 (마스킹된 이메일이 있는 경우) */}
@@ -453,7 +627,10 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
               <div>
                 <h4 className="font-semibold text-sm mb-2">📝 본문</h4>
                 <div className="bg-green-50 border border-green-200 rounded p-4 text-sm whitespace-pre-wrap max-h-[400px] overflow-y-auto">
-                  {htmlToText(maskedEmail.masked_body || '본문이 없습니다')}
+                  <MaskedTextWithMetadata
+                    text={htmlToText(maskedEmail.masked_body || '본문이 없습니다')}
+                    decisions={maskedEmail.masking_decisions || {}}
+                  />
                 </div>
               </div>
 
@@ -536,7 +713,10 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
             <div>
               <h4 className="font-semibold mb-2">📝 본문</h4>
               <div className="bg-green-50 border border-green-200 rounded p-4 text-sm whitespace-pre-wrap max-h-[600px] overflow-y-auto">
-                {htmlToText(maskedEmail.masked_body || '본문이 없습니다')}
+                <MaskedTextWithMetadata
+                  text={htmlToText(maskedEmail.masked_body || '본문이 없습니다')}
+                  decisions={maskedEmail.masking_decisions || {}}
+                />
               </div>
             </div>
 
