@@ -211,15 +211,20 @@ class RecognizerRegistry:
 
     def _remove_overlapping_entities(self, entities: List[Entity]) -> List[Entity]:
         """
-        겹치는 엔티티 제거
-        1. 완전 포함 관계: 더 긴 것 우선
-        2. 부분 겹침: 우선순위 높은 것 우선
-        3. 같은 위치에서 여러 매칭: 우선순위 높은 것 우선
+        겹치는 엔티티 제거 (우선순위 기반)
+        
+        우선순위:
+        1. RESIDENT_ID (주민번호) - 최우선
+        2. PHONE (전화번호)
+        3. CARD_NUMBER (카드번호)
+        4. PASSPORT (여권번호)
+        5. DRIVE (운전면허)
+        6. BANK_ACCOUNT (계좌번호) - 최저 우선순위
         """
         if not entities:
             return []
         
-        # 시작 위치, 길이 순으로 정렬 (긴 것이 먼저 오도록)
+        # 시작 위치, 길이 순으로 정렬 (긴 것이 먼저)
         sorted_entities = sorted(entities, key=lambda x: (x.start, -(x.end - x.start)))
         
         result: List[Entity] = []
@@ -229,84 +234,55 @@ class RecognizerRegistry:
             entities_to_remove = []
             
             for i, existing in enumerate(result):
+                # 겹침 유형 판단
                 overlap_type = self._get_overlap_type(current, existing)
                 
                 if overlap_type == "none":
                     continue
                 
+                # 우선순위 비교
                 current_priority = self.entity_priority.get(current.entity, 999)
                 existing_priority = self.entity_priority.get(existing.entity, 999)
                 current_len = current.end - current.start
                 existing_len = existing.end - existing.start
                 
-                # ===== 1. 완전 포함 관계 처리 =====
-                if overlap_type == "current_contains_existing":
-                    # 현재가 기존을 포함 (현재가 더 김)
-                    if current_priority <= existing_priority:
-                        # 현재가 우선순위 높거나 같으면 기존 제거
-                        entities_to_remove.append(i)
-                        print(f"[포함] {existing.entity} '{existing.word}'[{existing.start}:{existing.end}] 제거 "
-                              f"← 포함됨: {current.entity} '{current.word}'[{current.start}:{current.end}]")
-                    else:
-                        # 기존이 우선순위 높으면 현재 스킵
-                        should_add = False
-                        print(f"[포함] {current.entity} '{current.word}'[{current.start}:{current.end}] 스킵 "
-                              f"← 우선순위: {existing.entity}")
-                        break
-                
-                elif overlap_type == "existing_contains_current":
-                    # 기존이 현재를 포함 (기존이 더 김)
+                # ===== 부분 겹침 처리 (핵심) =====
+                if overlap_type in ["partial", "current_contains_existing", "existing_contains_current"]:
+                    # 우선순위가 높은 것 선택
                     if current_priority < existing_priority:
-                        # 현재가 우선순위 높으면 기존 제거
                         entities_to_remove.append(i)
-                        print(f"[포함] {existing.entity} '{existing.word}'[{existing.start}:{existing.end}] 제거 "
-                              f"← 우선순위: {current.entity}")
-                    else:
-                        # 기존이 우선순위 높거나 같으면 현재 스킵
+                        print(f"[겹침 제거] {existing.entity} '{existing.word}'[{existing.start}:{existing.end}] 제거 "
+                            f"← 우선순위: {current.entity} '{current.word}'[{current.start}:{current.end}]")
+                    elif current_priority > existing_priority:
                         should_add = False
-                        print(f"[포함] {current.entity} '{current.word}'[{current.start}:{current.end}] 스킵 "
-                              f"← 포함됨: {existing.entity} '{existing.word}'[{existing.start}:{existing.end}]")
+                        print(f"[겹침 제거] {current.entity} '{current.word}'[{current.start}:{current.end}] 스킵 "
+                            f"← 우선순위: {existing.entity}")
                         break
+                    else:
+                        # 우선순위 같으면 더 긴 것 선택
+                        if current_len > existing_len:
+                            entities_to_remove.append(i)
+                            print(f"[겹침 제거] {existing.entity} '{existing.word}' 제거 ← 길이")
+                        else:
+                            should_add = False
+                            print(f"[겹침 제거] {current.entity} '{current.word}' 스킵 ← 길이")
+                            break
                 
-                # ===== 2. 같은 시작 위치 =====
+                # ===== 동일 시작 위치 처리 =====
                 elif overlap_type == "same_start":
                     if current_priority < existing_priority:
                         entities_to_remove.append(i)
-                        print(f"[동일시작] {existing.entity} '{existing.word}' 제거 ← 우선순위: {current.entity}")
                     elif current_priority > existing_priority:
                         should_add = False
-                        print(f"[동일시작] {current.entity} '{current.word}' 스킵 ← 우선순위: {existing.entity}")
                         break
                     else:
-                        # 우선순위 같으면 더 긴 것 선택
                         if current_len > existing_len:
                             entities_to_remove.append(i)
-                            print(f"[동일시작] {existing.entity} '{existing.word}' 제거 ← 길이")
                         else:
                             should_add = False
-                            print(f"[동일시작] {current.entity} '{current.word}' 스킵 ← 길이")
-                            break
-                
-                # ===== 3. 일반 겹침 =====
-                elif overlap_type == "partial":
-                    if current_priority < existing_priority:
-                        entities_to_remove.append(i)
-                        print(f"[겹침] {existing.entity} '{existing.word}' 제거 ← 우선순위: {current.entity}")
-                    elif current_priority > existing_priority:
-                        should_add = False
-                        print(f"[겹침] {current.entity} '{current.word}' 스킵 ← 우선순위: {existing.entity}")
-                        break
-                    else:
-                        # 우선순위 같으면 더 긴 것 선택
-                        if current_len > existing_len:
-                            entities_to_remove.append(i)
-                            print(f"[겹침] {existing.entity} '{existing.word}' 제거 ← 길이")
-                        else:
-                            should_add = False
-                            print(f"[겹침] {current.entity} '{current.word}' 스킵 ← 길이")
                             break
             
-            # 제거할 엔티티 삭제 (역순으로)
+            # 제거할 엔티티 삭제 (역순)
             for idx in sorted(entities_to_remove, reverse=True):
                 result.pop(idx)
             
@@ -317,15 +293,11 @@ class RecognizerRegistry:
         result.sort(key=lambda x: (x.start, x.end))
         return result
 
+
     @staticmethod
     def _get_overlap_type(e1: Entity, e2: Entity) -> str:
         """
         두 엔티티의 겹침 유형 반환
-        - "none": 겹치지 않음
-        - "current_contains_existing": e1이 e2를 완전히 포함
-        - "existing_contains_current": e2가 e1을 완전히 포함
-        - "same_start": 시작 위치가 같음
-        - "partial": 부분 겹침
         """
         # 겹치지 않음
         if e1.end <= e2.start or e2.end <= e1.start:
@@ -334,7 +306,7 @@ class RecognizerRegistry:
         # e1이 e2를 완전히 포함
         if e1.start <= e2.start and e1.end >= e2.end:
             if e1.start == e2.start and e1.end == e2.end:
-                return "same_start"  # 완전히 동일
+                return "same_start"
             return "current_contains_existing"
         
         # e2가 e1을 완전히 포함
@@ -347,5 +319,5 @@ class RecognizerRegistry:
         if e1.start == e2.start:
             return "same_start"
         
-        # 부분 겹침
+        # 부분 겹침 (핵심: 이 케이스가 02-123-4567과 123-4567 같은 경우)
         return "partial"

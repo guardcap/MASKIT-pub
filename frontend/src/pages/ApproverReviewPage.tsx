@@ -353,17 +353,38 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
         console.log('✅ 첨부파일 PII:', attachmentResults.reduce((sum, r) => sum + r.entities.length, 0), '개')
       }
 
-// ==================== 3단계: 정규식 기반 PII 검출 (백엔드에서 못 잡은 것만) ====================
-      setAiSummary('3단계: 추가 PII 검출 중...')
+// ApproverReviewPage.tsx - 3단계 정규식 PII 검출 부분 수정
 
-      // 백엔드에서 이미 검출한 값들 수집
+// ==================== 3단계: 추가 PII 검출 (중복 제거 강화) ====================
+      setAiSummary('3단계: 추가 PII 검출 및 중복 제거 중...')
+
+      // 백엔드에서 이미 검출한 값들 수집 (정확한 문자열 매칭)
       const alreadyDetected = new Set<string>()
-      bodyPIIEntities.forEach(entity => alreadyDetected.add(entity.text.trim()))
-      attachmentPIIList.forEach(fileResult => {
-        fileResult.entities.forEach(entity => alreadyDetected.add(entity.text.trim()))
+
+      // 본문 PII
+      bodyPIIEntities.forEach(entity => {
+        alreadyDetected.add(entity.text.trim())
       })
 
-      // detectPII() 로직 재실행 (백엔드에서 못 잡은 것만)
+      // 첨부파일 PII
+      attachmentPIIList.forEach(fileResult => {
+        fileResult.entities.forEach(entity => {
+          alreadyDetected.add(entity.text.trim())
+        })
+      })
+
+      // ✅ 추가: 부분 문자열도 체크 (예: "02-123-4567"이 있으면 "123-4567"은 제외)
+      const isSubstringOfDetected = (value: string): boolean => {
+        for (const detected of alreadyDetected) {
+          if (detected.includes(value) && detected !== value) {
+            console.log(`[중복 제거] "${value}"는 "${detected}"의 부분 문자열이므로 제외`)
+            return true
+          }
+        }
+        return false
+      }
+
+      // 정규식 패턴 (기존)
       const text = (emailData.body || '').replace(/<[^>]*>/g, ' ')
       const patterns = {
         email: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
@@ -376,18 +397,24 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
       }
 
       const regexPII: PIIItem[] = []
+
       for (const [type, regex] of Object.entries(patterns)) {
         const matches = text.match(regex)
         if (matches) {
           matches.forEach((value) => {
-            // 백엔드에서 이미 검출한 값은 제외
-            if (!regexPII.some((item) => item.value === value) && !alreadyDetected.has(value.trim())) {
+            // ✅ 중복 체크 강화
+            if (!regexPII.some((item) => item.value === value) && 
+                !alreadyDetected.has(value.trim()) &&
+                !isSubstringOfDetected(value.trim())) {
               regexPII.push({ type, value })
+            } else {
+              console.log(`[중복 제거] 정규식 PII 제외: ${value} (이미 검출됨)`)
             }
           })
         }
       }
-      console.log('✅ 정규식 PII (백엔드 중복 제외):', regexPII.length, '개')
+
+      console.log('✅ 정규식 PII (중복 완전 제거):', regexPII.length, '개')
       // ==================== 4단계: 모든 PII 통합 ====================
       setAiSummary('4단계: 모든 PII 통합 중...')
 
