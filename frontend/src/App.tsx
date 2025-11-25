@@ -10,6 +10,7 @@ import { WriteEmailPage } from '@/pages/WriteEmailPage'
 import { ApproverReviewPage } from '@/pages/ApproverReviewPage'
 import { MyPage } from '@/pages/MyPage'
 import { EmailDetailPage } from '@/pages/EmailDetailPage'
+import { SentEmailDetailPage } from '@/pages/SentEmailDetailPage'
 import { AdminDashboardPage } from '@/pages/AdminDashboardPage'
 import { UserDashboardPage } from '@/pages/UserDashboardPage'
 import { AuditorDashboardPage } from '@/pages/AuditorDashboardPage'
@@ -74,6 +75,7 @@ function App() {
   const [currentView, setCurrentView] = useState('main')
   const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null)
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null)
+  const [emailDetailSource, setEmailDetailSource] = useState<'sent' | 'received' | 'main'>('main')
   const [isInitialized, setIsInitialized] = useState(false)
   const [emailDraftData, setEmailDraftData] = useState<EmailDraftData | null>(null)
 
@@ -238,7 +240,10 @@ function App() {
             <AdminDashboardPage
               onNavigate={(view, emailId) => {
                 setCurrentView(view)
-                if (emailId) setSelectedEmailId(emailId)
+                if (emailId) {
+                  setSelectedEmailId(emailId)
+                  setEmailDetailSource('main')
+                }
               }}
             />
           )}
@@ -246,7 +251,10 @@ function App() {
             <AuditorDashboardPage
               onNavigate={(view, emailId) => {
                 setCurrentView(view)
-                if (emailId) setSelectedEmailId(emailId)
+                if (emailId) {
+                  setSelectedEmailId(emailId)
+                  setEmailDetailSource('main')
+                }
               }}
             />
           )}
@@ -254,7 +262,10 @@ function App() {
             <UserDashboardPage
               onNavigate={(view, emailId) => {
                 setCurrentView(view)
-                if (emailId) setSelectedEmailId(emailId)
+                if (emailId) {
+                  setSelectedEmailId(emailId)
+                  setEmailDetailSource('main')
+                }
               }}
             />
           )}
@@ -331,14 +342,29 @@ function App() {
       {currentView === 'root-dashboard' && <RootDashboardPage />}
 
       {currentView === 'email-detail' && selectedEmailId && (
-        <EmailDetailPage emailId={selectedEmailId} onBack={() => setCurrentView('main')} />
+        <>
+          {emailDetailSource === 'sent' ? (
+            <SentEmailDetailPage
+              emailId={selectedEmailId}
+              onBack={() => setCurrentView('my-emails')}
+            />
+          ) : (
+            <EmailDetailPage
+              emailId={selectedEmailId}
+              onBack={() => setCurrentView('main')}
+            />
+          )}
+        </>
       )}
 
       {currentView === 'my-emails' && (
         <SentEmailsPage
           onNavigate={(view, emailId) => {
             setCurrentView(view)
-            if (emailId) setSelectedEmailId(emailId)
+            if (emailId) {
+              setSelectedEmailId(emailId)
+              setEmailDetailSource('sent')
+            }
           }}
           onBack={() => setCurrentView('main')}
         />
@@ -348,7 +374,10 @@ function App() {
         <ReceivedEmailsPage
           onNavigate={(view, emailId) => {
             setCurrentView(view)
-            if (emailId) setSelectedEmailId(emailId)
+            if (emailId) {
+              setSelectedEmailId(emailId)
+              setEmailDetailSource('received')
+            }
           }}
           onBack={() => setCurrentView('main')}
         />

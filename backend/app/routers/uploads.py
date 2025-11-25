@@ -181,11 +181,19 @@ async def watch_files():
 async def get_original_email(email_id: str, db = Depends(get_db)):
     """
     저장된 원본 이메일 조회
-    - email_id: 이메일 고유 ID
+    - email_id: 이메일 고유 ID (커스텀 email_id 또는 MongoDB _id)
     """
     try:
-        # MongoDB에서 원본 이메일 조회
+        # 1차: 커스텀 email_id로 조회
         email_data = await db.original_emails.find_one({"email_id": email_id})
+
+        # 2차: MongoDB _id로 조회 (ObjectId 변환 시도)
+        if not email_data:
+            try:
+                from bson import ObjectId
+                email_data = await db.original_emails.find_one({"_id": ObjectId(email_id)})
+            except:
+                pass
 
         if not email_data:
             return {
@@ -205,6 +213,8 @@ async def get_original_email(email_id: str, db = Depends(get_db)):
 
     except Exception as e:
         print(f"❌ 원본 이메일 조회 실패: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "success": False,
             "message": f"이메일 조회 중 오류 발생: {str(e)}",
@@ -324,4 +334,54 @@ async def download_attachment(email_id: str, filename: str, db = Depends(get_db)
         return {
             "success": False,
             "message": f"첨부파일 다운로드 중 오류 발생: {str(e)}"
+        }
+
+
+# ================== 마스킹된 이메일 조회 API ==================
+
+@router.get("/masked_emails/{email_id}")
+async def get_masked_email(email_id: str, db = Depends(get_db)):
+    """
+    저장된 마스킹 이메일 조회
+    - email_id: 이메일 고유 ID (커스텀 email_id 또는 MongoDB _id)
+    """
+    try:
+        # 1차: 커스텀 email_id로 조회
+        masked_data = await db.masked_emails.find_one({"email_id": email_id})
+
+        # 2차: MongoDB _id로 조회 (ObjectId 변환 시도)
+        if not masked_data:
+            try:
+                from bson import ObjectId
+                # _id로 original_emails 조회 후 email_id 가져오기
+                original_email = await db.original_emails.find_one({"_id": ObjectId(email_id)})
+                if original_email and original_email.get("email_id"):
+                    masked_data = await db.masked_emails.find_one({"email_id": original_email["email_id"]})
+            except:
+                pass
+
+        if not masked_data:
+            return {
+                "success": False,
+                "message": f"마스킹된 이메일을 찾을 수 없습니다: {email_id}",
+                "data": None
+            }
+
+        # _id 필드 제거 (ObjectId는 JSON 직렬화 불가)
+        masked_data.pop("_id", None)
+
+        return {
+            "success": True,
+            "message": "마스킹된 이메일 조회 성공",
+            "data": masked_data
+        }
+
+    except Exception as e:
+        print(f"❌ 마스킹된 이메일 조회 실패: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"마스킹된 이메일 조회 중 오류 발생: {str(e)}",
+            "data": None
         }

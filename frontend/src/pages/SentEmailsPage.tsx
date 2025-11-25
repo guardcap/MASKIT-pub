@@ -48,14 +48,22 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
   const loadSentEmails = async () => {
     try {
       setLoading(true)
-      const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
       const token = localStorage.getItem('auth_token')
 
       if (!token) {
         throw new Error('인증 토큰이 없습니다.')
       }
 
-      const response = await fetch(`${API_BASE}/api/v1/emails/my-emails`, {
+      // 사용자 정보 가져오기
+      const userJson = localStorage.getItem('user')
+      if (!userJson) {
+        throw new Error('사용자 정보가 없습니다.')
+      }
+      const user = JSON.parse(userJson)
+
+      // original_emails 컬렉션에서 조회 (email_id 필드 포함)
+      const response = await fetch(`${API_BASE}/api/v1/files/original_emails?from_email=${encodeURIComponent(user.email)}&limit=100`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -65,8 +73,21 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
         throw new Error('메일을 불러오는데 실패했습니다.')
       }
 
-      const data = await response.json()
-      setEmails(data)
+      const result = await response.json()
+      if (result.success && result.data) {
+        // email_id를 _id로 매핑 (기존 코드와 호환성 유지)
+        const transformedEmails = result.data.map((email: any) => ({
+          ...email,
+          _id: email.email_id,  // email_id를 _id로 사용
+          to_email: email.to_emails?.[0] || '',  // 첫 번째 수신자
+          created_at: email.created_at,
+          status: 'approved',  // 기본 상태 (필요시 수정)
+          attachments: email.attachments_summary || []
+        }))
+        setEmails(transformedEmails)
+      } else {
+        setEmails([])
+      }
       setError(null)
     } catch (err) {
       console.error('Error loading sent emails:', err)
