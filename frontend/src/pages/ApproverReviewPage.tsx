@@ -479,10 +479,23 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
         regulations: regulations,
       }
 
+      // PII가 없으면 RAG 분석 건너뛰기
+      if (allPII.length === 0) {
+        toast.info('탐지된 개인정보가 없어 분석을 중단합니다.')
+        setAiSummary('탐지된 개인정보가 없습니다.')
+        setAllPIIList([])
+        setShowPIICheckboxList(false)
+        return
+      }
+
       // RAG API 호출 (기존 detectedPII 대신 allPII의 value만 전달)
+      const token = localStorage.getItem('auth_token')
       const ragResponse = await fetch(`${API_BASE_URL}/api/vectordb/analyze`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           email_body: emailData.body,
           email_subject: emailData.subject,
@@ -492,7 +505,11 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
         }),
       })
 
-      if (!ragResponse.ok) throw new Error('RAG 분석 요청 실패')
+      if (!ragResponse.ok) {
+        const errorData = await ragResponse.json().catch(() => ({}))
+        console.error('❌ RAG 분석 실패:', errorData)
+        throw new Error(errorData.detail || 'RAG 분석 요청 실패')
+      }
 
       const ragResult = await ragResponse.json()
 
@@ -752,11 +769,6 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
 
   // 마스킹 적용 및 전송
   const handleSendMaskedEmail = async () => {
-    if (!showMaskedPreview) {
-      toast.error('먼저 마스킹을 실행해주세요.')
-      return
-    }
-
     setIsSending(true)
     toast.loading('이메일 전송 중...', { id: 'sending-email' })
 
@@ -797,10 +809,12 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
         attachments: finalAttachments
       })
 
+      // 본문: 마스킹된 본문이 있으면 사용, 없으면 원본 사용
+      const bodyToSend = maskedBody || emailData.body
       // 줄바꿈을 <br> 태그로 변환 (HTML 이메일 형식)
-      const maskedBodyHtml = maskedBody.replace(/\n/g, '<br>')
+      const bodyHtml = bodyToSend.replace(/\n/g, '<br>')
 
-      // SMTP 전송 (MongoDB의 마스킹된 이메일 사용)
+      // SMTP 전송 (마스킹된 이메일이 있으면 사용, 없으면 원본 사용)
       const smtpResponse = await fetch(`${API_BASE_URL}/api/v1/smtp/send`, {
         method: 'POST',
         headers: {
@@ -808,12 +822,12 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          masked_email_id: emailData.email_id,  // MongoDB에서 마스킹된 이메일 조회용
+          masked_email_id: showMaskedPreview ? emailData.email_id : undefined,  // 마스킹된 경우만 ID 전달
           from_email: emailData.from,
           to: emailData.to.join(','),
           subject: emailData.subject,
-          body: maskedBodyHtml,  // HTML 형식으로 변환된 본문
-          use_masked_email: true,  // 마스킹된 이메일 사용 플래그
+          body: bodyHtml,  // HTML 형식으로 변환된 본문
+          use_masked_email: showMaskedPreview,  // 마스킹 여부 플래그
         }),
       })
 
@@ -1136,18 +1150,13 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
           {/* 전송 버튼 */}
           <Button
             onClick={handleSendMaskedEmail}
-            disabled={isSending || !showMaskedPreview}
+            disabled={isSending}
             className="w-full"
             size="lg"
           >
             <Send className="mr-2 h-4 w-4" />
-            {isSending ? '전송 중...' : showMaskedPreview ? '마스킹된 이메일 전송' : '먼저 마스킹을 실행하세요'}
+            {isSending ? '전송 중...' : showMaskedPreview ? '마스킹된 이메일 전송' : '이메일 전송'}
           </Button>
-          {!showMaskedPreview && (
-            <p className="text-xs text-center text-muted-foreground mt-2">
-              ⚠️ 마스킹을 먼저 실행한 후 전송할 수 있습니다
-            </p>
-          )}
         </div>
 
         {/* 우측: 컨텍스트 설정 */}

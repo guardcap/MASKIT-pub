@@ -6,7 +6,7 @@
 - Recognizer 모듈 정보 제공
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import JSONResponse
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -16,6 +16,8 @@ from functools import lru_cache
 
 from app.database.mongodb import get_db
 from app.policy.models import EntityType
+from app.auth.auth_utils import get_current_user
+from app.audit.logger import AuditLogger
 
 router = APIRouter(prefix="/api/entities", tags=["Entity Management"])
 
@@ -148,7 +150,8 @@ class EntityCreateRequest(BaseModel):
 
 @router.post("/")
 async def create_entity(
-    item: EntityCreateRequest,  # <--- 2. 이렇게 모델 하나로 통째로 받습니다 (Body로 인식됨)
+    item: EntityCreateRequest,
+    request: Request,
     db = Depends(get_db),
     current_user = Depends(get_current_policy_admin)
 ):
@@ -185,6 +188,16 @@ async def create_entity(
 
         # MongoDB에 저장
         await db["entities"].insert_one(entity.model_dump(mode='json'))
+
+        # 감사 로그 기록
+        await AuditLogger.log_entity_crud(
+            operation="create",
+            user_email=current_user["email"],
+            user_role=current_user.get("role", "policy_admin"),
+            entity_id=item.entity_id,
+            entity_name=item.name,
+            request=request,
+        )
 
         return JSONResponse({
             "success": True,
@@ -341,6 +354,7 @@ async def get_entity_detail(
 @router.put("/{entity_id}")
 async def update_entity(
     entity_id: str,
+    request: Request,
     name: str = None,
     category: str = None,
     description: str = None,
@@ -390,6 +404,16 @@ async def update_entity(
             {"$set": update_data}
         )
 
+        # 감사 로그 기록
+        await AuditLogger.log_entity_crud(
+            operation="update",
+            user_email=current_user["email"],
+            user_role=current_user.get("role", "policy_admin"),
+            entity_id=entity_id,
+            entity_name=entity.get("name", entity_id),
+            request=request,
+        )
+
         return JSONResponse({
             "success": True,
             "message": "엔티티가 성공적으로 수정되었습니다"
@@ -404,6 +428,7 @@ async def update_entity(
 @router.delete("/{entity_id}")
 async def delete_entity(
     entity_id: str,
+    request: Request,
     db = Depends(get_db),
     current_user = Depends(get_current_policy_admin)
 ):
@@ -414,8 +439,20 @@ async def delete_entity(
         if not entity:
             raise HTTPException(status_code=404, detail="엔티티를 찾을 수 없습니다")
 
+        entity_name = entity.get("name", entity_id)
+
         # MongoDB에서 삭제
         await db["entities"].delete_one({"entity_id": entity_id})
+
+        # 감사 로그 기록
+        await AuditLogger.log_entity_crud(
+            operation="delete",
+            user_email=current_user["email"],
+            user_role=current_user.get("role", "policy_admin"),
+            entity_id=entity_id,
+            entity_name=entity_name,
+            request=request,
+        )
 
         return JSONResponse({
             "success": True,

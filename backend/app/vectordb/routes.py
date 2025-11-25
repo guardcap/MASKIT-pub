@@ -5,7 +5,7 @@ VectorDB 및 정책 스키마 관리 라우터
 - source_document 기반 그룹화
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import JSONResponse
 from typing import List, Optional, Dict, Any
 from pathlib import Path
@@ -16,6 +16,9 @@ import os
 from dotenv import load_dotenv
 import hashlib
 from pydantic import BaseModel
+
+from app.audit.logger import AuditLogger
+from app.auth.auth_utils import get_current_user
 
 load_dotenv()
 
@@ -533,7 +536,11 @@ class RAGAnalysisRequest(BaseModel):
 
 
 @router.post("/analyze")
-async def analyze_email_with_rag(request: RAGAnalysisRequest):
+async def analyze_email_with_rag(
+    request: RAGAnalysisRequest,
+    http_request: Request,
+    current_user: dict = Depends(get_current_user)
+):
     """
     OpenAI Vector Store 기반 이메일 분석 및 마스킹 결정
     """
@@ -567,6 +574,20 @@ async def analyze_email_with_rag(request: RAGAnalysisRequest):
         for decision in masking_decisions.values():
             if decision.get('cited_guidelines'):
                 cited_guide_texts.update(decision['cited_guidelines'])
+
+        # 마스킹된 PII 개수 계산
+        masked_count = sum(1 for d in masking_decisions.values() if d.get('should_mask', False))
+
+        # 감사 로그 기록
+        await AuditLogger.log_masking_decision(
+            user_email=current_user["email"],
+            user_role=current_user.get("role", "user"),
+            pii_count=len(request.detected_pii),
+            masked_count=masked_count,
+            receiver_type=request.context.get('receiver_type', 'unknown'),
+            cited_guidelines=list(cited_guide_texts),
+            request=http_request,
+        )
 
         return JSONResponse({
             "success": True,

@@ -1,7 +1,7 @@
 """
 SMTP 메일 전송 및 이메일 관리 API 라우터 (수정됨)
 """
-from fastapi import APIRouter, HTTPException, status, Query, Depends
+from fastapi import APIRouter, HTTPException, status, Query, Depends, Request
 from typing import Optional, Any # <<< [수정] Any 또는 dict를 위해 추가
 from datetime import datetime
 from bson import ObjectId
@@ -9,6 +9,8 @@ from bson import ObjectId
 from app.database.mongodb import get_database, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_USE_TLS, SMTP_USE_SSL # 기본 설정 Import
 from app.smtp_server.models import EmailSendRequest, EmailSendResponse, EmailListResponse
 from app.smtp_server.client import smtp_client
+from app.audit.logger import AuditLogger
+from app.audit.models import AuditEventType
 
 # [!!! 오류 수정 지점 !!!]
 # 'User' 모델을 찾을 수 없으므로, import 라인을 제거하고
@@ -25,6 +27,7 @@ router = APIRouter(prefix="/smtp", tags=["SMTP Email"])
 @router.post("/send", response_model=EmailSendResponse)
 async def send_email(
     email_data: EmailSendRequest, # 1. 이 모델에서 smtp_config 필드 제거 (아래 models.py 참고)
+    http_request: Request,
     db: get_database = Depends(),
     # [수정] current_user: User -> current_user: dict
     # get_current_user가 Pydantic 모델이 아닌 dict를 반환한다고 가정합니다.
@@ -155,6 +158,17 @@ async def send_email(
 
         insert_result = await db.emails.insert_one(email_record)
 
+        # 감사 로그 기록 (성공)
+        await AuditLogger.log_email_send(
+            user_email=current_user.get("email"),
+            user_role=current_user.get("role", "user"),
+            to_emails=email_data.to.split(',') if isinstance(email_data.to, str) else [email_data.to],
+            subject=email_data.subject,
+            has_attachments=len(attachments_to_send) > 0,
+            masked_count=0,  # SMTP 전송 단계에서는 마스킹 정보 없음
+            request=http_request,
+        )
+
         return EmailSendResponse(
             success=True,
             message=result["message"],
@@ -162,11 +176,35 @@ async def send_email(
             sent_at=result["sent_at"]
         )
 
-    except HTTPException:
+    except HTTPException as he:
+        # 감사 로그 기록 (실패)
+        await AuditLogger.log(
+            event_type=AuditEventType.EMAIL_SEND,
+            user_email=current_user.get("email"),
+            user_role=current_user.get("role", "user"),
+            action=f"SMTP 이메일 전송 실패: {email_data.subject}",
+            resource_type="email",
+            request=http_request,
+            success=False,
+            error_message=str(he.detail),
+        )
         raise
     except Exception as e:
         import traceback
         traceback.print_exc()
+
+        # 감사 로그 기록 (실패)
+        await AuditLogger.log(
+            event_type=AuditEventType.EMAIL_SEND,
+            user_email=current_user.get("email"),
+            user_role=current_user.get("role", "user"),
+            action=f"SMTP 이메일 전송 실패: {email_data.subject}",
+            resource_type="email",
+            request=http_request,
+            success=False,
+            error_message=str(e),
+        )
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"메일 전송 중 오류가 발생했습니다: {str(e)}"

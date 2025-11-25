@@ -33,6 +33,7 @@ from app.auth import routes as auth_routes, users as user_routes
 
 # Policy, Entity, VectorDB 관리
 from app.policy import routes as policy_routes
+from app.audit import routes as audit_routes
 from app.entity import routes as entity_routes
 from app.vectordb import routes as vectordb_routes
 
@@ -114,6 +115,9 @@ app.include_router(vectordb_routes.router, tags=["VectorDB Management"])
 
 # ===== Settings 라우터 =====
 app.include_router(settings_routes.router, tags=["Settings"])
+
+# ===== Audit 라우터 =====
+app.include_router(audit_routes.router, tags=["Audit Logs"])
 
 # ===== SMTP 메일 전송 라우터 =====
 app.include_router(smtp_routes.router, prefix="/api/v1", tags=["SMTP Email"])

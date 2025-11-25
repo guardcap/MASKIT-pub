@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Query
+from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -8,6 +8,8 @@ from bson import ObjectId
 from app.database.mongodb import get_db
 from app.auth.auth_utils import get_current_user, get_current_auditor
 from motor.motor_asyncio import AsyncIOMotorGridFSBucket
+from app.audit.logger import AuditLogger
+from app.audit.models import AuditEventType
 
 router = APIRouter(prefix="/api/v1/emails", tags=["Emails"])
 
@@ -366,7 +368,8 @@ class SendEmailRequest(BaseModel):
 
 @router.post("/send")
 async def send_email(
-    request: SendEmailRequest,
+    email_request: SendEmailRequest,
+    http_request: Request,
     current_user: dict = Depends(get_current_user),
     db = Depends(get_db)
 ):
@@ -374,11 +377,11 @@ async def send_email(
     이메일 전송 (임시 저장)
     """
     try:
-        recipients = [email.strip() for email in request.to.split(',')]
+        recipients = [email.strip() for email in email_request.to.split(',')]
         email_ids = []
-        
+
         attachment_records = []
-        for att in request.attachments:
+        for att in email_request.attachments:
             if isinstance(att, dict) and att.get("file_id"):
                 attachment_records.append({
                     "file_id": att["file_id"],
@@ -388,16 +391,19 @@ async def send_email(
                 })
             elif isinstance(att, str):
                 attachment_records.append({"filename": att})
-        
+
+        # 마스킹된 PII 개수 계산
+        masked_count = sum(1 for d in email_request.masking_decisions.values() if d.get('should_mask', False))
+
         for recipient in recipients:
             email_record = {
-                "from_email": request.from_email,
+                "from_email": email_request.from_email,
                 "to_email": recipient,
-                "subject": request.subject,
-                "body": request.body,
+                "subject": email_request.subject,
+                "body": email_request.body,
                 "attachments": attachment_records,
                 "team_name": current_user.get("team_name"),
-                "masking_decisions": request.masking_decisions,
+                "masking_decisions": email_request.masking_decisions,
                 "created_at": datetime.utcnow(),
                 "sent_at": datetime.utcnow(),
                 "read_at": None,
@@ -408,21 +414,45 @@ async def send_email(
 
         print(f"✅ 이메일 전송: {len(recipients)}명, 첨부파일: {len(attachment_records)}개")
 
+        # 감사 로그 기록
+        await AuditLogger.log_email_send(
+            user_email=current_user["email"],
+            user_role=current_user.get("role", "user"),
+            to_emails=recipients,
+            subject=email_request.subject,
+            has_attachments=len(attachment_records) > 0,
+            masked_count=masked_count,
+            request=http_request,
+        )
+
         return JSONResponse({
             "success": True,
             "message": f"{len(recipients)}명의 수신자에게 이메일이 전송되었습니다",
             "email_ids": email_ids,
             "data": {
-                "from": request.from_email,
+                "from": email_request.from_email,
                 "to": recipients,
-                "subject": request.subject,
+                "subject": email_request.subject,
                 "sent_at": datetime.utcnow().isoformat(),
                 "attachments": len(attachment_records)
             }
         })
-        
+
     except Exception as e:
         print(f"❌ 이메일 전송 오류: {e}")
+
+        # 실패 로그 기록
+        await AuditLogger.log(
+            event_type=AuditEventType.EMAIL_SEND,
+            user_email=current_user["email"],
+            user_role=current_user.get("role", "user"),
+            action=f"이메일 전송 실패: {email_request.subject}",
+            resource_type="email",
+            request=http_request,
+            success=False,
+            error_message=str(e),
+        )
+
         raise HTTPException(status_code=500, detail=f"이메일 전송 실패: {str(e)}")
 
 
