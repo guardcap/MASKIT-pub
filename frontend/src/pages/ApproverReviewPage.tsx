@@ -372,6 +372,7 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
         account: /\b\d{3,4}-?\d{2,6}-?\d{2,7}\b/g,
         passport: /\b[A-Z]\d{8}\b/g,
         driver_license: /\b\d{2}-\d{6,8}-\d{2}\b/g,
+        card: /(\d{4})([-. \s])\d{4}\2\d{4}\2\d{4}/g,
       }
 
       const regexPII: PIIItem[] = []
@@ -521,6 +522,8 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
         return value.substring(0, 2) + '******'
       case 'driver_license':
         return '**-******-**'
+      case 'card':
+        return '****-****-****-****'
       default:
         return '***'
     }
@@ -822,7 +825,7 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
     DRIVE: '운전면허번호',
     PHONE: '전화번호',
     BANK_ACCOUNT: '계좌 번호',
-    CREDIT_CARD: '카드 번호',
+    CARD_NUMBER: '카드 번호',
     IP: 'IP 주소',
     PERSON: '개인명',
     LOCATION: '위치 정보',
@@ -834,6 +837,7 @@ export const ApproverReviewPage: React.FC<ApproverReviewPageProps> = ({
     jumin: '주민등록번호',
     account: '계좌번호',
     passport: '여권번호',
+    card: '카드 번호',
     driver_license: '운전면허번호',
   }
 

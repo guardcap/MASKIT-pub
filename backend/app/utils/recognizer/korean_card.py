@@ -5,7 +5,7 @@ from app.utils.entity import Entity, EntityGroup
 
 class CardNumberRecognizer(EntityRecognizer):
     # 카드번호 예시: 1234-5678-9012-3456 또는 1234567890123456 (16자리)
-    CARD_REGEX = r"(?:\d{4}[-.\s]?){3}\d{4}"
+    CARD_REGEX = r"(\d{4})([-. \s])\d{4}\2\d{4}\2\d{4}"
     KEYWORDS = ['카드번호', '카드', 'credit card', 'card']
 
     def __init__(self):

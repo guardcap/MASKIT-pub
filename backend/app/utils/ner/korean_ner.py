@@ -158,6 +158,10 @@ class KoreanNER:
                 if label == "LOCATION" and re.match(r'^[\d\s\(\)\[\]\{\}\-\.,;:]+$', entity_text):
                     print(f"[DEBUG] 숫자/기호만 있는 LOC 필터링: '{entity_text}'")
                     continue
+# PERSON 필터링 (추가된 코드)
+                if label == "PERSON" and re.match(r'^[\d\s\(\)\[\]\{\}\-\.,;:]+$', entity_text):
+                    print(f"[DEBUG] 숫자/기호만 있는 PER 필터링: '{entity_text}'")
+                    continue
                 # ===========================
                 
                 results.append({
