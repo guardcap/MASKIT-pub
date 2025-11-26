@@ -238,13 +238,14 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
     setAttachmentUrls(urlMap)
   }
 
-  // 컴포넌트 언마운트 시 Blob URL 해제
+  // 컴포넌트 언마운트 시에만 Blob URL 해제 (의존성 배열 제거)
   useEffect(() => {
     return () => {
+      // 컴포넌트가 언마운트될 때만 실행
       attachmentUrls.forEach(url => URL.revokeObjectURL(url))
       maskedAttachmentUrls.forEach(url => URL.revokeObjectURL(url))
     }
-  }, [attachmentUrls, maskedAttachmentUrls])
+  }, []) // 빈 의존성 배열: 마운트/언마운트 시에만 실행
 
   // detectPII는 analyzeWithRAG 내부에서 실행되므로 별도 함수 불필요
   // (초기화 시 호출하던 부분은 제거)
@@ -576,71 +577,106 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
   }
 
   const maskValue = (value: string, type: string): string => {
-    // 특수문자는 유지하고 문자/숫자만 *로 치환
     const normalizedType = type.toLowerCase()
 
     switch (normalizedType) {
       case 'email':
-        // 이메일: local 부분만 마스킹, @와 도메인은 유지
-        const parts = value.split('@')
-        if (parts.length === 2) {
-          const localMasked = parts[0].replace(/[a-zA-Z0-9]/g, '*')
-          return `${localMasked}@${parts[1]}`
+        // 이메일: @와 도메인만 유지, local 부분은 글자수대로 * 처리
+        const emailParts = value.split('@')
+        if (emailParts.length === 2) {
+          const localMasked = '*'.repeat(emailParts[0].length)
+          return `${localMasked}@${emailParts[1]}`
         }
-        return value.replace(/[a-zA-Z0-9]/g, '*')
+        return '*'.repeat(value.length)
+
       case 'phone':
       case 'phone_number':
-        // 전화번호: 지역번호(02, 010 등) 유지하고 나머지만 마스킹
+        // 전화번호: 지역번호(첫 번째 부분)만 유지, 나머지는 글자수대로 * 처리
         if (value.includes('-')) {
-          const parts = value.split('-')
-          if (parts.length >= 2) {
-            // 첫 번째 부분(지역번호)은 유지, 나머지는 마스킹
-            const areaCode = parts[0]
-            const maskedParts = parts.slice(1).map(part => part.replace(/\d/g, '*'))
+          const phoneParts = value.split('-')
+          if (phoneParts.length >= 2) {
+            const areaCode = phoneParts[0]
+            const maskedParts = phoneParts.slice(1).map(part => '*'.repeat(part.length))
             return [areaCode, ...maskedParts].join('-')
           }
         }
         // 하이픈이 없으면 앞 3자리만 유지
         if (value.length > 3) {
-          return value.substring(0, 3) + value.substring(3).replace(/\d/g, '*')
+          return value.substring(0, 3) + '*'.repeat(value.length - 3)
         }
-        return value.replace(/\d/g, '*')
+        return '*'.repeat(value.length)
+
       case 'jumin':
       case 'resident_id':
-        // 주민등록번호: 하이픈 유지하고 숫자만 마스킹
-        return value.replace(/\d/g, '*')
+        // 주민등록번호: 하이픈 유지하고 숫자는 글자수대로 * 처리
+        if (value.includes('-')) {
+          const parts = value.split('-')
+          return parts.map(part => '*'.repeat(part.length)).join('-')
+        }
+        return '*'.repeat(value.length)
+
       case 'account':
       case 'bank_account':
-        // 계좌번호: 하이픈 유지하고 숫자만 마스킹
-        return value.replace(/\d/g, '*')
+        // 계좌번호: 하이픈 유지하고 숫자는 글자수대로 * 처리
+        if (value.includes('-')) {
+          const parts = value.split('-')
+          return parts.map(part => '*'.repeat(part.length)).join('-')
+        }
+        return '*'.repeat(value.length)
+
       case 'passport':
-        // 여권번호: 영문+숫자 마스킹
-        return value.replace(/[a-zA-Z0-9]/g, '*')
+        // 여권번호: 글자수대로 * 처리
+        return '*'.repeat(value.length)
+
       case 'driver_license':
       case 'drive':
-        // 운전면허: 하이픈 유지하고 숫자만 마스킹
-        return value.replace(/\d/g, '*')
+        // 운전면허: 하이픈 유지하고 숫자는 글자수대로 * 처리
+        if (value.includes('-')) {
+          const parts = value.split('-')
+          return parts.map(part => '*'.repeat(part.length)).join('-')
+        }
+        return '*'.repeat(value.length)
+
       case 'card':
       case 'card_number':
-        // 카드번호: 하이픈/공백/점 유지하고 숫자만 마스킹
-        return value.replace(/\d/g, '*')
+        // 카드번호: 하이픈/공백/점 유지하고 숫자는 글자수대로 * 처리
+        return value.replace(/\d+/g, match => '*'.repeat(match.length))
+
       case 'person':
       case 'organization':
       case 'location':
-        // 개인명, 조직명, 위치: 한글, 영문, 숫자 모두 마스킹
-        return value.replace(/[a-zA-Z0-9가-힣]/g, '*')
+        // 개인명, 조직명, 위치: 글자수대로 * 처리
+        return '*'.repeat(value.length)
+
       case 'ip':
-        // IP 주소: 점(.) 유지하고 숫자만 마스킹
-        return value.replace(/\d/g, '*')
+        // IP 주소: 점(.) 유지하고 숫자는 글자수대로 * 처리
+        if (value.includes('.')) {
+          const parts = value.split('.')
+          return parts.map(part => '*'.repeat(part.length)).join('.')
+        }
+        return '*'.repeat(value.length)
+
       case 'mac':
-        // MAC 주소: 콜론(:) 또는 하이픈(-) 유지하고 영숫자만 마스킹
-        return value.replace(/[a-fA-F0-9]/g, '*')
+        // MAC 주소: 콜론(:) 또는 하이픈(-) 유지하고 영숫자는 글자수대로 * 처리
+        if (value.includes(':')) {
+          const parts = value.split(':')
+          return parts.map(part => '*'.repeat(part.length)).join(':')
+        } else if (value.includes('-')) {
+          const parts = value.split('-')
+          return parts.map(part => '*'.repeat(part.length)).join('-')
+        }
+        return '*'.repeat(value.length)
+
       case 'gps':
-        // GPS: 점(.), 쉼표(,) 유지하고 숫자만 마스킹
-        return value.replace(/\d/g, '*')
+        // GPS: 점(.), 쉼표(,) 유지하고 숫자는 글자수대로 * 처리
+        return value.replace(/[\d.]+/g, match => {
+          if (match === '.') return '.'
+          return '*'.repeat(match.length)
+        })
+
       default:
-        // 기본: 알파벳, 숫자, 한글 마스킹, 특수문자 유지
-        return value.replace(/[a-zA-Z0-9가-힣]/g, '*')
+        // 기본: 글자수대로 * 처리
+        return '*'.repeat(value.length)
     }
   }
 
@@ -683,7 +719,8 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
 
       for (const pii of checkedPIIs) {
         if (pii.source === 'regex' || pii.source === 'backend_body') {
-          const masked = pii.maskingDecision?.masked_value || maskValue(pii.value, pii.type)
+          // 프론트엔드 마스킹 규칙 사용 (백엔드 masked_value 무시)
+          const masked = maskValue(pii.value, pii.type)
           tempMaskedBody = tempMaskedBody.replace(new RegExp(escapeRegex(pii.value), 'g'), masked)
         }
       }
@@ -849,6 +886,9 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
       setMaskedAttachmentFilenames(tempMaskedAttachments)
 
       // ==================== 마스킹된 첨부파일 Blob URL 생성 ====================
+      // 이전 마스킹된 URL들만 해제 (원본 URL은 유지)
+      maskedAttachmentUrls.forEach(url => URL.revokeObjectURL(url))
+
       const maskedUrlMap = new Map<string, string>()
       for (const maskedFilename of tempMaskedAttachments) {
         try {
@@ -1640,22 +1680,42 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
           )}
 
           {/* PII 체크박스 리스트 (AI 분석 완료 후 표시) */}
-          {showPIICheckboxList && allPIIList.length > 0 && (
-            <Card className="border-blue-500 bg-blue-50/50">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between text-sm">
-                  <span>✅ 마스킹 대상 PII</span>
-                  <Badge variant="default" className="text-xs">
-                    {allPIIList.filter(p => p.shouldMask).length} / {allPIIList.length}
-                  </Badge>
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  AI가 마스킹이 필요하다고 판단한 항목은 체크되어 있습니다.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                  {allPIIList.map((pii) => (
+          {showPIICheckboxList && allPIIList.length > 0 && (() => {
+            // activeTab에 따라 PII 필터링
+            const filteredPIIList = activeTab === 'all'
+              ? allPIIList
+              : allPIIList.filter(pii => {
+                  // 본문 PII는 '전체' 탭에서만 표시
+                  if (pii.source === 'regex' || pii.source === 'backend_body') {
+                    return activeTab === 'all'
+                  }
+                  // 첨부파일 PII는 해당 파일명과 매칭
+                  return pii.filename === activeTab
+                })
+
+            return (
+              <Card className="border-blue-500 bg-blue-50/50">
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between text-sm">
+                    <span>✅ 마스킹 대상 PII</span>
+                    <Badge variant="default" className="text-xs">
+                      {filteredPIIList.filter(p => p.shouldMask).length} / {filteredPIIList.length}
+                    </Badge>
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    {activeTab === 'all'
+                      ? 'AI가 마스킹이 필요하다고 판단한 항목은 체크되어 있습니다.'
+                      : `${activeTab} 파일에서 검출된 PII 목록`}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {filteredPIIList.length === 0 ? (
+                    <div className="text-center py-6 text-xs text-muted-foreground">
+                      이 파일에서 검출된 PII가 없습니다.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                      {filteredPIIList.map((pii) => (
                     <div
                       key={pii.id}
                       className={`p-2 border rounded-lg transition-all text-xs ${
@@ -1679,6 +1739,22 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
                             <Badge variant="outline" className="text-xs">
                               {typeNames[pii.type] || pii.type}
                             </Badge>
+                            {/* 출처 표시 */}
+                            {pii.source === 'backend_body' && (
+                              <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
+                                📝 본문
+                              </Badge>
+                            )}
+                            {pii.source === 'regex' && (
+                              <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700">
+                                🔍 본문
+                              </Badge>
+                            )}
+                            {pii.source === 'backend_attachment' && pii.filename && (
+                              <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
+                                📎 {pii.filename}
+                              </Badge>
+                            )}
                             {pii.shouldMask && pii.maskingDecision?.risk_level && (
                               <Badge
                                 variant={pii.maskingDecision.risk_level === 'high' ? 'destructive' : 'default'}
@@ -1694,7 +1770,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
                             {pii.value}
                             {pii.shouldMask && (
                               <div className="text-green-600 mt-1">
-                                → {pii.maskingDecision?.masked_value || maskValue(pii.value, pii.type)}
+                                → {maskValue(pii.value, pii.type)}
                               </div>
                             )}
                           </div>
@@ -1710,46 +1786,72 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
+                      ))}
+                    </div>
+                  )}
 
-                {/* 전체 선택/해제 버튼 */}
-                <div className="flex gap-1 mt-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs flex-1"
-                    onClick={() => setAllPIIList(prev => prev.map(pii => ({ ...pii, shouldMask: true })))}
-                  >
-                    전체 선택
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-xs flex-1"
-                    onClick={() => setAllPIIList(prev => prev.map(pii => ({ ...pii, shouldMask: false })))}
-                  >
-                    전체 해제
-                  </Button>
-                </div>
+                  {/* 전체 선택/해제 버튼 */}
+                  <div className="flex gap-1 mt-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs flex-1"
+                      onClick={() => {
+                        setAllPIIList(prev => prev.map(pii => {
+                          // 현재 필터링된 PII만 선택
+                          if (activeTab === 'all') {
+                            return { ...pii, shouldMask: true }
+                          } else if (pii.source === 'regex' || pii.source === 'backend_body') {
+                            return pii
+                          } else if (pii.filename === activeTab) {
+                            return { ...pii, shouldMask: true }
+                          }
+                          return pii
+                        }))
+                      }}
+                    >
+                      전체 선택
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs flex-1"
+                      onClick={() => {
+                        setAllPIIList(prev => prev.map(pii => {
+                          // 현재 필터링된 PII만 해제
+                          if (activeTab === 'all') {
+                            return { ...pii, shouldMask: false }
+                          } else if (pii.source === 'regex' || pii.source === 'backend_body') {
+                            return pii
+                          } else if (pii.filename === activeTab) {
+                            return { ...pii, shouldMask: false }
+                          }
+                          return pii
+                        }))
+                      }}
+                    >
+                      전체 해제
+                    </Button>
+                  </div>
 
-                {/* 마스킹 실행 버튼 */}
-                <div className="mt-4">
-                  <Button
-                    onClick={handleMaskOnly}
-                    disabled={isMasking || allPIIList.filter(p => p.shouldMask).length === 0}
-                    className="w-full bg-orange-500 hover:bg-orange-600"
-                    size="lg"
-                  >
-                    {isMasking ? '마스킹 처리 중...' : `🎭 선택된 PII 마스킹 (${allPIIList.filter(p => p.shouldMask).length}개)`}
-                  </Button>
-                  <p className="text-xs text-muted-foreground text-center mt-2">
-                    마스킹 후 MongoDB에 자동 저장됩니다
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                  {/* 마스킹 실행 버튼 */}
+                  <div className="mt-4">
+                    <Button
+                      onClick={handleMaskOnly}
+                      disabled={isMasking || allPIIList.filter(p => p.shouldMask).length === 0}
+                      className="w-full bg-orange-500 hover:bg-orange-600"
+                      size="lg"
+                    >
+                      {isMasking ? '마스킹 처리 중...' : `🎭 선택된 PII 마스킹 (${allPIIList.filter(p => p.shouldMask).length}개)`}
+                    </Button>
+                    <p className="text-xs text-muted-foreground text-center mt-2">
+                      마스킹 후 MongoDB에 자동 저장됩니다
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })()}
         </div>
       </div>
     </div>
