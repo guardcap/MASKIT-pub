@@ -698,17 +698,53 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
       if (attachmentPIIs.length > 0) {
         console.log('📎 첨부파일 마스킹 시작:', attachmentPIIs.length, '개 PII')
 
-        // PIIItemFromAnalysis 형식으로 변환
-        const piiItemsForBackend = attachmentPIIs.map((pii, index) => {
+        // PIIItemFromAnalysis 형식으로 변환 (PDF는 텍스트 검색 방식 사용)
+        // 1단계: 전체 PII 리스트(allPIIList)에서 같은 파일+텍스트별로 그룹화
+        const groupedAllPIIs = new Map<string, typeof allPIIList>()
+
+        allPIIList.forEach((pii) => {
+          if (pii.source === 'backend_attachment' && pii.filename) {
+            const key = `${pii.filename}_${pii.value}`
+            if (!groupedAllPIIs.has(key)) {
+              groupedAllPIIs.set(key, [])
+            }
+            groupedAllPIIs.get(key)!.push(pii)
+          }
+        })
+
+        // 2단계: 각 그룹 내에서 Y 좌표 기준으로 정렬 (위에서 아래로)
+        groupedAllPIIs.forEach((piis, key) => {
+          piis.sort((a, b) => {
+            if (a.coordinate && b.coordinate) {
+              // Y 좌표 (bbox[1])로 정렬
+              return a.coordinate.bbox[1] - b.coordinate.bbox[1]
+            }
+            return 0
+          })
+        })
+
+        // 3단계: 선택된 PII들의 instance_index 계산
+        const piiItemsForBackend = attachmentPIIs.map((pii) => {
+          const key = `${pii.filename}_${pii.value}`
+          const group = groupedAllPIIs.get(key) || []
+          const instanceIndex = group.findIndex(p => p.id === pii.id)
+
+          console.log('🔍 PII 처리:', {
+            id: pii.id,
+            value: pii.value,
+            bbox: pii.coordinate?.bbox,
+            calculated_instance: instanceIndex
+          })
+
           // coordinate 정보가 이미 PII 객체에 저장되어 있으면 그것을 사용
           if (pii.coordinate) {
+            console.log(`📍 coordinate 사용: instance=${instanceIndex}, bbox=${pii.coordinate.bbox}`)
             return {
               filename: pii.filename!,
               pii_type: pii.type,
               text: pii.value,
               pageIndex: pii.coordinate.pageIndex,
-              instance_index: index,  // 백엔드에서 사용할 인스턴스 인덱스
-              bbox: pii.coordinate.bbox
+              instance_index: instanceIndex  // Y 좌표 기준으로 정렬된 인덱스
             }
           }
 
@@ -724,8 +760,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
               pii_type: pii.type,
               text: pii.value,
               pageIndex: 0,
-              instance_index: 0,
-              bbox: null
+              instance_index: instanceIndex
             }
           }
 
@@ -741,8 +776,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
               pii_type: pii.type,
               text: pii.value,
               pageIndex: coord.pageIndex,
-              instance_index: 0,
-              bbox: coord.bbox
+              instance_index: instanceIndex
             }
           }
 
@@ -751,8 +785,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
             pii_type: pii.type,
             text: pii.value,
             pageIndex: 0,
-            instance_index: index,
-            bbox: null
+            instance_index: instanceIndex
           }
         })
 
@@ -769,7 +802,8 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
         if (!maskingResponse.ok) {
           const error = await maskingResponse.json()
           console.error('❌ 첨부파일 마스킹 실패:', error)
-          throw new Error('첨부파일 마스킹 실패: ' + (error.detail || '알 수 없는 오류'))
+          console.error('❌ 실패 상세:', JSON.stringify(error, null, 2))
+          throw new Error('첨부파일 마스킹 실패: ' + (error.detail || JSON.stringify(error)))
         }
 
         const maskingResult = await maskingResponse.json()

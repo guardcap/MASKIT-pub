@@ -276,18 +276,6 @@ export default function DecisionLogsPage() {
                 </SelectContent>
               </Select>
 
-              <Select value={severityFilter || undefined} onValueChange={(val) => setSeverityFilter(val === 'all' ? '' : val)}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="심각도" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체</SelectItem>
-                  <SelectItem value="info">정보</SelectItem>
-                  <SelectItem value="warning">경고</SelectItem>
-                  <SelectItem value="error">오류</SelectItem>
-                  <SelectItem value="critical">심각</SelectItem>
-                </SelectContent>
-              </Select>
 
               <Button onClick={handleSearch} variant="secondary">
                 <Search className="w-4 h-4 mr-2" />
@@ -313,7 +301,6 @@ export default function DecisionLogsPage() {
                   <TableHead>이벤트</TableHead>
                   <TableHead>사용자</TableHead>
                   <TableHead>액션</TableHead>
-                  <TableHead className="w-[100px]">심각도</TableHead>
                   <TableHead className="w-[80px]">상태</TableHead>
                   <TableHead className="w-[100px]">상세</TableHead>
                 </TableRow>
@@ -352,17 +339,12 @@ export default function DecisionLogsPage() {
                       <span className="text-sm">{log.action}</span>
                     </TableCell>
                     <TableCell>
-                      {getSeverityBadge(log.severity)}
-                    </TableCell>
-                    <TableCell>
                       {log.success ? (
                         <Badge variant="outline" className="text-green-600 border-green-600">
-                          <CheckCircle className="w-3 h-3 mr-1" />
                           성공
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="text-red-600 border-red-600">
-                          <XCircle className="w-3 h-3 mr-1" />
                           실패
                         </Badge>
                       )}
