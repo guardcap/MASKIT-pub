@@ -678,75 +678,106 @@ async def decide_masking_with_llm(
                 # 실제 정책명을 인용 목록에 추가
                 cited_guidelines.append(f"{source}")
 
-        # 규칙 1: 외부 전송이면 대부분 마스킹
+        # ==================== 사외 전송 규칙 ====================
         if receiver_type == 'external':
             should_mask = True
             reasoning_steps.append("4. 판단 근거:")
+            reasoning_steps.append(f"   ⚠️ 사외 전송 - 개인정보를 더욱 신중하게 보호합니다")
 
-            if pii_type in ['jumin', 'account']:
+            # 고유식별정보: 완전 마스킹
+            if pii_type in ['jumin', 'account', 'passport', 'driver_license', 'card_number']:
                 masking_method = "full"
-                reasoning_steps.append(f"   - 개인정보보호법 제24조: 고유식별정보({pii_type_kr})는 외부 전송 시 필수 마스킹")
-                reason = "고유식별정보 외부 전송 금지 (개인정보보호법 제24조)"
+                reasoning_steps.append(f"   - 고유식별정보({pii_type_kr})는 외부 전송 시 완전 마스킹이 바람직합니다")
+                reason = f"외부 전송으로 고유식별정보 완전 마스킹을 권장합니다 (개인정보보호법 제24조)"
                 cited_guidelines.append("개인정보보호법 제24조 (고유식별정보 처리 제한)")
-            elif pii_type == 'email':
-                masking_method = "partial"
-                reasoning_steps.append(f"   - 개인정보보호법 제17조: 개인정보 제3자 제공 시 최소화")
-                reason = "개인정보 최소화 원칙 (개인정보보호법 제17조)"
+
+            # 이름: 사외는 완전 마스킹
+            elif pii_type in ['name', 'person']:
+                masking_method = "full"
+                reasoning_steps.append(f"   - 외부 전송 시 개인 식별을 최소화하는 것이 좋습니다")
+                reason = "외부 전송으로 이름 완전 마스킹을 권장합니다 (개인정보보호법 제17조)"
                 cited_guidelines.append("개인정보보호법 제17조 (개인정보 제3자 제공)")
+
+            # 연락처: 부분 마스킹
+            elif pii_type in ['email', 'phone']:
+                masking_method = "partial"
+                reasoning_steps.append(f"   - 외부 제공 시 {pii_type_kr} 일부를 보호하는 것이 안전합니다")
+                reason = f"외부 전송으로 {pii_type_kr} 부분 마스킹을 권장합니다 (개인정보보호법 제17조)"
+                cited_guidelines.append("개인정보보호법 제17조 (개인정보 제3자 제공)")
+
+            # 주소: 완전 마스킹
+            elif pii_type in ['address']:
+                masking_method = "full"
+                reasoning_steps.append(f"   - 위치정보는 외부 전송 시 완전히 보호하는 것이 좋습니다")
+                reason = "외부 전송으로 주소 완전 마스킹을 권장합니다 (위치정보법)"
+                cited_guidelines.append("위치정보의 보호 및 이용 등에 관한 법률")
+
+            # 기타: 기본적으로 부분 마스킹
             else:
                 masking_method = "partial"
-                reasoning_steps.append(f"   - 개인정보보호법 제17조: 외부 전송 시 {pii_type_kr} 최소화 필요")
+                reasoning_steps.append(f"   - 외부 전송 시 {pii_type_kr}를 보호하는 것이 바람직합니다")
+                reason = f"외부 전송으로 {pii_type_kr} 부분 마스킹을 권장합니다"
+                cited_guidelines.append("개인정보보호법 제17조 (개인정보 제3자 제공)")
 
-                # Vector Store에서 관련 가이드라인 찾기
-                for idx, (text, source) in enumerate(zip(guideline_texts, guideline_sources)):
-                    if pii_type in text.lower() or pii_type_kr in text:
-                        reasoning_steps.append(f"   - [{source}]: 관련 규정 확인")
-                        cited_guidelines.append(f"{source}")
-                        break
+            reasoning_steps.append(f"5. 권장사항: {masking_method.upper()} 마스킹 (사외 전송)")
 
-                if not any('제17조' in g for g in cited_guidelines):
-                    cited_guidelines.append("개인정보보호법 제17조 (개인정보 제3자 제공)")
-
-                reason = f"외부 전송 시 {pii_type_kr} 마스킹 필수"
-
-            reasoning_steps.append(f"5. 최종 결정: {masking_method.upper()} 마스킹 적용")
-
-        elif pii_type in ['jumin', 'account']:
-            should_mask = True
-            masking_method = "full"
+        # ==================== 사내 전송 규칙 ====================
+        elif receiver_type == 'internal':
             reasoning_steps.append("4. 판단 근거:")
-            reasoning_steps.append(f"   - 개인정보보호법 제24조: 고유식별정보는 내부 전송이라도 최소 처리")
-            reasoning_steps.append(f"5. 최종 결정: FULL 마스킹 적용")
-            reason = "고유식별정보는 내부 전송에도 최소 처리 (개인정보보호법 제24조)"
-            cited_guidelines.append("개인정보보호법 제24조 (고유식별정보 처리 제한)")
+            reasoning_steps.append(f"   ✓ 사내 전송 - 업무 효율을 고려하여 최소한의 보호를 적용합니다")
 
-        elif 'mask_required' in guideline_keywords:
+            # 고유식별정보: 사내에서도 완전 마스킹
+            if pii_type in ['jumin', 'account', 'passport', 'driver_license', 'card_number']:
+                should_mask = True
+                masking_method = "full"
+                reasoning_steps.append(f"   - 고유식별정보는 조직 내부에서도 보호가 필요합니다")
+                reason = "사내 전송이지만 고유식별정보 완전 마스킹을 권장합니다 (개인정보보호법 제24조)"
+                cited_guidelines.append("개인정보보호법 제24조 (고유식별정보 처리 제한)")
+                reasoning_steps.append(f"5. 권장사항: FULL 마스킹 (사내 전송)")
+
+            # 이름: 사내는 부분 마스킹 (가독성 유지)
+            elif pii_type in ['name', 'person']:
+                should_mask = True
+                masking_method = "partial"
+                reasoning_steps.append(f"   - 업무 가독성을 유지하면서 이름을 부분적으로 보호합니다")
+                reason = "사내 전송으로 이름 부분 마스킹을 권장합니다 (가독성 유지)"
+                cited_guidelines.append("개인정보보호법 제29조 (안전조치 의무)")
+                reasoning_steps.append(f"5. 권장사항: PARTIAL 마스킹 (사내 전송)")
+
+            # 연락처, 주소: 사내는 마스킹 안 함 (업무 연속성)
+            elif pii_type in ['email', 'phone', 'address', 'company']:
+                should_mask = False
+                masking_method = "none"
+                reasoning_steps.append(f"   - 조직 내 원활한 협업을 위해 연락처 정보를 유지합니다")
+                reasoning_steps.append(f"   - 업무 연속성 확보를 위한 조치입니다")
+                reason = "사내 전송으로 마스킹하지 않습니다 (업무 연속성)"
+                reasoning_steps.append(f"5. 권장사항: 마스킹 미적용 (사내 전송)")
+
+            # 기타: 가이드라인 확인
+            else:
+                if 'mask_required' in guideline_keywords:
+                    should_mask = True
+                    masking_method = "partial"
+                    reasoning_steps.append(f"   - 정책상 부분 마스킹이 권장됩니다")
+                    reason = f"사내 전송이지만 {pii_type_kr} 부분 마스킹을 권장합니다"
+                    cited_guidelines.append("개인정보보호법 제29조 (안전조치 의무)")
+                    reasoning_steps.append(f"5. 권장사항: PARTIAL 마스킹")
+                else:
+                    should_mask = False
+                    masking_method = "none"
+                    reasoning_steps.append(f"   - 민감정보가 아닌 것으로 판단됩니다")
+                    reason = "사내 전송으로 마스킹하지 않습니다"
+                    reasoning_steps.append(f"5. 권장사항: 마스킹 미적용")
+
+        # ==================== 알 수 없는 경우 (안전하게 외부로 처리) ====================
+        else:
             should_mask = True
             masking_method = "partial"
             reasoning_steps.append("4. 판단 근거:")
-
-            # 마스킹을 요구하는 가이드라인 찾기
-            for idx, (text, source) in enumerate(zip(guideline_texts, guideline_sources)):
-                if '마스킹' in text or 'mask' in text.lower():
-                    reasoning_steps.append(f"   - [{source}]: {pii_type_kr} 마스킹 권장")
-                    cited_guidelines.append(f"{source}")
-                    break
-
-            if not cited_guidelines:
-                # 키워드만 있고 구체적 출처가 없으면 기본 규정 적용
-                reasoning_steps.append(f"   - 개인정보보호법 제29조: 안전조치 의무")
-                cited_guidelines.append("개인정보보호법 제29조 (안전조치 의무)")
-
-            reasoning_steps.append(f"5. 최종 결정: PARTIAL 마스킹 적용")
-            reason = f"정책 가이드라인에 따라 {pii_type_kr} 마스킹 필요"
-
-        else:
-            should_mask = False
-            masking_method = "none"
-            reasoning_steps.append("4. 판단 근거:")
-            reasoning_steps.append(f"   - 내부 전송이며 민감정보가 아님")
-            reasoning_steps.append(f"5. 최종 결정: 마스킹 미적용")
-            reason = "내부 전송으로 마스킹 불필요"
+            reasoning_steps.append(f"   ⚠️ 수신자 타입 불명 - 안전을 위해 부분 마스킹을 적용합니다")
+            reason = f"수신자 타입이 불분명하여 {pii_type_kr} 부분 마스킹을 권장합니다"
+            cited_guidelines.append("개인정보보호법 제29조 (안전조치 의무)")
+            reasoning_steps.append(f"5. 권장사항: PARTIAL 마스킹 (안전 모드)")
 
         # 마스킹 미리보기 생성
         masked_value = None
@@ -774,71 +805,20 @@ async def decide_masking_with_llm(
 
 
 def _generate_masked_preview(value: str, pii_type: str, method: str) -> str:
-    """마스킹 미리보기 생성 - 특수문자는 유지하고 문자/숫자만 *로 치환"""
-    import re
+    """마스킹 미리보기 생성 - MaskingRules 사용"""
+    from app.utils.masking_rules import MaskingRules
 
-    # 타입 정규화 (대소문자 통일)
-    normalized_type = pii_type.lower()
-
-    if method == "full":
-        # full 마스킹: 특수문자 제외하고 모두 *로 치환
-        return re.sub(r'[a-zA-Z0-9가-힣]', '*', value)
-    elif method == "partial":
-        if normalized_type in ['email']:
-            # 이메일: local 부분만 마스킹, @와 도메인은 유지
-            parts = value.split("@")
-            if len(parts) == 2:
-                local_masked = re.sub(r'[a-zA-Z0-9]', '*', parts[0])
-                return f"{local_masked}@{parts[1]}"
-            return re.sub(r'[a-zA-Z0-9]', '*', value)
-        elif normalized_type in ['phone', 'phone_number']:
-            # 전화번호: 지역번호(02, 010 등) 유지하고 나머지만 마스킹
-            if '-' in value:
-                parts = value.split('-')
-                if len(parts) >= 2:
-                    # 첫 번째 부분(지역번호)은 유지, 나머지는 마스킹
-                    area_code = parts[0]
-                    masked_parts = [re.sub(r'\d', '*', part) for part in parts[1:]]
-                    return '-'.join([area_code] + masked_parts)
-            # 하이픈이 없으면 앞 3자리만 유지
-            if len(value) > 3:
-                return value[:3] + re.sub(r'\d', '*', value[3:])
-            return re.sub(r'\d', '*', value)
-        elif normalized_type in ['jumin', 'resident_id']:
-            # 주민등록번호: 하이픈 유지하고 숫자만 마스킹
-            return re.sub(r'\d', '*', value)
-        elif normalized_type in ['account', 'bank_account']:
-            # 계좌번호: 하이픈 유지하고 숫자만 마스킹
-            return re.sub(r'\d', '*', value)
-        elif normalized_type in ['passport']:
-            # 여권번호: 영문+숫자 마스킹
-            return re.sub(r'[a-zA-Z0-9]', '*', value)
-        elif normalized_type in ['driver_license', 'drive']:
-            # 운전면허: 하이픈 유지하고 숫자만 마스킹
-            return re.sub(r'\d', '*', value)
-        elif normalized_type in ['card', 'card_number']:
-            # 카드번호: 하이픈/공백 유지하고 숫자만 마스킹
-            return re.sub(r'\d', '*', value)
-        elif normalized_type in ['person', 'organization', 'location']:
-            # 개인명, 조직명, 위치: 한글, 영문, 숫자 모두 마스킹
-            return re.sub(r'[a-zA-Z0-9가-힣]', '*', value)
-        elif normalized_type in ['ip']:
-            # IP 주소: 점(.) 유지하고 숫자만 마스킹
-            return re.sub(r'\d', '*', value)
-        elif normalized_type in ['mac']:
-            # MAC 주소: 콜론(:) 또는 하이픈(-) 유지하고 영숫자만 마스킹
-            return re.sub(r'[a-fA-F0-9]', '*', value)
-        elif normalized_type in ['gps']:
-            # GPS: 점(.), 쉼표(,) 유지하고 숫자만 마스킹
-            return re.sub(r'\d', '*', value)
-        # 기본: 알파벳, 숫자, 한글 마스킹, 특수문자 유지
-        return re.sub(r'[a-zA-Z0-9가-힣]', '*', value)
-    elif method == "redact":
-        return "[REDACTED]"
-    elif method == "hash":
-        return "[HASHED]"
-    else:
-        return value
+    try:
+        # method를 masking_level로 변환
+        masking_level = 'full' if method == 'full' else 'partial'
+        return MaskingRules.apply_masking(value, pii_type, masking_level)
+    except Exception as e:
+        print(f"❌ 마스킹 미리보기 생성 실패: {e}, 기본 마스킹 적용")
+        # 폴백: 기본 마스킹
+        if method == "full":
+            return "***"
+        else:
+            return value[:2] + "***" if len(value) > 2 else "***"
 
 
 def generate_summary(context: Dict, decisions: Dict, guides: List[Dict]) -> str:

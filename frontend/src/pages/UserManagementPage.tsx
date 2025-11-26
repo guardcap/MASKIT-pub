@@ -9,7 +9,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Users, Trash2, Shield, Loader2, RefreshCw } from 'lucide-react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Users, Trash2, Shield, Loader2, RefreshCw, Info } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface User {
@@ -26,6 +45,9 @@ export default function UserManagementPage() {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [roleChangeDialogOpen, setRoleChangeDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<{ email: string; role?: string } | null>(null);
 
   const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -99,25 +121,31 @@ export default function UserManagementPage() {
   };
 
   const handleRoleChange = async (email: string, newRole: string) => {
+    setSelectedUser({ email, role: newRole });
+    setRoleChangeDialogOpen(true);
+  };
+
+  const confirmRoleChange = async () => {
+    if (!selectedUser?.email || !selectedUser?.role) return;
+
+    const { email, role: newRole } = selectedUser;
     const token = localStorage.getItem('auth_token');
-    
+
     if (!token) {
       toast.error('인증 토큰이 없습니다. 다시 로그인해주세요.');
-      return;
-    }
-
-    if (!confirm(`${email}의 권한을 "${roleNames[newRole]}"(으)로 변경하시겠습니까?`)) {
+      setRoleChangeDialogOpen(false);
       return;
     }
 
     setActionLoading(email);
+    setRoleChangeDialogOpen(false);
 
     try {
       console.log('\n🔄 권한 변경 시도:', { email, newRole });
-      
+
       const response = await fetch(`${API_BASE}/api/users/${encodeURIComponent(email)}/role`, {
         method: 'PATCH',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
@@ -134,40 +162,47 @@ export default function UserManagementPage() {
 
       const result = await response.json();
       console.log('✅ 권한 변경 결과:', result);
-      
+
       toast.success(`${email}의 권한이 "${roleNames[newRole]}"(으)로 변경되었습니다`);
-      
+
       // 목록 새로고침
       await loadUsers();
-      
+
     } catch (error: any) {
       console.error('❌ 권한 변경 오류:', error);
       toast.error(error.message || '권한 변경에 실패했습니다');
     } finally {
       setActionLoading(null);
+      setSelectedUser(null);
     }
   };
 
-  const handleDeleteUser = async (email: string) => {
+  const handleDeleteUser = (email: string) => {
+    setSelectedUser({ email });
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!selectedUser?.email) return;
+
+    const { email } = selectedUser;
     const token = localStorage.getItem('auth_token');
-    
+
     if (!token) {
       toast.error('인증 토큰이 없습니다. 다시 로그인해주세요.');
-      return;
-    }
-
-    if (!confirm(`${email} 사용자를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) {
+      setDeleteDialogOpen(false);
       return;
     }
 
     setActionLoading(email);
+    setDeleteDialogOpen(false);
 
     try {
       console.log('🗑️ 사용자 삭제 시도:', email);
-      
+
       const response = await fetch(`${API_BASE}/api/users/${encodeURIComponent(email)}`, {
         method: 'DELETE',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
@@ -182,12 +217,13 @@ export default function UserManagementPage() {
 
       toast.success('사용자가 삭제되었습니다');
       await loadUsers();
-      
+
     } catch (error: any) {
       console.error('❌ 사용자 삭제 오류:', error);
       toast.error(error.message || '사용자 삭제에 실패했습니다');
     } finally {
       setActionLoading(null);
+      setSelectedUser(null);
     }
   };
 
@@ -195,35 +231,20 @@ export default function UserManagementPage() {
     return new Date(dateString).toLocaleDateString('ko-KR');
   };
 
+  const getDepartmentDisplay = (user: User) => {
+    return user.department || user.team_name || '-';
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
+    <div>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-slate-900 mb-2 flex items-center gap-3">
-            <Users className="w-10 h-10 text-purple-600" />
             사용자 계정 관리
           </h1>
           <p className="text-slate-600">사용자의 권한을 관리하고 계정을 관리할 수 있습니다</p>
         </div>
-
-        {/* Role Description */}
-        <Card className="mb-6 border-l-4 border-l-purple-500 bg-purple-50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-purple-900">
-              <Shield className="w-5 h-5" />
-              권한 설명
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2 text-sm text-purple-900">
-              <li><strong>ROOT 관리자:</strong> 시스템 설정, 팀/사용자 관리, 모든 권한</li>
-              <li><strong>감사자 (Auditor):</strong> 모든 로그, 통계, 설정 읽기 전용 (사후 감독)</li>
-              <li><strong>정책 관리자 (Policy Admin):</strong> 엔티티, 정책 CRUD, 통계/로그 읽기</li>
-              <li><strong>일반 사용자 (User):</strong> 메일 작성, 본인 통계/로그 읽기</li>
-            </ul>
-          </CardContent>
-        </Card>
 
         {/* Loading State */}
         {loading && (
@@ -261,90 +282,120 @@ export default function UserManagementPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b-2 border-slate-200">
-                      <th className="text-left p-4 font-semibold text-slate-700">이메일</th>
-                      <th className="text-left p-4 font-semibold text-slate-700">닉네임</th>
-                      <th className="text-left p-4 font-semibold text-slate-700">부서</th>
-                      <th className="text-left p-4 font-semibold text-slate-700">팀</th>
-                      <th className="text-left p-4 font-semibold text-slate-700">권한</th>
-                      <th className="text-left p-4 font-semibold text-slate-700">가입일</th>
-                      <th className="text-left p-4 font-semibold text-slate-700">관리</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((user) => {
-                      const isCurrentUser = user.email === currentUser?.email;
-                      const isActionPending = actionLoading === user.email;
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>이메일</TableHead>
+                    <TableHead>닉네임</TableHead>
+                    <TableHead>부서</TableHead>
+                    <TableHead>권한</TableHead>
+                    <TableHead>가입일</TableHead>
+                    <TableHead>관리</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.map((user) => {
+                    const isCurrentUser = user.email === currentUser?.email;
+                    const isActionPending = actionLoading === user.email;
 
-                      return (
-                        <tr key={user.email} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                          <td className="p-4">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-slate-900">{user.email}</span>
-                              {isCurrentUser && (
-                                <Badge className="bg-blue-100 text-blue-800 text-xs">본인</Badge>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-4 text-slate-700">{user.nickname}</td>
-                          <td className="p-4 text-slate-700">{user.department || '-'}</td>
-                          <td className="p-4 text-slate-700">{user.team_name || '-'}</td>
-                          <td className="p-4">
-                            <Badge className={roleColors[user.role]}>
-                              {roleNames[user.role]}
-                            </Badge>
-                          </td>
-                          <td className="p-4 text-slate-700">{formatDate(user.created_at)}</td>
-                          <td className="p-4">
-                            {isCurrentUser ? (
-                              <span className="text-slate-400 text-sm">본인 계정</span>
-                            ) : (
-                              <div className="flex gap-2">
-                                <Select
-                                  value={user.role}
-                                  onValueChange={(value) => handleRoleChange(user.email, value)}
-                                  disabled={isActionPending}
-                                >
-                                  <SelectTrigger className="w-[160px] h-9">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="root_admin">ROOT 관리자</SelectItem>
-                                    <SelectItem value="auditor">감사자</SelectItem>
-                                    <SelectItem value="policy_admin">정책 관리자</SelectItem>
-                                    <SelectItem value="user">일반 사용자</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => handleDeleteUser(user.email)}
-                                  className="gap-1"
-                                  disabled={isActionPending}
-                                >
-                                  {isActionPending ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="w-4 h-4" />
-                                  )}
-                                  삭제
-                                </Button>
-                              </div>
+                    return (
+                      <TableRow key={user.email}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{user.email}</span>
+                            {isCurrentUser && (
+                              <Badge variant="secondary" className="text-xs">본인</Badge>
                             )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>{user.nickname}</TableCell>
+                        <TableCell>{getDepartmentDisplay(user)}</TableCell>
+                        <TableCell>
+                          <Badge className={roleColors[user.role]}>
+                            {roleNames[user.role]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{formatDate(user.created_at)}</TableCell>
+                        <TableCell>
+                          {isCurrentUser ? (
+                            <span className="text-muted-foreground text-sm">본인 계정</span>
+                          ) : (
+                            <div className="flex gap-2">
+                              <Select
+                                value={user.role}
+                                onValueChange={(value) => handleRoleChange(user.email, value)}
+                                disabled={isActionPending}
+                              >
+                                <SelectTrigger className="w-[160px] h-9">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="root_admin">ROOT 관리자</SelectItem>
+                                  <SelectItem value="auditor">감사자</SelectItem>
+                                  <SelectItem value="policy_admin">정책 관리자</SelectItem>
+                                  <SelectItem value="user">일반 사용자</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleDeleteUser(user.email)}
+                                disabled={isActionPending}
+                              >
+                                {isActionPending ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
+                                )}
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         )}
       </div>
+
+      {/* Role Change Confirmation Dialog */}
+      <AlertDialog open={roleChangeDialogOpen} onOpenChange={setRoleChangeDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>권한 변경 확인</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedUser?.email}의 권한을 "{selectedUser?.role && roleNames[selectedUser.role]}"(으)로 변경하시겠습니까?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRoleChange}>변경</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete User Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>사용자 삭제 확인</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedUser?.email} 사용자를 삭제하시겠습니까?
+              <br />
+              <span className="text-destructive font-semibold">이 작업은 되돌릴 수 없습니다.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteUser} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

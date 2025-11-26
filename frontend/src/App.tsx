@@ -237,15 +237,7 @@ function App() {
       {currentView === 'main' && (
         <>
           {user?.userRole === 'root_admin' && (
-            <AdminDashboardPage
-              onNavigate={(view, emailId) => {
-                setCurrentView(view)
-                if (emailId) {
-                  setSelectedEmailId(emailId)
-                  setEmailDetailSource('main')
-                }
-              }}
-            />
+            <UserManagementPage />
           )}
           {user?.userRole === 'auditor' && (
             <AuditorDashboardPage
