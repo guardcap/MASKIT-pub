@@ -41,7 +41,7 @@ export function ModernAppLayout({
 }: ModernAppLayoutProps) {
   // 메뉴를 카테고리별로 그룹화
   const emailMenuItems = sidebarMenu.filter((item) =>
-    ['write-email', 'approver-review'].includes(item.id)
+    ['write-email', 'received-emails', 'my-emails', 'approver-review'].includes(item.id)
   )
   const policyMenuItems = sidebarMenu.filter((item) =>
     ['policy-dashboard', 'policy-list', 'policy-add', 'entity-management'].includes(item.id)
@@ -58,11 +58,11 @@ export function ModernAppLayout({
           <SidebarHeader>
             <div className="flex items-center gap-2 px-4 py-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <span className="text-sm font-bold">GC</span>
+                <span className="text-sm font-bold">M</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-sm font-semibold">GuardCAP</span>
-                <span className="text-xs text-muted-foreground">Enterprise DLP</span>
+                <span className="text-sm font-semibold">MASKIT</span>
+                <span className="text-xs text-muted-foreground">PBL: 헨젤과 그레텔</span>
               </div>
             </div>
           </SidebarHeader>
@@ -170,10 +170,8 @@ export function ModernAppLayout({
           <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background px-4 sm:px-6">
             <SidebarTrigger />
             <div className="flex flex-1 items-center justify-between">
-              <h1 className="text-lg font-semibold">Enterprise GuardCAP</h1>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">{userRole}</span>
-              </div>
+              
+             
             </div>
           </header>
           <div className="flex-1 overflow-auto p-4 sm:p-6">{children}</div>

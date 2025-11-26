@@ -11,18 +11,16 @@ import { MaskingPage } from '@/pages/MaskingPage'
 import { MyPage } from '@/pages/MyPage'
 import { EmailDetailPage } from '@/pages/EmailDetailPage'
 import { SentEmailDetailPage } from '@/pages/SentEmailDetailPage'
-import { AdminDashboardPage } from '@/pages/AdminDashboardPage'
+
 import { UserDashboardPage } from '@/pages/UserDashboardPage'
 import { AuditorDashboardPage } from '@/pages/AuditorDashboardPage'
 import { SentEmailsPage } from '@/pages/SentEmailsPage'
 import { ReceivedEmailsPage } from '@/pages/ReceivedEmailsPage'
-import PendingApprovalsPage from '@/pages/PendingApprovalsPage'
 import DecisionLogsPage from '@/pages/DecisionLogsPage'
 import UserManagementPage from '@/pages/UserManagementPage'
 import EntityManagementPage from '@/pages/EntityManagementPage'
-import DlpStatisticsPage from '@/pages/DlpStatisticsPage'
 import RootDashboardPage from '@/pages/RootDashboardPage'
-import { Home, FileText, Shield, Users, Plus, List, Mail, Send, User } from 'lucide-react'
+import { Home, FileText, Shield, Users, Plus, List, Mail, Send, User, Inbox, MailOpen } from 'lucide-react'
 
 type Page = 'login' | 'register' | 'main'
 
@@ -126,10 +124,16 @@ function App() {
         onClick: () => setCurrentView('write-email'),
       },
       {
-        id: 'pending-approvals',
-        label: '승인 대기',
-        icon: <Send className="h-4 w-4" />,
-        onClick: () => setCurrentView('pending-approvals'),
+        id: 'received-emails',
+        label: '받은 메일함',
+        icon: <Inbox className="h-4 w-4" />,
+        onClick: () => setCurrentView('received-emails'),
+      },
+      {
+        id: 'my-emails',
+        label: '보낸 메일함',
+        icon: <MailOpen className="h-4 w-4" />,
+        onClick: () => setCurrentView('my-emails'),
       },
     ]
 
@@ -178,13 +182,6 @@ function App() {
 
     // 공통 메뉴
     baseMenu.push(
-      
-      {
-        id: 'dlp-statistics',
-        label: 'DLP 통계',
-        icon: <FileText className="h-4 w-4" />,
-        onClick: () => setCurrentView('dlp-statistics'),
-      },
       {
         id: 'logs',
         label: '의사결정 로그',
@@ -325,11 +322,9 @@ function App() {
 
       {currentView === 'logs' && <DecisionLogsPage />}
 
-      {currentView === 'pending-approvals' && <PendingApprovalsPage />}
 
       {currentView === 'entity-management' && <EntityManagementPage />}
 
-      {currentView === 'dlp-statistics' && <DlpStatisticsPage />}
 
       {currentView === 'root-dashboard' && <RootDashboardPage />}
 

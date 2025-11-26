@@ -18,13 +18,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Mail, Clock, CheckCircle, XCircle, Paperclip, ArrowLeft, Search, Filter } from 'lucide-react'
+import { Mail, Clock, Paperclip, ArrowLeft, Search, Filter } from 'lucide-react'
 
 interface Email {
   _id: string
   subject: string
   to_email: string
-  status: 'pending' | 'approved' | 'rejected'
   created_at: string
   attachments?: any[]
 }
@@ -39,7 +38,7 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [dateFilter, setDateFilter] = useState<string>('all')
 
   useEffect(() => {
     loadSentEmails()
@@ -81,7 +80,6 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
           _id: email.email_id,  // email_id를 _id로 사용
           to_email: email.to_emails?.[0] || '',  // 첫 번째 수신자
           created_at: email.created_at,
-          status: 'approved',  // 기본 상태 (필요시 수정)
           attachments: email.attachments_summary || []
         }))
         setEmails(transformedEmails)
@@ -95,22 +93,6 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
     } finally {
       setLoading(false)
     }
-  }
-
-  const getStatusBadge = (status: string) => {
-    const variants = {
-      pending: { variant: 'secondary' as const, icon: Clock },
-      approved: { variant: 'default' as const, icon: CheckCircle },
-      rejected: { variant: 'destructive' as const, icon: XCircle },
-    }
-    const config = variants[status as keyof typeof variants] || variants.pending
-    const Icon = config.icon
-
-    return (
-      <Badge variant={config.variant} className="gap-1">
-        <Icon className="h-3 w-3" />
-      </Badge>
-    )
   }
 
   const formatDate = (dateString: string) => {
@@ -128,8 +110,19 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
     const matchesSearch =
       email.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
       email.to_email.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = statusFilter === 'all' || email.status === statusFilter
-    return matchesSearch && matchesStatus
+
+    // 날짜 필터링
+    if (dateFilter !== 'all') {
+      const emailDate = new Date(email.created_at)
+      const now = new Date()
+      const daysDiff = Math.floor((now.getTime() - emailDate.getTime()) / (1000 * 60 * 60 * 24))
+
+      if (dateFilter === 'today' && daysDiff > 0) return false
+      if (dateFilter === 'week' && daysDiff > 7) return false
+      if (dateFilter === 'month' && daysDiff > 30) return false
+    }
+
+    return matchesSearch
   })
 
   return (
@@ -162,23 +155,26 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">승인 대기</CardTitle>
+            <CardTitle className="text-sm font-medium">이번 주</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {emails.filter((e) => e.status === 'pending').length}
+              {emails.filter((e) => {
+                const daysDiff = Math.floor((new Date().getTime() - new Date(e.created_at).getTime()) / (1000 * 60 * 60 * 24))
+                return daysDiff <= 7
+              }).length}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">승인 완료</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">첨부파일 있음</CardTitle>
+            <Paperclip className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {emails.filter((e) => e.status === 'approved').length}
+              {emails.filter((e) => e.attachments && e.attachments.length > 0).length}
             </div>
           </CardContent>
         </Card>
@@ -199,15 +195,15 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
             </div>
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4 text-muted-foreground" />
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={dateFilter} onValueChange={setDateFilter}>
                 <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="상태 필터" />
+                  <SelectValue placeholder="기간 필터" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">전체</SelectItem>
-                  <SelectItem value="pending">승인 대기</SelectItem>
-                  <SelectItem value="approved">승인 완료</SelectItem>
-                  <SelectItem value="rejected">반려</SelectItem>
+                  <SelectItem value="all">전체 기간</SelectItem>
+                  <SelectItem value="today">오늘</SelectItem>
+                  <SelectItem value="week">최근 7일</SelectItem>
+                  <SelectItem value="month">최근 30일</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -263,10 +259,9 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[40%]">제목</TableHead>
-                  <TableHead className="w-[25%]">받는이</TableHead>
-                  <TableHead className="w-[15%]">상태</TableHead>
-                  <TableHead className="w-[15%]">작성일</TableHead>
+                  <TableHead className="w-[45%]">제목</TableHead>
+                  <TableHead className="w-[30%]">받는이</TableHead>
+                  <TableHead className="w-[20%]">작성일</TableHead>
                   <TableHead className="w-[5%]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -290,7 +285,6 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
                         {email.to_email}
                       </span>
                     </TableCell>
-                    <TableCell>{getStatusBadge(email.status)}</TableCell>
                     <TableCell>
                       <span className="text-sm text-muted-foreground">
                         {formatDate(email.created_at)}

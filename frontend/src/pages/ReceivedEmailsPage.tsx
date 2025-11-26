@@ -18,13 +18,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Mail, Clock, CheckCircle, XCircle, Paperclip, ArrowLeft, Inbox, Search, Filter } from 'lucide-react'
+import { Mail, Paperclip, ArrowLeft, Inbox, Search, Filter } from 'lucide-react'
 
 interface Email {
   _id: string
   subject: string
   from_email: string
-  status: 'pending' | 'approved' | 'rejected'
   created_at: string
   attachments?: any[]
   read?: boolean
@@ -40,7 +39,7 @@ export function ReceivedEmailsPage({ onNavigate, onBack }: ReceivedEmailsPagePro
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [dateFilter, setDateFilter] = useState<string>('all')
   const [readFilter, setReadFilter] = useState<string>('all')
 
   useEffect(() => {
@@ -79,22 +78,6 @@ export function ReceivedEmailsPage({ onNavigate, onBack }: ReceivedEmailsPagePro
     }
   }
 
-  const getStatusBadge = (status: string) => {
-    const variants = {
-      pending: { variant: 'secondary' as const, icon: Clock },
-      approved: { variant: 'default' as const, icon: CheckCircle },
-      rejected: { variant: 'destructive' as const, icon: XCircle },
-    }
-    const config = variants[status as keyof typeof variants] || variants.pending
-    const Icon = config.icon
-
-    return (
-      <Badge variant={config.variant} className="gap-1">
-        <Icon className="h-3 w-3" />
-      </Badge>
-    )
-  }
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('ko-KR', {
       year: 'numeric',
@@ -110,12 +93,23 @@ export function ReceivedEmailsPage({ onNavigate, onBack }: ReceivedEmailsPagePro
     const matchesSearch =
       email.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
       email.from_email.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = statusFilter === 'all' || email.status === statusFilter
+
+    // 날짜 필터링
+    if (dateFilter !== 'all') {
+      const emailDate = new Date(email.created_at)
+      const now = new Date()
+      const daysDiff = Math.floor((now.getTime() - emailDate.getTime()) / (1000 * 60 * 60 * 24))
+
+      if (dateFilter === 'today' && daysDiff > 0) return false
+      if (dateFilter === 'week' && daysDiff > 7) return false
+      if (dateFilter === 'month' && daysDiff > 30) return false
+    }
+
     const matchesRead =
       readFilter === 'all' ||
       (readFilter === 'read' && email.read) ||
       (readFilter === 'unread' && !email.read)
-    return matchesSearch && matchesStatus && matchesRead
+    return matchesSearch && matchesRead
   })
 
   return (
@@ -159,12 +153,12 @@ export function ReceivedEmailsPage({ onNavigate, onBack }: ReceivedEmailsPagePro
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">수신 완료</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">첨부파일 있음</CardTitle>
+            <Paperclip className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {emails.filter((e) => e.status === 'approved').length}
+              {emails.filter((e) => e.attachments && e.attachments.length > 0).length}
             </div>
           </CardContent>
         </Card>
@@ -186,15 +180,15 @@ export function ReceivedEmailsPage({ onNavigate, onBack }: ReceivedEmailsPagePro
               </div>
               <div className="flex items-center gap-2">
                 <Filter className="h-4 w-4 text-muted-foreground" />
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <Select value={dateFilter} onValueChange={setDateFilter}>
                   <SelectTrigger className="w-[150px]">
-                    <SelectValue placeholder="상태" />
+                    <SelectValue placeholder="기간" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">전체 상태</SelectItem>
-                    <SelectItem value="pending">승인 대기</SelectItem>
-                    <SelectItem value="approved">수신 완료</SelectItem>
-                    <SelectItem value="rejected">반려됨</SelectItem>
+                    <SelectItem value="all">전체 기간</SelectItem>
+                    <SelectItem value="today">오늘</SelectItem>
+                    <SelectItem value="week">최근 7일</SelectItem>
+                    <SelectItem value="month">최근 30일</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={readFilter} onValueChange={setReadFilter}>
@@ -258,10 +252,9 @@ export function ReceivedEmailsPage({ onNavigate, onBack }: ReceivedEmailsPagePro
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[5%]"></TableHead>
-                  <TableHead className="w-[35%]">제목</TableHead>
-                  <TableHead className="w-[25%]">보낸이</TableHead>
-                  <TableHead className="w-[15%]">상태</TableHead>
-                  <TableHead className="w-[15%]">받은 날짜</TableHead>
+                  <TableHead className="w-[40%]">제목</TableHead>
+                  <TableHead className="w-[30%]">보낸이</TableHead>
+                  <TableHead className="w-[20%]">받은 날짜</TableHead>
                   <TableHead className="w-[5%]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -290,7 +283,6 @@ export function ReceivedEmailsPage({ onNavigate, onBack }: ReceivedEmailsPagePro
                         {email.from_email}
                       </span>
                     </TableCell>
-                    <TableCell>{getStatusBadge(email.status)}</TableCell>
                     <TableCell>
                       <span className="text-sm text-muted-foreground">
                         {formatDate(email.created_at)}

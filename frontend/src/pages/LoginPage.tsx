@@ -81,26 +81,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     }
   }
 
-  // 테스트용 계정으로 로그인 (개발 전용)
-  const handleTestLogin = (testEmail: string) => {
-    setEmail(testEmail)
-    setPassword('password123') // 테스트 계정 기본 비밀번호
-
-    // 약간의 delay 후 자동 로그인
-    setTimeout(() => {
-      const form = document.querySelector('form') as HTMLFormElement
-      if (form) {
-        form.requestSubmit()
-      }
-    }, 100)
-  }
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-primary/5 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-2 text-center">
           <CardTitle className="text-3xl font-bold text-primary">MASKIT</CardTitle>
-          <CardDescription className="text-base">이메일 마스킹 시스템</CardDescription>
+          <CardDescription className="text-base">이메일 마스킹 agent</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -135,16 +121,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </Button>
           </form>
 
-          {/* 개발용 테스트 계정 */}
-          <div className="mt-6 space-y-3">
-            <p className="text-center text-sm text-muted-foreground">
-              테스트 계정 (개발용):
-            </p>
-            <div className="text-xs text-muted-foreground text-center space-y-1">
-              <p>먼저 회원가입 후 로그인하세요</p>
-              <p className="text-blue-600">기본 비밀번호: password123</p>
-            </div>
-          </div>
 
           <div className="mt-6 text-center text-sm">
             <span className="text-muted-foreground">
