@@ -34,6 +34,7 @@ class AuditEventType(str, Enum):
     # 시스템 관련
     VECTOR_STORE_SYNC = "vector_store_sync"
     POLICY_UPLOAD = "policy_upload"
+    POLICY_UPDATE = "policy_update"  # ✅ 추가
     POLICY_DELETE = "policy_delete"
 
     # 인증 관련

@@ -5,7 +5,7 @@
 - 임베딩 생성 및 VectorDB 저장
 """
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, status
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, status, Request
 from fastapi.responses import JSONResponse
 from typing import List, Optional
 import os
@@ -17,7 +17,10 @@ import hashlib
 import fitz  # PyMuPDF
 from dotenv import load_dotenv
 from app.auth.auth_utils import get_current_policy_admin
-
+from app.audit.logger import AuditLogger
+from app.audit.models import AuditEventType, AuditSeverity
+from app.database.mongodb import get_db
+from fastapi.background import BackgroundTasks
 
 # OpenAI imports
 try:
@@ -212,17 +215,11 @@ class PolicyProcessor:
             }
 
 
-# 현재 사용자 확인 (정책 관리자 권한)
-async def get_current_policy_admin(db = Depends(get_db)):
-    """정책 관리자 권한 확인"""
-    # TODO: JWT 토큰 검증 로직 추가
-    # 임시로 모든 요청 허용
-    return None
-
 
 @router.post("/upload")
 async def upload_policy_file(
     background_tasks: BackgroundTasks,
+    request: Request,
     file: UploadFile = File(...),
     title: str = Form(...),
     authority: str = Form(default="내부"),
@@ -299,6 +296,24 @@ async def upload_policy_file(
         # MongoDB에 저장
         await db["policies"].insert_one(policy_doc.model_dump(mode='json'))
 
+        # ✅ 감사 로그 기록
+        await AuditLogger.log(
+            event_type=AuditEventType.POLICY_UPLOAD,
+            user_email=current_user["email"],
+            user_role=current_user.get("role", "policy_admin"),
+            action=f"정책 업로드: {title}",
+            resource_type="policy",
+            resource_id=policy_id,
+            details={
+                "title": title,
+                "authority": authority,
+                "file_type": file_ext,
+                "file_size_mb": len(content) / (1024 * 1024)
+            },
+            request=request,
+            severity=AuditSeverity.INFO
+        )
+
         # 백업용으로 파일에도 저장
         processed_file = PROCESSED_DIR / f"policy_{policy_id}.json"
         with open(processed_file, "w", encoding="utf-8") as f:
@@ -332,6 +347,17 @@ async def upload_policy_file(
         # 오류 발생 시 업로드된 파일 삭제
         if file_path.exists():
             file_path.unlink()
+        # ✅ 실패 로그
+        await AuditLogger.log(
+            event_type=AuditEventType.POLICY_UPLOAD,
+            user_email=current_user["email"],
+            user_role=current_user.get("role", "policy_admin"),
+            action=f"정책 업로드 실패: {title}",
+            resource_type="policy",
+            request=request,
+            success=False,
+            error_message=str(e),
+        )
         raise HTTPException(status_code=500, detail=f"파일 처리 중 오류 발생: {str(e)}")
 
 
@@ -559,6 +585,7 @@ async def get_policy_detail(
 @router.delete("/{policy_id}")
 async def delete_policy(
     policy_id: str,
+    request: Request,  # ✅ Request 추가
     db = Depends(get_db),
     current_user = Depends(get_current_policy_admin)
 ):
@@ -569,6 +596,8 @@ async def delete_policy(
 
         if not policy:
             raise HTTPException(status_code=404, detail="정책을 찾을 수 없습니다")
+
+        policy_title = policy.get("title", policy_id)
 
         # 원본 파일 삭제
         original_file = UPLOAD_DIR / policy["saved_filename"]
@@ -583,6 +612,19 @@ async def delete_policy(
         # MongoDB에서 삭제
         await db["policies"].delete_one({"policy_id": policy_id})
 
+        # ✅ 감사 로그 기록
+        await AuditLogger.log(
+            event_type=AuditEventType.POLICY_DELETE,
+            user_email=current_user["email"],
+            user_role=current_user.get("role", "policy_admin"),
+            action=f"정책 삭제: {policy_title}",
+            resource_type="policy",
+            resource_id=policy_id,
+            details={"title": policy_title},
+            request=request,
+            severity=AuditSeverity.WARNING
+        )
+
         return JSONResponse({
             "success": True,
             "message": "정책이 성공적으로 삭제되었습니다"
@@ -591,12 +633,26 @@ async def delete_policy(
     except HTTPException:
         raise
     except Exception as e:
+        # ✅ 실패 로그
+        await AuditLogger.log(
+            event_type=AuditEventType.POLICY_DELETE,
+            user_email=current_user["email"],
+            user_role=current_user.get("role", "policy_admin"),
+            action=f"정책 삭제 실패: {policy_id}",
+            resource_type="policy",
+            resource_id=policy_id,
+            request=request,
+            success=False,
+            error_message=str(e),
+            severity=AuditSeverity.ERROR
+        )
         raise HTTPException(status_code=500, detail=f"정책 삭제 실패: {str(e)}")
 
 @router.patch("/{policy_id}/text")
 async def update_policy_text(
     policy_id: str,
     text_data: dict,
+    request: Request,  # ✅ Request 추가
     current_user = Depends(get_current_policy_admin),
     db = Depends(get_db)
 ):
@@ -620,7 +676,8 @@ async def update_policy_text(
         
         # 정책 존재 확인
         policy = await db["policies"].find_one({"policy_id": policy_id})
-        
+        policy_title = policy.get("title", policy_id)
+
         if not policy:
             print(f"[Policy] ❌ 정책을 찾을 수 없음: {policy_id}")
             raise HTTPException(
@@ -651,7 +708,24 @@ async def update_policy_text(
         
         print(f"[Policy] ✅ 텍스트 수정 완료")
         print(f"[Policy] ===== 텍스트 수정 끝 =====\n")
-        
+
+
+        # ✅ 감사 로그 기록
+        await AuditLogger.log(
+            event_type=AuditEventType.POLICY_UPDATE,  # ✅ 새 이벤트 타입
+            user_email=current_user["email"],
+            user_role=current_user.get("role", "policy_admin"),
+            action=f"정책 텍스트 수정: {policy_title}",
+            resource_type="policy",
+            resource_id=policy_id,
+            details={
+                "title": policy_title,
+                "text_length": len(new_text)
+            },
+            request=request,
+            severity=AuditSeverity.INFO
+        )
+
         return JSONResponse({
             "success": True,
             "message": "텍스트가 성공적으로 수정되었습니다",
@@ -666,6 +740,19 @@ async def update_policy_text(
         raise
     except Exception as e:
         print(f"[Policy] ❌ 텍스트 수정 오류: {e}")
+        # ✅ 실패 로그
+        await AuditLogger.log(
+            event_type=AuditEventType.POLICY_UPDATE,
+            user_email=current_user["email"],
+            user_role=current_user.get("role", "policy_admin"),
+            action=f"정책 텍스트 수정 실패: {policy_id}",
+            resource_type="policy",
+            resource_id=policy_id,
+            request=request,
+            success=False,
+            error_message=str(e),
+            severity=AuditSeverity.ERROR
+        )
         import traceback
         traceback.print_exc()
         raise HTTPException(
@@ -677,6 +764,7 @@ async def update_policy_text(
 async def update_policy_guidelines(
     policy_id: str,
     guidelines_data: dict,
+    request: Request,
     current_user = Depends(get_current_policy_admin),
     db = Depends(get_db)
 ):
@@ -700,6 +788,8 @@ async def update_policy_guidelines(
 
         # 정책 존재 확인
         policy = await db["policies"].find_one({"policy_id": policy_id})
+        policy_title = policy.get("title", policy_id)
+
 
         if not policy:
             print(f"[Policy] ❌ 정책을 찾을 수 없음: {policy_id}")
@@ -735,6 +825,22 @@ async def update_policy_guidelines(
 
         print(f"[Policy] ✅ 가이드라인 수정 완료 (동기화 상태 초기화됨)")
         print(f"[Policy] ===== 가이드라인 수정 끝 =====\n")
+
+        # ✅ 감사 로그 기록
+        await AuditLogger.log(
+            event_type=AuditEventType.POLICY_UPDATE,
+            user_email=current_user["email"],
+            user_role=current_user.get("role", "policy_admin"),
+            action=f"정책 가이드라인 수정: {policy_title}",
+            resource_type="policy",
+            resource_id=policy_id,
+            details={
+                "title": policy_title,
+                "guidelines_count": len(new_guidelines)
+            },
+            request=request,
+            severity=AuditSeverity.WARNING  # 동기화 필요
+        )
 
         return JSONResponse({
             "success": True,
