@@ -121,6 +121,8 @@ export default function DecisionLogsPage() {
     if (eventType.includes('email')) return <Mail className="w-4 h-4" />;
     if (eventType.includes('masking')) return <Shield className="w-4 h-4" />;
     if (eventType.includes('entity')) return <Database className="w-4 h-4" />;
+    // ✅ 엔티티/정책 아이콘
+    if (eventType.includes('policy')) return <FileText className="w-4 h-4" />;
     if (eventType.includes('settings') || eventType.includes('env')) return <Settings className="w-4 h-4" />;
     if (eventType.includes('vector_store') || eventType.includes('policy')) return <FileText className="w-4 h-4" />;
     if (eventType.includes('login') || eventType.includes('auth')) return <User className="w-4 h-4" />;
@@ -148,10 +150,14 @@ export default function DecisionLogsPage() {
       'entity_create': '엔티티 생성',
       'entity_update': '엔티티 수정',
       'entity_delete': '엔티티 삭제',
+      // ✅ 정책 관련 (추가)
+      'policy_upload': '정책 업로드',
+      'policy_update': '정책 수정',
+      'policy_delete': '정책 삭제',
+
       'settings_update': '설정 변경',
       'env_change': '환경변수 변경',
       'vector_store_sync': 'Vector Store 동기화',
-      'policy_upload': '정책 업로드',
       'login': '로그인',
       'logout': '로그아웃',
       'auth_fail': '인증 실패',
@@ -262,6 +268,9 @@ export default function DecisionLogsPage() {
                   <SelectItem value="entity_create">엔티티 생성</SelectItem>
                   <SelectItem value="entity_update">엔티티 수정</SelectItem>
                   <SelectItem value="entity_delete">엔티티 삭제</SelectItem>
+                  <SelectItem value="policy_upload">정책 업로드</SelectItem>
+                  <SelectItem value="policy_update">정책 수정</SelectItem>
+                  <SelectItem value="policy_delete">정책 삭제</SelectItem>
                   <SelectItem value="settings_update">설정 변경</SelectItem>
                   <SelectItem value="vector_store_sync">Vector Store 동기화</SelectItem>
                 </SelectContent>
