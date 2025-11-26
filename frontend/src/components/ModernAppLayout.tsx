@@ -41,7 +41,7 @@ export function ModernAppLayout({
 }: ModernAppLayoutProps) {
   // 메뉴를 카테고리별로 그룹화
   const emailMenuItems = sidebarMenu.filter((item) =>
-    ['write-email', 'received-emails', 'my-emails', 'approver-review'].includes(item.id)
+    ['write-email', 'received-emails', 'my-emails'].includes(item.id)
   )
   const policyMenuItems = sidebarMenu.filter((item) =>
     ['policy-dashboard', 'policy-list', 'policy-add', 'entity-management'].includes(item.id)
