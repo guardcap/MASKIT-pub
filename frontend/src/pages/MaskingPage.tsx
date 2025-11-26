@@ -729,22 +729,52 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
           const group = groupedAllPIIs.get(key) || []
           const instanceIndex = group.findIndex(p => p.id === pii.id)
 
+          // 파일 타입 확인 (확장자 기반)
+          const fileExt = pii.filename?.toLowerCase().split('.').pop()
+          const isPDF = fileExt === 'pdf'
+          const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp'].includes(fileExt || '')
+
           console.log('🔍 PII 처리:', {
             id: pii.id,
             value: pii.value,
+            filename: pii.filename,
+            fileType: isPDF ? 'PDF' : isImage ? 'Image' : 'Unknown',
             bbox: pii.coordinate?.bbox,
             calculated_instance: instanceIndex
           })
 
           // coordinate 정보가 이미 PII 객체에 저장되어 있으면 그것을 사용
           if (pii.coordinate) {
-            console.log(`📍 coordinate 사용: instance=${instanceIndex}, bbox=${pii.coordinate.bbox}`)
-            return {
-              filename: pii.filename!,
-              pii_type: pii.type,
-              text: pii.value,
-              pageIndex: pii.coordinate.pageIndex,
-              instance_index: instanceIndex  // Y 좌표 기준으로 정렬된 인덱스
+            if (isPDF) {
+              // PDF: 텍스트 검색 방식 (instance_index 사용)
+              console.log(`📄 PDF 마스킹: instance=${instanceIndex}, bbox=${pii.coordinate.bbox}`)
+              return {
+                filename: pii.filename!,
+                pii_type: pii.type,
+                text: pii.value,
+                pageIndex: pii.coordinate.pageIndex,
+                instance_index: instanceIndex  // Y 좌표 기준으로 정렬된 인덱스
+              }
+            } else if (isImage) {
+              // 이미지: bbox 좌표 직접 사용
+              console.log(`🖼️ 이미지 마스킹: bbox=${pii.coordinate.bbox}`)
+              return {
+                filename: pii.filename!,
+                pii_type: pii.type,
+                text: pii.value,
+                pageIndex: pii.coordinate.pageIndex,
+                bbox: pii.coordinate.bbox  // bbox 좌표 직접 사용
+              }
+            } else {
+              // 기타: instance_index 사용
+              console.log(`📎 기타 파일 마스킹: instance=${instanceIndex}`)
+              return {
+                filename: pii.filename!,
+                pii_type: pii.type,
+                text: pii.value,
+                pageIndex: pii.coordinate.pageIndex,
+                instance_index: instanceIndex
+              }
             }
           }
 
