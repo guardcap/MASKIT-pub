@@ -16,8 +16,10 @@ from functools import lru_cache
 
 from app.database.mongodb import get_db
 from app.policy.models import EntityType
-from app.auth.auth_utils import get_current_user
+from app.auth.auth_utils import get_current_user,get_current_policy_admin
 from app.audit.logger import AuditLogger
+from app.audit.models import AuditEventType, AuditSeverity
+
 
 router = APIRouter(prefix="/api/entities", tags=["Entity Management"])
 
@@ -120,6 +122,24 @@ def load_all_recognizers(use_cache: bool = True) -> List[Dict[str, Any]]:
 
     return recognizers
 
+from pydantic import BaseModel, Field
+# (기타 필요한 import 구문들...)
+
+# 1. 입력받을 데이터의 형태를 정의하는 DTO(Data Transfer Object) 클래스 생성
+class EntityCreateRequest(BaseModel):
+    entity_id: str
+    name: str
+    category: str
+    description: str = ""
+    regex_pattern: str = ""
+    keywords: str = ""
+    examples: str = ""
+    masking_rule: str = "full"
+    sensitivity_level: str = "high"
+    # 마스킹 설정
+    masking_type: str = "full"      # full, partial, custom
+    masking_char: str = "*"          # *, #, X, ●
+    masking_pattern: str = ""        # 커스텀 패턴 (예: "###-##-*****")
 
 # 현재 사용자 확인 (정책 관리자 권한)
 async def get_current_policy_admin(db = Depends(get_db)):
@@ -153,10 +173,15 @@ async def create_entity(
     item: EntityCreateRequest,
     request: Request,
     db = Depends(get_db),
-    current_user = Depends(get_current_policy_admin)
+    current_user = Depends(get_current_user)
 ):
     """엔티티 생성"""
     try:
+        print(f"\n[Entity] ===== 엔티티 생성 시작 =====")
+        print(f"[Entity] Entity ID: {item.entity_id}")
+        print(f"[Entity] Name: {item.name}")
+        print(f"[Entity] User: {current_user.get('email', 'unknown')}")
+        
         # item.entity_id 처럼 접근합니다.
         existing = await db["entities"].find_one({"entity_id": item.entity_id})
         if existing:
@@ -189,15 +214,20 @@ async def create_entity(
         # MongoDB에 저장
         await db["entities"].insert_one(entity.model_dump(mode='json'))
 
-        # 감사 로그 기록
+        print(f"[Entity] ✅ MongoDB 저장 완료")
+    # 감사 로그 기록
         await AuditLogger.log_entity_crud(
             operation="create",
-            user_email=current_user["email"],
-            user_role=current_user.get("role", "policy_admin"),
+            user_email=current_user.get("email", "unknown"),
+            user_role=current_user.get("role", "user"),
             entity_id=item.entity_id,
             entity_name=item.name,
             request=request,
         )
+        
+        print(f"[Entity] ✅ 감사 로그 기록 완료")
+        print(f"[Entity] ===== 엔티티 생성 끝 =====\n")
+
 
         return JSONResponse({
             "success": True,
@@ -208,7 +238,29 @@ async def create_entity(
     except HTTPException:
         raise
     except Exception as e:
+        print(f"[Entity] ❌ 엔티티 생성 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # 실패 로그도 기록
+        try:
+            await AuditLogger.log(
+                event_type=AuditEventType.ENTITY_CREATE,
+                user_email=current_user.get("email", "unknown"),
+                user_role=current_user.get("role", "user"),
+                action=f"엔티티 생성 실패: {item.name}",
+                resource_type="entity",
+                resource_id=item.entity_id,
+                request=request,
+                success=False,
+                error_message=str(e),
+                severity=AuditSeverity.ERROR
+            )
+        except:
+            pass
+        
         raise HTTPException(status_code=500, detail=f"엔티티 생성 실패: {str(e)}")
+
 
 @router.get("/list")
 async def list_entities(
@@ -365,7 +417,7 @@ async def update_entity(
     sensitivity_level: str = None,
     is_active: bool = None,
     db = Depends(get_db),
-    current_user = Depends(get_current_policy_admin)
+    current_user = Depends(get_current_user)
 ):
     """엔티티 수정"""
     try:
@@ -408,7 +460,7 @@ async def update_entity(
         await AuditLogger.log_entity_crud(
             operation="update",
             user_email=current_user["email"],
-            user_role=current_user.get("role", "policy_admin"),
+            user_role=current_user.get("role", "user"),
             entity_id=entity_id,
             entity_name=entity.get("name", entity_id),
             request=request,
@@ -430,10 +482,14 @@ async def delete_entity(
     entity_id: str,
     request: Request,
     db = Depends(get_db),
-    current_user = Depends(get_current_policy_admin)
+    current_user = Depends(get_current_user)
 ):
     """엔티티 삭제"""
     try:
+        print(f"\n[Entity] ===== 엔티티 삭제 시작 =====")
+        print(f"[Entity] Entity ID: {entity_id}")
+        print(f"[Entity] User: {current_user.get('email', 'unknown')}")
+
         # 엔티티 확인
         entity = await db["entities"].find_one({"entity_id": entity_id})
         if not entity:
@@ -443,14 +499,15 @@ async def delete_entity(
 
         # MongoDB에서 삭제
         await db["entities"].delete_one({"entity_id": entity_id})
+        print(f"[Entity] ✅ MongoDB 삭제 완료")
 
         # 감사 로그 기록
         await AuditLogger.log_entity_crud(
             operation="delete",
             user_email=current_user["email"],
-            user_role=current_user.get("role", "policy_admin"),
+            user_role=current_user.get("role", "user"),
             entity_id=entity_id,
-            entity_name=entity_name,
+            entity_name=entity.get("name", entity_id),
             request=request,
         )
 
@@ -462,12 +519,32 @@ async def delete_entity(
     except HTTPException:
         raise
     except Exception as e:
+        print(f"[Entity] ❌ 엔티티 삭제 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # 실패 로그도 기록
+        try:
+            await AuditLogger.log(
+                event_type=AuditEventType.ENTITY_DELETE,
+                user_email=current_user.get("email", "unknown"),
+                user_role=current_user.get("role", "user"),
+                action=f"엔티티 삭제 실패: {entity_id}",
+                resource_type="entity",
+                resource_id=entity_id,
+                request=request,
+                success=False,
+                error_message=str(e),
+                severity=AuditSeverity.ERROR
+            )
+        except:
+            pass
+        
         raise HTTPException(status_code=500, detail=f"엔티티 삭제 실패: {str(e)}")
-
 
 @router.post("/recognizers/cache/clear")
 async def clear_recognizer_cache(
-    current_user = Depends(get_current_policy_admin)
+    current_user = Depends(get_current_user)
 ):
     """Recognizer 캐시 무효화 (개발/디버깅용)"""
     global _recognizers_cache
@@ -482,7 +559,7 @@ async def clear_recognizer_cache(
 @router.post("/seed")
 async def seed_default_entities(
     db = Depends(get_db),
-    current_user = Depends(get_current_policy_admin)
+    current_user = Depends(get_current_user)
 ):
     """기본 엔티티 데이터 시드"""
     default_entities = [

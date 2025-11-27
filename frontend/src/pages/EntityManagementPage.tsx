@@ -133,14 +133,18 @@ export default function EntityManagementPage() {
     setExpandedRows(newExpanded)
   }
 
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
 
     try {
+      const token = localStorage.getItem('auth_token')
+      
       const response = await fetch(`${API_BASE}/api/entities/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(formData),
       })
