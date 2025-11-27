@@ -170,8 +170,8 @@ export function ModernAppLayout({
           <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background px-4 sm:px-6">
             <SidebarTrigger />
             <div className="flex flex-1 items-center justify-between">
-              
-             
+
+
             </div>
           </header>
           <div className="flex-1 overflow-auto p-4 sm:p-6">{children}</div>

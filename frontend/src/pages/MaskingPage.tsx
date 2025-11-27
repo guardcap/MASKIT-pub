@@ -7,6 +7,13 @@ import { Send } from 'lucide-react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
+// 스크롤바 숨기기 스타일
+const scrollbarHideStyle = `
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+`
+
 interface MaskingPageProps {
   emailData: EmailData
   onBack?: () => void
@@ -84,7 +91,6 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
   onBack,
   onSendComplete,
 }) => {
-  const [activeTab, setActiveTab] = useState<'all' | string>('all')
   const [emailBodyParagraphs, setEmailBodyParagraphs] = useState<string[]>([])
   const [attachmentUrls, setAttachmentUrls] = useState<Map<string, string>>(new Map())
   const [maskingDecisions, setMaskingDecisions] = useState<Record<string, MaskingDecision>>({})
@@ -418,7 +424,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
       }
 
       console.log('✅ 정규식 PII (중복 완전 제거):', regexPII.length, '개')
-      // ==================== 4단계: 모든 PII 통합 ====================
+      // ==================== 4단계: 모든 PII 통합 (완전 중복 제거) ====================
       setAiSummary('4단계: 모든 PII 통합 중...')
 
       const allPII: Array<{
@@ -433,28 +439,42 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
         entityIndex?: number  // 원본 entity 인덱스
       }> = []
 
+      // 전체 중복 체크용 Set (모든 출처 통합)
+      const globalAddedValues = new Set<string>()
+
       // 정규식 PII
       regexPII.forEach((pii, idx) => {
-        allPII.push({
-          id: `regex_${idx}`,
-          type: pii.type,
-          value: pii.value,
-          source: 'regex',
-          shouldMask: false, // 기본값: 체크 해제
-          maskingDecision: undefined
-        })
+        const trimmedValue = pii.value.trim()
+        if (!globalAddedValues.has(trimmedValue)) {
+          globalAddedValues.add(trimmedValue)
+          allPII.push({
+            id: `regex_${idx}`,
+            type: pii.type,
+            value: pii.value,
+            source: 'regex',
+            shouldMask: false, // 기본값: 체크 해제
+            maskingDecision: undefined
+          })
+        }
       })
 
-      // 백엔드 본문 PII
+      // 백엔드 본문 PII (중복 제거)
       bodyPIIEntities.forEach((entity, idx) => {
-        allPII.push({
-          id: `body_${idx}`,
-          type: entity.type,
-          value: entity.text,
-          source: 'backend_body',
-          shouldMask: false,
-          maskingDecision: undefined
-        })
+        const trimmedValue = entity.text.trim()
+        // 전역 Set에서 중복 확인
+        if (!globalAddedValues.has(trimmedValue)) {
+          globalAddedValues.add(trimmedValue)
+          allPII.push({
+            id: `body_${idx}`,
+            type: entity.type,
+            value: entity.text,
+            source: 'backend_body',
+            shouldMask: false,
+            maskingDecision: undefined
+          })
+        } else {
+          console.log(`[중복 제거] 백엔드 본문 PII 제외: ${entity.text} (이미 추가됨)`)
+        }
       })
 
       // 백엔드 첨부파일 PII
@@ -515,6 +535,13 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
 
       // RAG API 호출 (기존 detectedPII 대신 allPII의 value만 전달)
       const token = localStorage.getItem('auth_token')
+
+      if (!token) {
+        throw new Error('인증 정보가 없습니다. 다시 로그인해주세요.')
+      }
+
+      console.log('🔑 토큰 확인:', token ? `${token.substring(0, 20)}...` : 'null')
+
       const ragResponse = await fetch(`${API_BASE_URL}/api/vectordb/analyze`, {
         method: 'POST',
         headers: {
@@ -1111,7 +1138,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
           className="w-full h-[600px] border rounded"
         >
           <p className="text-sm text-gray-500">
-            PDF를 표시할 수 없습니다. 
+            PDF를 표시할 수 없습니다.
             <a href={url} download={attachment.filename} className="text-blue-500 underline ml-1">
               다운로드
             </a>
@@ -1131,54 +1158,59 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
   }
 
   return (
-    <div className="container mx-auto max-w-7xl p-6">
-      <div className="mb-6">
-        <h2 className="text-2xl font-semibold">🛡️ MASKIT - 이메일 마스킹 검토</h2>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 좌측: 이메일 내용 (FE UI 구조) */}
-        <div className="lg:col-span-2 space-y-6">
+    <>
+      <style>{scrollbarHideStyle}</style>
+      <div className="flex h-screen overflow-hidden">
+        {/* 중앙: 이메일 내용 (스크롤 가능) */}
+        <div className="flex-1 overflow-y-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <div className="p-6 space-y-6">
+          {/* 헤더 */}
+          <div className="mb-6">
+            <h2 className="text-2xl font-semibold">이메일 마스킹 검토</h2>
+            <p className="text-muted-foreground text-sm mt-1">AI가 분석한 개인정보를 확인하고 마스킹을 적용하세요</p>
+          </div>
 
           {/* 원본 이메일 데이터 (MongoDB) */}
           {originalEmailData && (
-            <Card className="border-blue-200 bg-blue-50/50">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">원본 이메일 정보</CardTitle>
+              </CardHeader>
               <CardContent className="space-y-3">
-                <div className="bg-white p-4 rounded-lg border border-blue-200">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="bg-muted/30 p-4 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
-                      <strong className="text-blue-900">발신자:</strong>
-                      <p className="text-muted-foreground">{originalEmailData.from_email}</p>
+                      <label className="font-medium text-foreground">발신자</label>
+                      <p className="text-muted-foreground mt-1">{originalEmailData.from_email}</p>
                     </div>
                     <div>
-                      <strong className="text-blue-900">수신자:</strong>
-                      <p className="text-muted-foreground">{originalEmailData.to_emails?.join(', ')}</p>
+                      <label className="font-medium text-foreground">수신자</label>
+                      <p className="text-muted-foreground mt-1">{originalEmailData.to_emails?.join(', ')}</p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="font-medium text-foreground">제목</label>
+                      <p className="text-muted-foreground mt-1">{originalEmailData.subject}</p>
                     </div>
                     <div>
-                      <strong className="text-blue-900">제목:</strong>
-                      <p className="text-muted-foreground">{originalEmailData.subject}</p>
-                    </div>
-                    <div>
-                      <strong className="text-blue-900">저장 시간:</strong>
-                      <p className="text-muted-foreground">
+                      <label className="font-medium text-foreground">저장 시간</label>
+                      <p className="text-muted-foreground mt-1">
                         {new Date(originalEmailData.created_at).toLocaleString('ko-KR')}
                       </p>
                     </div>
                   </div>
 
-
                   {originalEmailData.attachments && originalEmailData.attachments.length > 0 && (
-                    <div className="mt-4">
-                      <strong className="text-sm text-blue-900">
-                        첨부파일 ({originalEmailData.attachments.length}개):
-                      </strong>
+                    <div className="mt-4 pt-4 border-t">
+                      <label className="font-medium text-foreground text-sm">
+                        첨부파일 ({originalEmailData.attachments.length}개)
+                      </label>
                       <div className="mt-2 space-y-2">
                         {originalEmailData.attachments.map((att: any, idx: number) => (
-                          <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 rounded text-sm">
-                            <span className="font-medium">{att.filename}</span>
-                            <Badge variant="outline">{att.content_type}</Badge>
-                            <span className="text-muted-foreground">
-                              ({(att.size / 1024).toFixed(2)} KB)
+                          <div key={idx} className="flex items-center gap-2 p-2 bg-background rounded text-sm border">
+                            <span className="font-medium flex-1">{att.filename}</span>
+                            <Badge variant="outline" className="text-xs">{att.content_type}</Badge>
+                            <span className="text-muted-foreground text-xs">
+                              {(att.size / 1024).toFixed(2)} KB
                             </span>
                           </div>
                         ))}
@@ -1191,126 +1223,105 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
           )}
 
           {isLoadingOriginal && (
-            <Card className="border-blue-200">
-              <CardContent className="p-6 text-center text-blue-700">
-                원본 이메일 데이터를 불러오는 중...
+            <Card>
+              <CardContent className="p-6 text-center text-muted-foreground">
+                <div className="flex items-center justify-center gap-2">
+                  <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"></div>
+                  원본 이메일 데이터를 불러오는 중...
+                </div>
               </CardContent>
             </Card>
           )}
 
-          {/* 파일 탭 (FE 방식) */}
+          {/* 이메일 내용 */}
           <Card>
-            <CardHeader>
-              <div className="flex gap-2 border-b pb-2">
-                <button
-                  onClick={() => setActiveTab('all')}
-                  className={`px-4 py-2 text-sm font-medium rounded-t ${
-                    activeTab === 'all'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-100 hover:bg-gray-200'
-                  }`}
-                >
-                  전체
-                </button>
+            <CardContent className="min-h-[400px] pt-6">
+              <div className="space-y-6">
+                {/* 이메일 본문 (contenteditable) */}
+                <div>
+                  <h4 className="font-medium mb-2">📧 메일 본문</h4>
+                  <div
+                    ref={emailBodyRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    className="border rounded p-4 min-h-[200px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    style={{ whiteSpace: 'pre-wrap' }}
+                    dangerouslySetInnerHTML={{ __html: emailData.body || '' }}
+                  />
+                </div>
+
+                {/* 첨부파일 표시 */}
                 {(originalEmailData?.attachments || emailData.attachments).map((att: any, idx: number) => (
-                  <button
-                    key={att.filename || att.file_id || idx}
-                    onClick={() => setActiveTab(att.filename || att.file_id)}
-                    className={`px-4 py-2 text-sm font-medium rounded-t ${
-                      activeTab === (att.filename || att.file_id)
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-100 hover:bg-gray-200'
-                    }`}
-                  >
-                    {att.filename}
-                  </button>
+                  <div key={att.filename || att.file_id || idx} className="border-t pt-4">
+                    <h4 className="font-medium mb-2">📎 {att.filename}</h4>
+                    {renderAttachment(att)}
+                  </div>
                 ))}
               </div>
-            </CardHeader>
-            <CardContent className="min-h-[400px]">
-              {/* 전체 탭 */}
-              {activeTab === 'all' && (
-                <div className="space-y-6">
-                  {/* 이메일 본문 (contenteditable) */}
-                  <div>
-                    <h3 className="font-semibold mb-3">{emailData.subject}</h3>
-                    <div
-                      ref={emailBodyRef}
-                      contentEditable
-                      suppressContentEditableWarning
-                      className="border rounded p-4 min-h-[200px] focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      style={{ whiteSpace: 'pre-wrap' }}
-                      dangerouslySetInnerHTML={{ __html: emailData.body || '' }}
-                    />
-                  </div>
-
-                  {/* 첨부파일 표시 */}
-                  {(originalEmailData?.attachments || emailData.attachments).map((att: any, idx: number) => (
-                    <div key={att.filename || att.file_id || idx} className="border-t pt-4">
-                      <h4 className="font-medium mb-2">📎 {att.filename}</h4>
-                      {renderAttachment(att)}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* 개별 파일 탭 */}
-              {activeTab !== 'all' && (
-                <div>
-                  {(originalEmailData?.attachments || emailData.attachments)
-                    .filter((att: any) => (att.filename || att.file_id) === activeTab)
-                    .map((att: any, idx: number) => (
-                      <div key={att.filename || att.file_id || idx}>
-                        <h3 className="font-semibold mb-4">{att.filename}</h3>
-                        {renderAttachment(att)}
-                      </div>
-                    ))}
-                </div>
-              )}
             </CardContent>
           </Card>
 
 
           {/* 마스킹 미리보기 */}
           {showMaskedPreview && (
-            <Card className="border-green-500 bg-green-50/30">
+            <Card className="border-green-600">
               <CardHeader>
-                <CardTitle className="text-green-700 flex items-center gap-2">
-                  ✅ 마스킹 완료 - 미리보기
+                <CardTitle className="text-base flex items-center gap-2">
+                  <span className="text-green-600">✓</span> 마스킹 완료
                 </CardTitle>
                 <CardDescription>
-                  마스킹된 결과를 확인하세요. 문제없으면 아래 전송 버튼을 클릭하세요.
+                  마스킹된 결과를 확인하고 이메일을 전송하세요
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* 마스킹된 본문 */}
                 <div>
-                  <h4 className="font-semibold mb-2 text-sm">📝 마스킹된 본문</h4>
-                  <div className="bg-white border rounded p-4 text-sm whitespace-pre-wrap max-h-[200px] overflow-y-auto">
+                  <label className="font-medium text-sm mb-2 block">마스킹된 본문</label>
+                  <div className="bg-muted/50 border rounded-lg p-4 text-sm whitespace-pre-wrap">
                     {maskedBody || '본문이 없습니다'}
                   </div>
                 </div>
 
-                {/* 마스킹된 첨부파일 */}
-                {maskedAttachmentFilenames.length > 0 && (
+                {/* 전송될 첨부파일 (원본 + 마스킹) */}
+                {(originalEmailData?.attachments || emailData.attachments).length > 0 && (
                   <div>
-                    <h4 className="font-semibold mb-2 text-sm">
-                      📎 마스킹된 첨부파일 ({maskedAttachmentFilenames.length}개)
-                    </h4>
+                    <label className="font-medium text-sm mb-2 block">
+                      전송될 첨부파일 ({(originalEmailData?.attachments || emailData.attachments).length}개)
+                    </label>
                     <div className="space-y-3">
-                      {maskedAttachmentFilenames.map((filename, idx) => {
-                        const url = maskedAttachmentUrls.get(filename)
-                        const isImage = filename.toLowerCase().match(/\.(jpg|jpeg|png|gif)$/)
-                        const isPDF = filename.toLowerCase().endsWith('.pdf')
+                      {(originalEmailData?.attachments || emailData.attachments).map((att: any, idx: number) => {
+                        const originalFilename = att.filename || (att instanceof File ? att.name : '')
+
+                        // 마스킹된 파일이 있는지 확인
+                        const maskedFilename = maskedAttachmentFilenames.find(masked =>
+                          masked === `masked_${originalFilename}`
+                        )
+
+                        // 마스킹된 파일이 있으면 마스킹 URL, 없으면 원본 URL 사용
+                        const url = maskedFilename
+                          ? maskedAttachmentUrls.get(maskedFilename)
+                          : attachmentUrls.get(originalFilename)
+
+                        const displayFilename = maskedFilename || originalFilename
+                        const isMasked = !!maskedFilename
+                        const isImage = displayFilename.toLowerCase().match(/\.(jpg|jpeg|png|gif)$/)
+                        const isPDF = displayFilename.toLowerCase().endsWith('.pdf')
 
                         return (
-                          <div key={idx} className="bg-white border rounded p-3">
+                          <div key={idx} className={`bg-white border rounded p-3 ${isMasked ? 'border-green-500' : 'border-gray-300'}`}>
                             <div className="flex items-center justify-between mb-2">
-                              <span className="font-medium text-sm">{filename}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-sm">{displayFilename}</span>
+                                {isMasked ? (
+                                  <Badge variant="default" className="text-xs bg-green-600">마스킹됨</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-xs">원본</Badge>
+                                )}
+                              </div>
                               {url && (
                                 <a
                                   href={url}
-                                  download={filename}
+                                  download={displayFilename}
                                   className="text-blue-500 text-xs underline"
                                 >
                                   다운로드
@@ -1321,7 +1332,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
                             {url && isImage && (
                               <img
                                 src={url}
-                                alt={filename}
+                                alt={displayFilename}
                                 className="max-w-full h-auto border rounded"
                               />
                             )}
@@ -1330,7 +1341,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
                               <object
                                 data={url}
                                 type="application/pdf"
-                                className="w-full h-[400px] border rounded"
+                                className="w-full h-[800px] border rounded"
                               >
                                 <p className="text-sm text-gray-500">
                                   PDF를 표시할 수 없습니다.
@@ -1358,9 +1369,13 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
             {isSending ? '전송 중...' : showMaskedPreview ? '마스킹된 이메일 전송' : '이메일 전송'}
           </Button>
         </div>
+      </div>
 
-        {/* 우측: 컨텍스트 설정 */}
-        <div className="space-y-6">
+      {/* 우측: 컨텍스트 설정 (스크롤 가능, 고정 너비) */}
+      <div className="w-[400px] flex-shrink-0 overflow-y-auto scrollbar-hide border-l bg-muted/10" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <div className="p-6 space-y-6">
+          {/* 헤더 높이만큼 공백 */}
+          <div className="h-[52px]"></div>
           <Card>
             <CardHeader>
               <CardTitle>커스텀</CardTitle>
@@ -1368,15 +1383,9 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
             <CardContent className="space-y-4">
               {/* 사내 그룹 */}
               <div className="border-b pb-4">
-                <button 
-                  className="flex items-center justify-between w-full text-sm font-medium mb-3"
-                  onClick={() => {/* 토글 기능은 유지 */}}
-                >
+                <div className="text-sm font-medium mb-3">
                   <span>사내</span>
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="8 4 16 12 8 20" />
-                  </svg>
-                </button>
+                </div>
                 <div className="space-y-2 pl-2">
                   <label className="flex items-center gap-2">
                     <input
@@ -1456,15 +1465,9 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
 
               {/* 사외 그룹 */}
               <div className="border-b pb-4">
-                <button 
-                  className="flex items-center justify-between w-full text-sm font-medium mb-3"
-                  onClick={() => {/* 토글 기능은 유지 */}}
-                >
+                <div className="text-sm font-medium mb-3">
                   <span>사외</span>
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="8 4 16 12 8 20" />
-                  </svg>
-                </button>
+                </div>
                 <div className="space-y-2 pl-2">
                   <label className="flex items-center gap-2">
                     <input
@@ -1589,15 +1592,9 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
 
               {/* 세부 커스텀 그룹 */}
               <div className="pb-4">
-                <button 
-                  className="flex items-center justify-between w-full text-sm font-medium mb-3"
-                  onClick={() => {/* 토글 기능은 유지 */}}
-                >
+                <div className="text-sm font-medium mb-3">
                   <span>세부 커스텀</span>
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="8 4 16 12 8 20" />
-                  </svg>
-                </button>
+                </div>
                 <div className="space-y-2 pl-2">
                   <label className="flex items-center gap-2">
                     <input
@@ -1654,74 +1651,61 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
 
           {/* AI 분석 진행 상황 */}
           {isAnalyzing && (
-            <Card className="border-blue-200 bg-blue-50/30">
+            <Card className="border-primary">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"></div>
                   AI 분석 진행 중
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-xs text-muted-foreground">{aiSummary}</p>
+                <p className="text-sm text-muted-foreground">{aiSummary}</p>
               </CardContent>
             </Card>
           )}
 
           {/* AI 분석 요약 (완료 후) */}
           {!isAnalyzing && showPIICheckboxList && (
-            <Card className="border-green-200 bg-green-50/30">
+            <Card className="border-green-600">
               <CardHeader>
-                <CardTitle className="text-sm">📊 AI 분석 요약</CardTitle>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <span className="text-green-600">✓</span> AI 분석 완료
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-xs text-muted-foreground">{aiSummary}</p>
+                <p className="text-sm text-muted-foreground">{aiSummary}</p>
               </CardContent>
             </Card>
           )}
 
           {/* PII 체크박스 리스트 (AI 분석 완료 후 표시) */}
-          {showPIICheckboxList && allPIIList.length > 0 && (() => {
-            // activeTab에 따라 PII 필터링
-            const filteredPIIList = activeTab === 'all'
-              ? allPIIList
-              : allPIIList.filter(pii => {
-                  // 본문 PII는 '전체' 탭에서만 표시
-                  if (pii.source === 'regex' || pii.source === 'backend_body') {
-                    return activeTab === 'all'
-                  }
-                  // 첨부파일 PII는 해당 파일명과 매칭
-                  return pii.filename === activeTab
-                })
-
-            return (
-              <Card className="border-blue-500 bg-blue-50/50">
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between text-sm">
-                    <span>✅ 마스킹 대상 PII</span>
-                    <Badge variant="default" className="text-xs">
-                      {filteredPIIList.filter(p => p.shouldMask).length} / {filteredPIIList.length}
-                    </Badge>
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    {activeTab === 'all'
-                      ? 'AI가 마스킹이 필요하다고 판단한 항목은 체크되어 있습니다.'
-                      : `${activeTab} 파일에서 검출된 PII 목록`}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {filteredPIIList.length === 0 ? (
-                    <div className="text-center py-6 text-xs text-muted-foreground">
-                      이 파일에서 검출된 PII가 없습니다.
-                    </div>
-                  ) : (
-                    <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                      {filteredPIIList.map((pii) => (
+          {showPIICheckboxList && allPIIList.length > 0 && (
+            <Card className="border-primary">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between text-base">
+                  <span>마스킹 대상 PII</span>
+                  <Badge variant="secondary" className="text-xs font-normal">
+                    선택: {allPIIList.filter(p => p.shouldMask).length} / {allPIIList.length}
+                  </Badge>
+                </CardTitle>
+                <CardDescription className="text-sm">
+                  AI가 권장한 항목은 체크되어 있습니다
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {allPIIList.length === 0 ? (
+                  <div className="text-center py-8 text-sm text-muted-foreground">
+                    검출된 PII가 없습니다
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                    {allPIIList.map((pii) => (
                     <div
                       key={pii.id}
-                      className={`p-2 border rounded-lg transition-all text-xs ${
+                      className={`p-3 border rounded-lg transition-all ${
                         pii.shouldMask
-                          ? 'bg-yellow-50 border-yellow-300'
-                          : 'bg-white border-gray-200'
+                          ? 'bg-amber-50 border-amber-300'
+                          : 'bg-background border-border'
                       }`}
                     >
                       <div className="flex items-start gap-2">
@@ -1746,8 +1730,8 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
                               </Badge>
                             )}
                             {pii.source === 'regex' && (
-                              <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700">
-                                🔍 본문
+                              <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
+                                📝 본문
                               </Badge>
                             )}
                             {pii.source === 'backend_attachment' && pii.filename && (
@@ -1786,74 +1770,51 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
                         </div>
                       </div>
                     </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* 전체 선택/해제 버튼 */}
-                  <div className="flex gap-1 mt-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs flex-1"
-                      onClick={() => {
-                        setAllPIIList(prev => prev.map(pii => {
-                          // 현재 필터링된 PII만 선택
-                          if (activeTab === 'all') {
-                            return { ...pii, shouldMask: true }
-                          } else if (pii.source === 'regex' || pii.source === 'backend_body') {
-                            return pii
-                          } else if (pii.filename === activeTab) {
-                            return { ...pii, shouldMask: true }
-                          }
-                          return pii
-                        }))
-                      }}
-                    >
-                      전체 선택
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs flex-1"
-                      onClick={() => {
-                        setAllPIIList(prev => prev.map(pii => {
-                          // 현재 필터링된 PII만 해제
-                          if (activeTab === 'all') {
-                            return { ...pii, shouldMask: false }
-                          } else if (pii.source === 'regex' || pii.source === 'backend_body') {
-                            return pii
-                          } else if (pii.filename === activeTab) {
-                            return { ...pii, shouldMask: false }
-                          }
-                          return pii
-                        }))
-                      }}
-                    >
-                      전체 해제
-                    </Button>
+                    ))}
                   </div>
+                )}
 
-                  {/* 마스킹 실행 버튼 */}
-                  <div className="mt-4">
-                    <Button
-                      onClick={handleMaskOnly}
-                      disabled={isMasking || allPIIList.filter(p => p.shouldMask).length === 0}
-                      className="w-full bg-orange-500 hover:bg-orange-600"
-                      size="lg"
-                    >
-                      {isMasking ? '마스킹 처리 중...' : `🎭 선택된 PII 마스킹 (${allPIIList.filter(p => p.shouldMask).length}개)`}
-                    </Button>
-                    <p className="text-xs text-muted-foreground text-center mt-2">
-                      마스킹 후 MongoDB에 자동 저장됩니다
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })()}
+                {/* 전체 선택/해제 버튼 */}
+                <div className="flex gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => {
+                      setAllPIIList(prev => prev.map(pii => ({ ...pii, shouldMask: true })))
+                    }}
+                  >
+                    전체 선택
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => {
+                      setAllPIIList(prev => prev.map(pii => ({ ...pii, shouldMask: false })))
+                    }}
+                  >
+                    전체 해제
+                  </Button>
+                </div>
+
+                {/* 마스킹 실행 버튼 */}
+                <div className="mt-4 space-y-2">
+                  <Button
+                    onClick={handleMaskOnly}
+                    disabled={isMasking || allPIIList.filter(p => p.shouldMask).length === 0}
+                    className="w-full"
+                    size="lg"
+                  >
+                    {isMasking ? '마스킹 처리 중...' : `선택된 PII 마스킹 (${allPIIList.filter(p => p.shouldMask).length}개)`}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }
