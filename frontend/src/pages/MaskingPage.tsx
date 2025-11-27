@@ -1162,8 +1162,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
       <style>{scrollbarHideStyle}</style>
       <div className="flex h-screen overflow-hidden">
         {/* 중앙: 이메일 내용 (스크롤 가능) */}
-        <div className="flex-1 overflow-y-auto scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-        <div className="p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide p-6 space-y-6" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', minWidth: 0 }}>
           {/* 헤더 */}
           <div className="mb-6">
             <h2 className="text-2xl font-semibold">이메일 마스킹 검토</h2>
@@ -1308,7 +1307,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
                         const isPDF = displayFilename.toLowerCase().endsWith('.pdf')
 
                         return (
-                          <div key={idx} className={`bg-white border rounded p-3 ${isMasked ? 'border-green-500' : 'border-gray-300'}`}>
+                          <div key={idx} className="bg-white border rounded p-3">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
                                 <span className="font-medium text-sm">{displayFilename}</span>
@@ -1369,18 +1368,14 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
             {isSending ? '전송 중...' : showMaskedPreview ? '마스킹된 이메일 전송' : '이메일 전송'}
           </Button>
         </div>
-      </div>
 
-      {/* 우측: 컨텍스트 설정 (스크롤 가능, 고정 너비) */}
+        {/* 우측: 컨텍스트 설정 (스크롤 가능, 고정 너비) */}
       <div className="w-[400px] flex-shrink-0 overflow-y-auto scrollbar-hide border-l bg-muted/10" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
         <div className="p-6 space-y-6">
           {/* 헤더 높이만큼 공백 */}
           <div className="h-[52px]"></div>
           <Card>
-            <CardHeader>
-              <CardTitle>커스텀</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 pt-6">
               {/* 사내 그룹 */}
               <div className="border-b pb-4">
                 <div className="text-sm font-medium mb-3">
