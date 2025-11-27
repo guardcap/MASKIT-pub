@@ -219,11 +219,11 @@ class PolicyProcessor:
 @router.post("/upload")
 async def upload_policy_file(
     background_tasks: BackgroundTasks,
-    request: Request,
     file: UploadFile = File(...),
     title: str = Form(...),
     authority: str = Form(default="내부"),
     description: str = Form(default=""),
+    request: Request=None,
     db = Depends(get_db),
     current_user = Depends(get_current_policy_admin)
 ):
@@ -585,7 +585,7 @@ async def get_policy_detail(
 @router.delete("/{policy_id}")
 async def delete_policy(
     policy_id: str,
-    request: Request,  # ✅ Request 추가
+    request: Request=None,  # ✅ Request 추가
     db = Depends(get_db),
     current_user = Depends(get_current_policy_admin)
 ):
