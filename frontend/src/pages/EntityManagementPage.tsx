@@ -183,12 +183,24 @@ export default function EntityManagementPage() {
   const handleDeleteConfirm = async () => {
     if (!entityToDelete) return
 
+    console.log('[Frontend] 엔티티 삭제 요청:', entityToDelete)
+
     try {
+      const token = localStorage.getItem('auth_token')
+      console.log('[Frontend] 인증 토큰:', token ? '존재함' : '없음')
+
       const response = await fetch(`${API_BASE}/api/entities/${entityToDelete}`, {
         method: 'DELETE',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
       })
 
+      console.log('[Frontend] 응답 상태:', response.status)
+      console.log('[Frontend] 응답 헤더:', response.headers)
+
       const result = await response.json()
+      console.log('[Frontend] 응답 데이터:', result)
 
       if (!result.success) {
         throw new Error(result.message || '엔티티 삭제 실패')
@@ -199,6 +211,7 @@ export default function EntityManagementPage() {
       setEntityToDelete(null)
       loadData()
     } catch (error: any) {
+      console.error('[Frontend] 엔티티 삭제 오류:', error)
       toast.error('엔티티 삭제 실패: ' + error.message)
     }
   }

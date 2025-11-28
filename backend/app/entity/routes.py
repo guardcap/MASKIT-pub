@@ -485,40 +485,50 @@ async def delete_entity(
     current_user = Depends(get_current_user)
 ):
     """엔티티 삭제"""
+    print(f"\n[Entity DELETE] ===== 엔티티 삭제 요청 수신 =====")
+    print(f"[Entity DELETE] Entity ID: {entity_id}")
+    print(f"[Entity DELETE] User: {current_user.get('email', 'unknown')}")
+    print(f"[Entity DELETE] Request method: {request.method}")
+    print(f"[Entity DELETE] Request URL: {request.url}")
+    
     try:
-        print(f"\n[Entity] ===== 엔티티 삭제 시작 =====")
-        print(f"[Entity] Entity ID: {entity_id}")
-        print(f"[Entity] User: {current_user.get('email', 'unknown')}")
-
         # 엔티티 확인
         entity = await db["entities"].find_one({"entity_id": entity_id})
+        
         if not entity:
+            print(f"[Entity DELETE] ❌ 엔티티를 찾을 수 없음: {entity_id}")
             raise HTTPException(status_code=404, detail="엔티티를 찾을 수 없습니다")
 
         entity_name = entity.get("name", entity_id)
+        print(f"[Entity DELETE] 엔티티 발견: {entity_name}")
 
         # MongoDB에서 삭제
-        await db["entities"].delete_one({"entity_id": entity_id})
-        print(f"[Entity] ✅ MongoDB 삭제 완료")
+        delete_result = await db["entities"].delete_one({"entity_id": entity_id})
+        print(f"[Entity DELETE] MongoDB 삭제 결과 - deleted_count: {delete_result.deleted_count}")
+        
+        if delete_result.deleted_count == 0:
+            print(f"[Entity DELETE] ❌ 삭제 실패 (deleted_count = 0)")
+            raise HTTPException(status_code=500, detail="엔티티 삭제에 실패했습니다")
+        
+        print(f"[Entity DELETE] ✅ MongoDB 삭제 완료")
 
         # 감사 로그 기록
-        await AuditLogger.log_entity_crud(
-            operation="delete",
-            user_email=current_user["email"],
-            user_role=current_user.get("role", "user"),
-            entity_id=entity_id,
-            entity_name=entity.get("name", entity_id),
-            request=request,
-        )
-    # 감사 로그 기록
-        await AuditLogger.log_entity_crud(
-            operation="update",
-            user_email=current_user["email"],
-            user_role=current_user.get("role", "user"),
-            entity_id=entity_id,
-            entity_name=entity.get("name", entity_id),
-            request=request,
-        )
+        try:
+            await AuditLogger.log_entity_crud(
+                operation="delete",
+                user_email=current_user["email"],
+                user_role=current_user.get("role", "user"),
+                entity_id=entity_id,
+                entity_name=entity_name,
+                request=request,
+            )
+            print(f"[Entity DELETE] ✅ 감사 로그 기록 완료")
+        except Exception as log_error:
+            print(f"[Entity DELETE] ⚠️ 감사 로그 기록 실패 (무시): {log_error}")
+            # 로그 실패는 무시하고 계속 진행
+        
+        print(f"[Entity DELETE] ===== 엔티티 삭제 완료 =====\n")
+        
         return JSONResponse({
             "success": True,
             "message": "엔티티가 성공적으로 삭제되었습니다"
@@ -527,11 +537,11 @@ async def delete_entity(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[Entity] ❌ 엔티티 삭제 오류: {e}")
+        print(f"[Entity DELETE] ❌ 예상치 못한 오류: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
         
-        # 실패 로그도 기록
+        # 실패 로그 기록 (최선을 다하되 실패해도 무시)
         try:
             await AuditLogger.log(
                 event_type=AuditEventType.ENTITY_DELETE,
@@ -545,8 +555,8 @@ async def delete_entity(
                 error_message=str(e),
                 severity=AuditSeverity.ERROR
             )
-        except:
-            pass
+        except Exception as log_error:
+            print(f"[Entity DELETE] ⚠️ 실패 로그 기록 실패 (무시): {log_error}")
         
         raise HTTPException(status_code=500, detail=f"엔티티 삭제 실패: {str(e)}")
 
