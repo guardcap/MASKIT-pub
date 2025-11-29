@@ -649,7 +649,6 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
             <CardContent className="pt-4 space-y-4">
               {/* 본문 */}
               <div>
-                <h4 className="font-semibold text-sm mb-2 text-slate-700">📝 본문</h4>
                 <div className="bg-slate-50 border border-slate-200 rounded p-4 text-sm whitespace-pre-wrap max-h-[400px] overflow-y-auto text-slate-800">
                   {htmlToText(originalEmail.original_body || originalEmail.body || '')}
                 </div>
