@@ -9,13 +9,11 @@ import asyncio
 import base64
 from datetime import datetime,timedelta
 import uuid
-from app.database.mongodb import get_db
+from app.database.mongodb import get_db, get_kst_now
 from app.models.email import AttachmentData, OriginalEmailData
 
 router = APIRouter()
-def get_kst_now():
-    """한국 표준시(KST) 반환"""
-    return datetime.utcnow() + timedelta(hours=9)
+
 class FileItem(BaseModel):
     id: str
     name: str

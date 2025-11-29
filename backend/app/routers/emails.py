@@ -5,16 +5,13 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel, EmailStr
 from bson import ObjectId
 
-from app.database.mongodb import get_db
+from app.database.mongodb import get_db, get_kst_now
 from app.auth.auth_utils import get_current_user, get_current_auditor
 from motor.motor_asyncio import AsyncIOMotorGridFSBucket
 from app.audit.logger import AuditLogger
 from app.audit.models import AuditEventType
 
 router = APIRouter(prefix="/api/v1/emails", tags=["Emails"])
-def get_kst_now():
-    """한국 표준시(KST) 반환"""
-    return datetime.utcnow() + timedelta(hours=9)
 
 # ===== Auditor 전용: 전체 메일 로그 조회 API =====
 

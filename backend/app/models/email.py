@@ -4,9 +4,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime,timedelta
-def get_kst_now():
-    """한국 표준시(KST) 반환"""
-    return datetime.utcnow() + timedelta(hours=9)
+from app.database.mongodb import get_kst_now
 
 class AttachmentData(BaseModel):
     """첨부파일 데이터 모델"""

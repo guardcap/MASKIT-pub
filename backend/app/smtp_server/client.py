@@ -8,10 +8,9 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 from typing import Optional, List
-from datetime import datetime,timedelta
-def get_kst_now():
-    """한국 표준시(KST) 반환"""
-    return datetime.utcnow() + timedelta(hours=9)
+
+from app.database.mongodb import get_kst_now
+
 
 class SMTPEmailClient:
     """SMTP를 통한 이메일 전송 클라이언트 (TLS/SSL 지원)"""
@@ -213,7 +212,7 @@ class SMTPEmailClient:
                     # 메일 전송
                     server.send_message(msg)
 
-            sent_at = datetime.utcnow()
+            sent_at = get_kst_now()
             print(f"[SMTP Client] ✅ 메일 전송 완료: {sent_at}")
 
             return {

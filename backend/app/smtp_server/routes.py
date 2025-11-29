@@ -6,7 +6,7 @@ from typing import Optional, Any # <<< [수정] Any 또는 dict를 위해 추가
 from datetime import datetime,timedelta
 from bson import ObjectId
 
-from app.database.mongodb import get_database, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_USE_TLS, SMTP_USE_SSL # 기본 설정 Import
+from app.database.mongodb import get_database, get_kst_now, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_USE_TLS, SMTP_USE_SSL # 기본 설정 Import
 from app.smtp_server.models import EmailSendRequest, EmailSendResponse, EmailListResponse
 from app.smtp_server.client import smtp_client
 from app.audit.logger import AuditLogger
@@ -23,9 +23,6 @@ from app.auth.auth_utils import get_current_user # <<< [중요] 이 경로는 �
 
 router = APIRouter(prefix="/smtp", tags=["SMTP Email"])
 
-def get_kst_now():
-    """한국 표준시(KST) 반환"""
-    return datetime.utcnow() + timedelta(hours=9)
 @router.post("/send", response_model=EmailSendResponse)
 async def send_email(
     email_data: EmailSendRequest, # 1. 이 모델에서 smtp_config 필드 제거 (아래 models.py 참고)
@@ -151,7 +148,7 @@ async def send_email(
             "status": "sent",
             "attachments": attachments_for_db,  # 실제 전송된 첨부파일 정보
             "sent_at": result["sent_at"],
-            "created_at": datetime.utcnow(),
+            "created_at": get_kst_now(),
             "dlp_verified": False,
             "dlp_token": None,
             "owner_email": current_user.get("email"), # [추가] 누가 보냈는지 기록
