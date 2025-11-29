@@ -10,6 +10,7 @@ import { WriteEmailPage } from '@/pages/WriteEmailPage'
 import { MaskingPage } from '@/pages/MaskingPage'
 import { MyPage } from '@/pages/MyPage'
 import { SentEmailDetailPage } from '@/pages/SentEmailDetailPage'
+import { ReceivedDetailPage } from '@/pages/ReceivedDetailPage' // ← 추가
 
 import { UserDashboardPage } from '@/pages/UserDashboardPage'
 import { AuditorDashboardPage } from '@/pages/AuditorDashboardPage'
@@ -40,7 +41,6 @@ interface EmailDraftData {
   attachments: File[]
   email_id?: string
 }
-
 
 // localStorage에서 사용자 정보 복원
 const restoreUserFromStorage = (): User | null => {
@@ -104,7 +104,6 @@ function App() {
     setCurrentPage('login')
     setCurrentView('main')
   }
-
 
   // 역할별 사이드바 메뉴 생성
   const getSidebarMenuByRole = (userRole: string) => {
@@ -311,19 +310,17 @@ function App() {
         />
       )}
 
-
       {currentView === 'mypage' && <MyPage />}
 
       {currentView === 'users' && <UserManagementPage />}
 
       {currentView === 'logs' && <DecisionLogsPage />}
 
-
       {currentView === 'entity-management' && <EntityManagementPage />}
-
 
       {currentView === 'root-dashboard' && <RootDashboardPage />}
 
+      {/* ✅ 보낸 메일 상세 페이지 */}
       {currentView === 'sent-email-detail' && selectedEmailId && (
         <SentEmailDetailPage
           emailId={selectedEmailId}
@@ -331,8 +328,9 @@ function App() {
         />
       )}
 
+      {/* ✅ 받은 메일 상세 페이지 (ReceivedDetailPage 사용) */}
       {currentView === 'email-detail' && selectedEmailId && (
-        <SentEmailDetailPage
+        <ReceivedDetailPage
           emailId={selectedEmailId}
           onBack={() => setCurrentView('received-emails')}
         />

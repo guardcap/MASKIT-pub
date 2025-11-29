@@ -1283,4 +1283,3 @@ async def remove_policy_from_vector_store(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Vector Store 제거 실패: {str(e)}")
-
