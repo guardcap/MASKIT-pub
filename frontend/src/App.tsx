@@ -9,7 +9,6 @@ import { PolicyDetailPage } from '@/pages/PolicyDetailPage'
 import { WriteEmailPage } from '@/pages/WriteEmailPage'
 import { MaskingPage } from '@/pages/MaskingPage'
 import { MyPage } from '@/pages/MyPage'
-import { EmailDetailPage } from '@/pages/EmailDetailPage'
 import { SentEmailDetailPage } from '@/pages/SentEmailDetailPage'
 
 import { UserDashboardPage } from '@/pages/UserDashboardPage'
@@ -73,7 +72,6 @@ function App() {
   const [currentView, setCurrentView] = useState('main')
   const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null)
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null)
-  const [emailDetailSource, setEmailDetailSource] = useState<'sent' | 'received' | 'main'>('main')
   const [isInitialized, setIsInitialized] = useState(false)
   const [emailDraftData, setEmailDraftData] = useState<EmailDraftData | null>(null)
 
@@ -242,7 +240,6 @@ function App() {
                 setCurrentView(view)
                 if (emailId) {
                   setSelectedEmailId(emailId)
-                  setEmailDetailSource('main')
                 }
               }}
             />
@@ -253,7 +250,6 @@ function App() {
                 setCurrentView(view)
                 if (emailId) {
                   setSelectedEmailId(emailId)
-                  setEmailDetailSource('main')
                 }
               }}
             />
@@ -328,20 +324,18 @@ function App() {
 
       {currentView === 'root-dashboard' && <RootDashboardPage />}
 
+      {currentView === 'sent-email-detail' && selectedEmailId && (
+        <SentEmailDetailPage
+          emailId={selectedEmailId}
+          onBack={() => setCurrentView('my-emails')}
+        />
+      )}
+
       {currentView === 'email-detail' && selectedEmailId && (
-        <>
-          {emailDetailSource === 'sent' ? (
-            <SentEmailDetailPage
-              emailId={selectedEmailId}
-              onBack={() => setCurrentView('my-emails')}
-            />
-          ) : (
-            <EmailDetailPage
-              emailId={selectedEmailId}
-              onBack={() => setCurrentView('main')}
-            />
-          )}
-        </>
+        <SentEmailDetailPage
+          emailId={selectedEmailId}
+          onBack={() => setCurrentView('received-emails')}
+        />
       )}
 
       {currentView === 'my-emails' && (
@@ -350,7 +344,6 @@ function App() {
             setCurrentView(view)
             if (emailId) {
               setSelectedEmailId(emailId)
-              setEmailDetailSource('sent')
             }
           }}
           onBack={() => setCurrentView('main')}
@@ -363,7 +356,6 @@ function App() {
             setCurrentView(view)
             if (emailId) {
               setSelectedEmailId(emailId)
-              setEmailDetailSource('received')
             }
           }}
           onBack={() => setCurrentView('main')}

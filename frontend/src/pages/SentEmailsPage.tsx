@@ -270,7 +270,7 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
                   <TableRow
                     key={email._id}
                     className="cursor-pointer"
-                    onClick={() => onNavigate?.('email-detail', email._id)}
+                    onClick={() => onNavigate?.('sent-email-detail', email._id)}
                   >
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
