@@ -8,8 +8,10 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 from typing import Optional, List
-from datetime import datetime
-
+from datetime import datetime,timedelta
+def get_kst_now():
+    """한국 표준시(KST) 반환"""
+    return datetime.utcnow() + timedelta(hours=9)
 
 class SMTPEmailClient:
     """SMTP를 통한 이메일 전송 클라이언트 (TLS/SSL 지원)"""

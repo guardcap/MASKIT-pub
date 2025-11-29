@@ -12,7 +12,9 @@ from .models import AuditEventType, AuditSeverity, AuditLogResponse
 
 router = APIRouter(prefix="/api/audit", tags=["Audit Logs"])
 
-
+def get_kst_now():
+    """한국 표준시(KST) 반환"""
+    return datetime.utcnow() + timedelta(hours=9)
 @router.get("/logs")
 async def get_audit_logs(
     page: int = Query(1, ge=1),
@@ -141,7 +143,7 @@ async def get_audit_stats(
     - 사용자별 활동 집계
     """
     try:
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = get_kst_now() - timedelta(days=days)
 
         # 이벤트 타입별 집계
         event_pipeline = [

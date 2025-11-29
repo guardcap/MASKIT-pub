@@ -9,7 +9,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import JSONResponse
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime,timedelta
 import hashlib
 import inspect
 from functools import lru_cache
@@ -26,7 +26,9 @@ router = APIRouter(prefix="/api/entities", tags=["Entity Management"])
 # 글로벌 캐시 변수
 _recognizers_cache: Optional[List[Dict[str, Any]]] = None
 
-
+def get_kst_now():
+    """한국 표준시(KST) 반환"""
+    return datetime.utcnow() + timedelta(hours=9)
 # Recognizer 정보 추출 함수
 def extract_recognizer_info(recognizer_class) -> Dict[str, Any]:
     """Recognizer 클래스에서 메타정보 추출"""

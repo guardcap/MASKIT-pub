@@ -6,7 +6,7 @@ HMAC 토큰 기반 메일 변조 검증
 import hmac
 import hashlib
 import os
-from datetime import datetime
+from datetime import datetime,timedelta
 from email import message_from_bytes, policy
 
 # 환경변수에서 시크릿 키 로드 (기본값은 개발용)
@@ -14,7 +14,9 @@ DLP_SECRET_KEY = os.getenv(
     "DLP_SECRET_KEY",
     "dlp-secret-key-min-32-characters-for-production-use"
 )
-
+def get_kst_now():
+    """한국 표준시(KST) 반환"""
+    return datetime.utcnow() + timedelta(hours=9)
 def create_integrity_token(email_content: bytes) -> str:
     """
     메일 원본 내용으로부터 HMAC-SHA256 토큰 생성
@@ -136,7 +138,7 @@ def create_email_metadata(email_content: bytes) -> dict:
             'content_hash': get_content_hash(email_content),
             'dlp_token': create_integrity_token(email_content),
             'attachments': attachments,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': get_kst_now().isoformat()
         }
 
         return metadata

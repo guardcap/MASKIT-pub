@@ -3,8 +3,10 @@
 """
 from pydantic import BaseModel, Field
 from typing import List, Optional
-from datetime import datetime
-
+from datetime import datetime,timedelta
+def get_kst_now():
+    """한국 표준시(KST) 반환"""
+    return datetime.utcnow() + timedelta(hours=9)
 
 class AttachmentData(BaseModel):
     """첨부파일 데이터 모델"""
@@ -22,7 +24,7 @@ class OriginalEmailData(BaseModel):
     subject: str = Field(description="이메일 제목")
     original_body: str = Field(description="마스킹 전 원본 본문 (HTML)")
     attachments: List[AttachmentData] = Field(default=[], description="첨부파일 리스트")
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="생성 시간")
+    created_at: datetime = Field(default_factory=get_kst_now, description="생성 시간")
 
     class Config:
         json_schema_extra = {
@@ -62,7 +64,7 @@ class MaskedEmailData(BaseModel):
     masked_attachments: List[AttachmentData] = Field(default=[], description="마스킹된 첨부파일 리스트")
     masking_decisions: dict = Field(default={}, description="마스킹 결정 정보")
     pii_masked_count: int = Field(default=0, description="마스킹된 PII 개수")
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="생성 시간")
+    created_at: datetime = Field(default_factory=get_kst_now, description="생성 시간")
 
     class Config:
         json_schema_extra = {

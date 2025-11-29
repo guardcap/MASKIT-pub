@@ -7,13 +7,15 @@ import json
 from typing import List
 import asyncio
 import base64
-from datetime import datetime
+from datetime import datetime,timedelta
 import uuid
 from app.database.mongodb import get_db
 from app.models.email import AttachmentData, OriginalEmailData
 
 router = APIRouter()
-
+def get_kst_now():
+    """한국 표준시(KST) 반환"""
+    return datetime.utcnow() + timedelta(hours=9)
 class FileItem(BaseModel):
     id: str
     name: str
@@ -92,7 +94,7 @@ async def upload_email(
     # MongoDB에 원본 이메일 데이터 저장
     try:
         # 고유 이메일 ID 생성
-        email_id = f"email_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        email_id = f"email_{get_kst_now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
         # 수신자 리스트 파싱
         to_emails_list = [email.strip() for email in to_email.split(',')]
@@ -105,7 +107,7 @@ async def upload_email(
             subject=subject,
             original_body=original_body,
             attachments=attachment_data_list,
-            created_at=datetime.utcnow()
+            created_at=get_kst_now()
         )
 
         # MongoDB에 저장

@@ -12,7 +12,7 @@ import os
 import json
 import asyncio
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime,timedelta
 import hashlib
 import fitz  # PyMuPDF
 from dotenv import load_dotenv
@@ -21,7 +21,9 @@ from app.audit.logger import AuditLogger
 from app.audit.models import AuditEventType, AuditSeverity
 from app.database.mongodb import get_db
 from fastapi.background import BackgroundTasks
-
+def get_kst_now():
+    """한국 표준시(KST) 반환"""
+    return datetime.utcnow() + timedelta(hours=9)
 # OpenAI imports
 try:
     from openai import AsyncOpenAI
@@ -696,7 +698,7 @@ async def update_policy_text(
             {
                 "$set": {
                     "extracted_text": new_text,
-                    "updated_at": datetime.utcnow()
+                    "updated_at": get_kst_now()
                 }
             }
         )
@@ -737,7 +739,7 @@ async def update_policy_text(
             "data": {
                 "policy_id": policy_id,
                 "text_length": len(new_text),
-                "updated_at": datetime.utcnow().isoformat()
+                "updated_at": get_kst_now().isoformat()
             }
         })
         
@@ -810,7 +812,7 @@ async def update_policy_guidelines(
                 "$set": {
                     "guidelines": new_guidelines,
                     "guidelines_count": len(new_guidelines),
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": get_kst_now(),
                     # 동기화 상태 초기화 - 다시 동기화 필요
                     "vector_store_file_id": None,
                     "vector_store_synced_at": None
@@ -853,7 +855,7 @@ async def update_policy_guidelines(
             "data": {
                 "policy_id": policy_id,
                 "guidelines_count": len(new_guidelines),
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": get_kst_now().isoformat(),
                 "sync_required": True
             }
         })
@@ -1134,7 +1136,7 @@ async def sync_policies_to_vector_store(
                     {"policy_id": policy_id},
                     {"$set": {
                         "vector_store_file_id": uploaded_file.id,
-                        "vector_store_synced_at": datetime.utcnow()
+                        "vector_store_synced_at": get_kst_now()
                     }}
                 )
 

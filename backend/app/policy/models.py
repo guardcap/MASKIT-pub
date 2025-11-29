@@ -1,8 +1,10 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime,timedelta
 from enum import Enum
-
+def get_kst_now():
+    """한국 표준시(KST) 반환"""
+    return datetime.utcnow() + timedelta(hours=9)
 class UserRole(str, Enum):
     ROOT_ADMIN = "root_admin"      # 시스템 관리자 (팀/사용자 관리)
     AUDITOR = "auditor"            # 감사자 (모든 로그/통계 읽기 전용)
@@ -54,8 +56,8 @@ class UserSelfUpdate(BaseModel):
 
 class UserInDB(UserBase):
     hashed_password: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_kst_now)
+    updated_at: datetime = Field(default_factory=get_kst_now)
 
 class UserResponse(UserBase):
     created_at: datetime
@@ -108,8 +110,8 @@ class PolicyDocument(BaseModel):
 
     # 생성 정보
     created_by: Optional[str] = None  # 생성자 이메일
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_kst_now)
+    updated_at: datetime = Field(default_factory=get_kst_now)
 
 class PolicyResponse(BaseModel):
     """정책 응답 모델 (전체 텍스트 제외)"""
@@ -147,8 +149,8 @@ class EntityType(BaseModel):
     masking_char: str = "*"          # 마스킹 문자 (*, #, X, ●)
     masking_pattern: Optional[str] = None  # 커스텀 패턴 (예: "###-##-*****")
     is_active: bool = True
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_kst_now)
+    updated_at: datetime = Field(default_factory=get_kst_now)
 
 
 class EmailRecord(BaseModel):
@@ -171,7 +173,7 @@ class EmailRecord(BaseModel):
     dlp_token: str     # HMAC-SHA256 토큰 (프록시 → 수신 서버 전송 검증용)
 
     # 타임스탬프
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_kst_now)
     received_at: Optional[datetime] = None  # 프록시가 메일을 받은 시간
 
     # DLP 검증 정보

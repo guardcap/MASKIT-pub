@@ -7,12 +7,14 @@
 
 import asyncio
 from typing import Dict, Optional
-from datetime import datetime
+from datetime import datetime,timedelta
 from pathlib import Path
 import json
 import os
 from dotenv import load_dotenv
-
+def get_kst_now():
+    """한국 표준시(KST) 반환"""
+    return datetime.utcnow() + timedelta(hours=9)
 # OpenAI imports
 try:
     from openai import AsyncOpenAI
@@ -328,7 +330,7 @@ def save_guidelines_to_jsonl(guidelines: list, policy_id: str, policy_title: str
     """
     try:
         # 파일명 생성 (정책 제목 기반)
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = get_kst_now().strftime("%Y%m%d_%H%M%S")
         safe_title = "".join(c if c.isalnum() or c in (' ', '_', '-') else '_' for c in policy_title)
         safe_title = safe_title.replace(' ', '_')[:50]
 
@@ -366,7 +368,7 @@ async def process_policy_background(policy_id: str, policy_data: dict, db):
         "status": "processing",
         "progress": 0,
         "message": "가이드라인 추출 중...",
-        "started_at": datetime.utcnow().isoformat(),
+        "started_at": get_kst_now().isoformat(),
         "policy_id": policy_id
     }
 
@@ -394,7 +396,7 @@ async def process_policy_background(policy_id: str, policy_data: dict, db):
             task_status[task_id]["status"] = "completed"
             task_status[task_id]["progress"] = 100
             task_status[task_id]["message"] = "가이드라인을 추출하지 못했습니다"
-            task_status[task_id]["completed_at"] = datetime.utcnow().isoformat()
+            task_status[task_id]["completed_at"] = get_kst_now().isoformat()
             return
 
         # 2. JSONL 파일로 저장 (50% → 60%)
@@ -432,7 +434,7 @@ async def process_policy_background(policy_id: str, policy_data: dict, db):
         task_status[task_id]["status"] = "completed"
         task_status[task_id]["progress"] = 100
         task_status[task_id]["message"] = f"{len(guidelines)}개 가이드라인이 JSONL 및 VectorDB에 추가되었습니다"
-        task_status[task_id]["completed_at"] = datetime.utcnow().isoformat()
+        task_status[task_id]["completed_at"] = get_kst_now().isoformat()
         task_status[task_id]["guidelines_count"] = len(guidelines)
         task_status[task_id]["jsonl_saved"] = jsonl_saved
         task_status[task_id]["vectordb_success"] = success
@@ -441,7 +443,7 @@ async def process_policy_background(policy_id: str, policy_data: dict, db):
         task_status[task_id]["status"] = "failed"
         task_status[task_id]["progress"] = 0
         task_status[task_id]["message"] = f"오류 발생: {str(e)}"
-        task_status[task_id]["completed_at"] = datetime.utcnow().isoformat()
+        task_status[task_id]["completed_at"] = get_kst_now().isoformat()
         print(f"백그라운드 작업 실패: {e}")
 
 
@@ -452,7 +454,7 @@ def get_task_status(task_id: str) -> Optional[Dict]:
 
 def clear_old_tasks(max_age_seconds: int = 3600):
     """오래된 작업 삭제 (1시간 이상)"""
-    now = datetime.utcnow()
+    now = get_kst_now()
     to_delete = []
 
     for task_id, task in task_status.items():

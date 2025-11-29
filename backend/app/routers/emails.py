@@ -12,7 +12,9 @@ from app.audit.logger import AuditLogger
 from app.audit.models import AuditEventType
 
 router = APIRouter(prefix="/api/v1/emails", tags=["Emails"])
-
+def get_kst_now():
+    """한국 표준시(KST) 반환"""
+    return datetime.utcnow() + timedelta(hours=9)
 
 # ===== Auditor 전용: 전체 메일 로그 조회 API =====
 
@@ -128,7 +130,7 @@ async def upload_attachment(
             metadata={
                 "content_type": file.content_type,
                 "uploaded_by": current_user["email"],
-                "uploaded_at": datetime.utcnow(),
+                "uploaded_at": get_kst_now(),
                 "size": len(file_data)
             }
         )
@@ -404,8 +406,8 @@ async def send_email(
                 "attachments": attachment_records,
                 "team_name": current_user.get("team_name"),
                 "masking_decisions": email_request.masking_decisions,
-                "created_at": datetime.utcnow(),
-                "sent_at": datetime.utcnow(),
+                "created_at": get_kst_now(),
+                "sent_at": get_kst_now(),
                 "read_at": None,
             }
 
@@ -433,7 +435,7 @@ async def send_email(
                 "from": email_request.from_email,
                 "to": recipients,
                 "subject": email_request.subject,
-                "sent_at": datetime.utcnow().isoformat(),
+                "sent_at": get_kst_now().isoformat(),
                 "attachments": len(attachment_records)
             }
         })
@@ -588,9 +590,9 @@ async def get_email_detail(
                     obj_id = ObjectId(email["_id"])
                     await db.emails.update_one(
                         {"_id": obj_id},
-                        {"$set": {"read_at": datetime.utcnow()}}
+                        {"$set": {"read_at": get_kst_now()}}
                     )
-                    email["read_at"] = datetime.utcnow()
+                    email["read_at"] = get_kst_now()
                 except:
                     pass
 

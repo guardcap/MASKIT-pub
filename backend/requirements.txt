@@ -67,3 +67,5 @@ certifi
 # ===== Version Constraints =====
 # urllib3 v2 경고 방지
 urllib3<2.0.0
+
+pytz>=2024.1  # 한국 시간(KST) 지원

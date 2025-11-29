@@ -3,7 +3,7 @@
 """
 import os
 import json
-from datetime import datetime
+from datetime import datetime,timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any
 from fastapi import Request
@@ -11,6 +11,9 @@ from fastapi import Request
 from .models import AuditEventType, AuditSeverity, AuditLog
 from app.database.mongodb import get_database
 
+def get_kst_now():
+    """한국 표준시(KST) 반환"""
+    return datetime.utcnow() + timedelta(hours=9)
 
 class AuditLogger:
     """감사 로그 작성기"""
@@ -97,7 +100,7 @@ class AuditLogger:
 
         # 로그 객체 생성
         log = AuditLog(
-            timestamp=datetime.utcnow(),
+            timestamp=get_kst_now(),
             event_type=event_type,
             severity=severity,
             user_email=user_email,

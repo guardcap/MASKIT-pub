@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime,timedelta
 import os
 import base64
 
@@ -10,7 +10,9 @@ from ..utils.masking_engine import PdfMaskingEngine
 from ..routers.uploads import UPLOAD_DIR
 from ..models.email import MaskedEmailData, MaskedEmailResponse, AttachmentData
 from ..database.mongodb import get_db
-
+def get_kst_now():
+    """한국 표준시(KST) 반환"""
+    return datetime.utcnow() + timedelta(hours=9)
 router = APIRouter()
 
 class PIIItemFromAnalysis(BaseModel):
