@@ -103,13 +103,17 @@ export const PolicyAddPage: React.FC<PolicyAddPageProps> = ({ onBack, onSuccess 
     setIsUploading(true)
     setUploadProgress(0)
 
-    // Toast 알림으로 업로드 시작
     const uploadToastId = toast.loading('파일 업로드 중...', {
       description: '정책 문서를 서버에 업로드하고 있습니다.',
     })
 
     try {
-      // 1단계: 파일 업로드
+      console.log('📤 [PolicyAdd] 업로드 시작:', {
+        file: selectedFile.name,
+        title: formData.title,
+        authority: formData.authority,
+      })
+
       setUploadProgress(10)
       const uploadResult = await uploadPolicyFile(
         selectedFile,
@@ -118,29 +122,30 @@ export const PolicyAddPage: React.FC<PolicyAddPageProps> = ({ onBack, onSuccess 
         formData.description
       )
 
+      console.log('✅ [PolicyAdd] 업로드 성공:', uploadResult)
+
       setUploadProgress(30)
       toast.success('파일 업로드 완료!', {
         id: uploadToastId,
         description: `${uploadResult.processing_method}로 텍스트를 추출했습니다.`,
       })
 
-      // 2단계: 백그라운드 작업이 있는 경우 진행률 추적
+      // 백그라운드 작업 추적
       if (uploadResult.task_id) {
         const processingToastId = toast.loading('멀티모달 처리 중...', {
           description: 'AI가 정책 가이드라인을 추출하고 VectorDB에 임베딩하고 있습니다.',
         })
 
-        // Task 상태 폴링
         await pollTaskStatus(
           uploadResult.task_id,
           (progress, message) => {
-            setUploadProgress(30 + (progress * 0.7)) // 30%부터 100%까지
+            setUploadProgress(30 + progress * 0.7)
             toast.loading(`처리 진행 중: ${progress}%`, {
               id: processingToastId,
               description: message,
             })
           },
-          2000 // 2초마다 폴링
+          2000
         )
 
         toast.success('정책 처리 완료!', {
@@ -152,7 +157,6 @@ export const PolicyAddPage: React.FC<PolicyAddPageProps> = ({ onBack, onSuccess 
 
       setUploadProgress(100)
 
-      // 성공 메시지
       toast.success('정책이 성공적으로 등록되었습니다!', {
         description: `"${formData.title}" 정책이 시스템에 추가되었습니다.`,
         duration: 5000,
@@ -162,12 +166,17 @@ export const PolicyAddPage: React.FC<PolicyAddPageProps> = ({ onBack, onSuccess 
       setSelectedFile(null)
       setFormData({ title: '', authority: '', description: '' })
 
-      // 성공 콜백
       onSuccess?.()
     } catch (error) {
-      console.error('Upload error:', error)
-      const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다'
+      console.error('❌ [PolicyAdd] 업로드 실패:', error)
+      
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : '알 수 없는 오류가 발생했습니다'
+      
       toast.error('정책 등록 실패', {
+        id: uploadToastId,
         description: errorMessage,
         duration: 5000,
       })
