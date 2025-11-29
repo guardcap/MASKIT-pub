@@ -16,7 +16,9 @@
       "Bash(rm:*)",
       "Bash(kill:*)",
       "Bash(/Users/6kiity/Documents/enterprise-guardcap/venv/bin/pip uninstall:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []

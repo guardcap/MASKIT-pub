@@ -54,23 +54,10 @@ export function EmailDetailPage({ emailId, onBack }: EmailDetailPageProps) {
     try {
       setLoading(true)
       const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
-      const token = localStorage.getItem('auth_token')
 
-      if (!token) {
-        throw new Error('인증 토큰이 없습니다.')
-      }
+      const { authenticatedFetch } = await import('../utils/auth')
+      const data = await authenticatedFetch(`${API_BASE}/api/v1/emails/email/${emailId}`)
 
-      const response = await fetch(`${API_BASE}/api/v1/emails/email/${emailId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error('메일을 불러오는데 실패했습니다.')
-      }
-
-      const data = await response.json()
       setEmail(data)
       setError(null)
     } catch (err) {
