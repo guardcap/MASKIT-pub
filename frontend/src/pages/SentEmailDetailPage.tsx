@@ -108,9 +108,10 @@ interface PIIDecision {
 }
 
 // 마스킹된 텍스트를 hover card와 함께 렌더링하는 컴포넌트
-function MaskedTextWithMetadata({ text, decisions }: {
+function MaskedTextWithMetadata({ text, decisions, originalText }: {
   text: string
   decisions: Record<string, PIIDecision>
+  originalText?: string
 }) {
   if (!text || !decisions || Object.keys(decisions).length === 0) {
     return <span>{text}</span>
@@ -126,98 +127,86 @@ function MaskedTextWithMetadata({ text, decisions }: {
   // 디버깅: decisions 정보 출력
   console.log('[MaskedTextWithMetadata] Total decisions:', Object.keys(decisions).length)
   console.log('[MaskedTextWithMetadata] Filtered decisions (should_mask=true):', decisionsArray.length)
-  console.log('[MaskedTextWithMetadata] Text length:', text.length)
-  console.log('[MaskedTextWithMetadata] Text preview:', text.substring(0, 200))
+  console.log('[MaskedTextWithMetadata] Has original text:', !!originalText)
 
   // 모든 마스킹 위치를 찾아서 정렬
   interface MaskMatch {
     start: number
     end: number
     decision: PIIDecision
-    isMaskedValue: boolean  // masked_value로 찾았는지, 원본 value로 찾았는지 구분
   }
 
   const matches: MaskMatch[] = []
-  const unmatchedDecisions: PIIDecision[] = []
 
-  decisionsArray.forEach((decision) => {
-    const maskedValue = decision.masked_value || '***'
-    let searchIndex = 0
-    let foundCount = 0
+  // 원본 텍스트가 있으면 원본 순서 기반 매칭
+  if (originalText && originalText.length > 0) {
+    console.log('[MaskedTextWithMetadata] Using original text order matching')
 
-    // 1순위: masked_value로 검색 (마스킹된 텍스트에서 찾기)
-    while (true) {
-      const position = text.indexOf(maskedValue, searchIndex)
-      if (position === -1) break
-
-      matches.push({
-        start: position,
-        end: position + maskedValue.length,
-        decision: decision,
-        isMaskedValue: true
-      })
-
-      foundCount++
-      searchIndex = position + maskedValue.length
+    // 1. 각 decision이 원본 텍스트에서 처음 나타나는 위치 찾기
+    interface DecisionWithPosition {
+      decision: PIIDecision
+      originalPosition: number
     }
 
-    // 2순위: masked_value를 못 찾았다면 원본 value로도 검색
-    // (마스킹이 적용 안 된 경우 대비)
-    if (foundCount === 0 && decision.value) {
-      searchIndex = 0
-      while (true) {
-        const position = text.indexOf(decision.value, searchIndex)
-        if (position === -1) break
+    const decisionsWithPosition: DecisionWithPosition[] = decisionsArray.map(decision => {
+      const position = originalText.indexOf(decision.value)
+      return { decision, originalPosition: position }
+    }).filter(d => d.originalPosition !== -1) // 원본에서 찾을 수 없는 것 제외
 
-        // 이미 masked_value로 찾은 위치와 겹치지 않는지 확인
-        const isDuplicate = matches.some(
-          m => m.start <= position && position < m.end
-        )
+    // 2. 원본 텍스트에서의 출현 순서대로 정렬
+    decisionsWithPosition.sort((a, b) => a.originalPosition - b.originalPosition)
 
-        if (!isDuplicate) {
-          matches.push({
-            start: position,
-            end: position + decision.value.length,
-            decision: decision,
-            isMaskedValue: false
-          })
-          foundCount++
-        }
+    console.log('[MaskedTextWithMetadata] Decisions sorted by original position:',
+      decisionsWithPosition.map(d => ({
+        type: d.decision.type,
+        value: d.decision.value,
+        masked: d.decision.masked_value,
+        pos: d.originalPosition
+      }))
+    )
 
-        searchIndex = position + decision.value.length
+    // 3. 마스킹된 텍스트에서 순서대로 masked_value 찾아서 매칭
+    let searchIndex = 0
+
+    for (const { decision } of decisionsWithPosition) {
+      const maskedValue = decision.masked_value || '***'
+      const position = text.indexOf(maskedValue, searchIndex)
+
+      if (position !== -1) {
+        matches.push({
+          start: position,
+          end: position + maskedValue.length,
+          decision
+        })
+        searchIndex = position + maskedValue.length
+        console.log(`[MaskedTextWithMetadata] Matched: ${decision.type} "${decision.value}" -> "${maskedValue}" at ${position}`)
+      } else {
+        console.warn(`[MaskedTextWithMetadata] Could not find masked value "${maskedValue}" for ${decision.type} "${decision.value}"`)
       }
     }
+  } else {
+    // 원본 텍스트가 없으면 마스킹된 텍스트만으로 매칭 (fallback)
+    console.log('[MaskedTextWithMetadata] No original text, using fallback matching')
 
-    // 매칭되지 않은 decision 추적
-    if (foundCount === 0) {
-      unmatchedDecisions.push(decision)
-      console.warn('[MaskedTextWithMetadata] Unmatched PII:', {
-        type: decision.type,
-        value: decision.value,
-        masked_value: decision.masked_value,
-        pii_id: decision.pii_id
-      })
-    }
-  })
+    let searchIndex = 0
+    for (const decision of decisionsArray) {
+      const maskedValue = decision.masked_value || '***'
+      const position = text.indexOf(maskedValue, searchIndex)
 
-  console.log('[MaskedTextWithMetadata] Matches found:', matches.length)
-  console.log('[MaskedTextWithMetadata] Unmatched decisions:', unmatchedDecisions.length)
-
-  // 시작 위치 기준으로 정렬
-  matches.sort((a, b) => a.start - b.start)
-
-  // 겹치는 매치 제거 (더 긴 매치 우선, masked_value 우선)
-  const filteredMatches: MaskMatch[] = []
-  for (const match of matches) {
-    const hasOverlap = filteredMatches.some(
-      existing =>
-        (match.start >= existing.start && match.start < existing.end) ||
-        (match.end > existing.start && match.end <= existing.end)
-    )
-    if (!hasOverlap) {
-      filteredMatches.push(match)
+      if (position !== -1) {
+        matches.push({
+          start: position,
+          end: position + maskedValue.length,
+          decision
+        })
+        searchIndex = position + maskedValue.length
+      }
     }
   }
+
+  console.log('[MaskedTextWithMetadata] Total matches:', matches.length)
+
+  const filteredMatches = matches
 
   // 텍스트를 분할하여 렌더링
   const parts: React.ReactNode[] = []
@@ -724,6 +713,7 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
                   <MaskedTextWithMetadata
                     text={htmlToText(maskedEmail.masked_body || '본문이 없습니다')}
                     decisions={maskedEmail.masking_decisions || {}}
+                    originalText={htmlToText(originalEmail.original_body || originalEmail.body || '')}
                   />
                 </div>
               </div>
@@ -810,6 +800,7 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
                 <MaskedTextWithMetadata
                   text={htmlToText(maskedEmail.masked_body || '본문이 없습니다')}
                   decisions={maskedEmail.masking_decisions || {}}
+                  originalText={htmlToText(originalEmail.original_body || originalEmail.body || '')}
                 />
               </div>
             </div>
