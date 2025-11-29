@@ -610,7 +610,12 @@ async def delete_policy(
             backup_file.unlink()
 
         # MongoDB에서 삭제
-        await db["policies"].delete_one({"policy_id": policy_id})
+        delete_result = await db["policies"].delete_one({"policy_id": policy_id})
+        print(f"[Policy Delete] MongoDB 삭제 결과: {delete_result.deleted_count}개")
+
+        if delete_result.deleted_count == 0:
+            print(f"[Policy Delete] ⚠️ MongoDB에서 삭제 실패")
+            raise HTTPException(status_code=500, detail="정책 삭제에 실패했습니다")
 
         # ✅ 감사 로그 기록
         await AuditLogger.log(

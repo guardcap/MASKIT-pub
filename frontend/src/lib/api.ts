@@ -104,12 +104,34 @@ export async function getPolicyDetail(policyId: string): Promise<any> {
  * 정책 삭제
  */
 export async function deletePolicy(policyId: string): Promise<void> {
-  await apiRequest<{ success: boolean; message: string }>(
-    `/api/policies/${policyId}`,
-    {
-      method: 'DELETE',
-    }
-  )
+  console.log('🗑️ [API] deletePolicy 호출:', policyId)
+
+  const token = localStorage.getItem('auth_token')
+  if (!token) {
+    throw new Error('인증 토큰이 없습니다.')
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/policies/${policyId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  console.log('📥 [API] 삭제 응답:', response.status)
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    console.error('❌ [API] 삭제 실패:', errorData)
+    throw new Error(errorData.detail || errorData.message || '정책 삭제 실패')
+  }
+
+  const data = await response.json()
+  console.log('✅ [API] 삭제 성공:', data)
+
+  if (!data.success) {
+    throw new Error(data.message || '정책 삭제 실패')
+  }
 }
 
 /**
@@ -177,38 +199,50 @@ export async function uploadPolicyFile(
   file: File,
   title: string,
   authority: string,
-  description?: string
+  description: string
 ): Promise<any> {
   const formData = new FormData()
   formData.append('file', file)
   formData.append('title', title)
   formData.append('authority', authority)
-  if (description) {
-    formData.append('description', description)
+  formData.append('description', description)
+
+  console.log('📤 [API] uploadPolicyFile 호출:', {
+    filename: file.name,
+    size: file.size,
+    title,
+    authority,
+  })
+
+  const token = localStorage.getItem('auth_token')
+  if (!token) {
+    throw new Error('인증 토큰이 없습니다. 다시 로그인해주세요.')
   }
 
-  const url = `${API_BASE_URL}/api/policies/upload`
+  const response = await fetch(`${API_BASE_URL}/api/policies/upload`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  })
 
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      body: formData,
-      // FormData를 사용할 때는 Content-Type을 설정하지 않음 (브라우저가 자동으로 설정)
-    })
+  console.log('📥 [API] 응답 상태:', response.status)
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({
-        detail: `HTTP ${response.status}: ${response.statusText}`,
-      }))
-      throw new Error(error.detail || `파일 업로드 실패: ${response.statusText}`)
-    }
-
-    const data = await response.json()
-    return data.data
-  } catch (error) {
-    console.error('파일 업로드 오류:', error)
-    throw error
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    console.error('❌ [API] 업로드 실패:', errorData)
+    throw new Error(errorData.detail || errorData.message || '정책 업로드 실패')
   }
+
+  const data = await response.json()
+  console.log('✅ [API] 업로드 성공:', data)
+
+  if (!data.success) {
+    throw new Error(data.message || '정책 업로드 실패')
+  }
+
+  return data.data
 }
 
 /**
