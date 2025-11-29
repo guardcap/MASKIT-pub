@@ -823,11 +823,13 @@ def _generate_masked_preview(value: str, pii_type: str, method: str) -> str:
 
 def generate_summary(context: Dict, decisions: Dict, guides: List[Dict]) -> str:
     """AI 분석 요약 생성"""
+    from app.vectordb.rag_masking import normalize_receiver_type
 
     masked_count = sum(1 for d in decisions.values() if d.get('should_mask', False))
     total_count = len(decisions)
 
-    receiver_type = context.get('receiver_type', 'unknown')
+    # receiver_type 정규화 (한글 → 영어)
+    receiver_type = normalize_receiver_type(context)
     receiver_text = "외부" if receiver_type == "external" else "내부"
 
     summary = f"{receiver_text} 전송으로 분류되어, "
