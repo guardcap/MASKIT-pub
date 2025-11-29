@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { toast } from 'sonner'
-import { ArrowLeft, Mail, Calendar, Paperclip, Users, Eye, EyeOff, Shield, AlertTriangle, Info } from 'lucide-react'
+import { ArrowLeft, Mail, Calendar, Paperclip, Users, Eye, EyeOff, Shield, AlertTriangle, Info, FileText } from 'lucide-react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
@@ -24,17 +24,17 @@ const getPIITypeKorean = (type: string): string => {
   return typeMap[type] || type
 }
 
-// Risk level에 따른 색상 반환
+// Risk level에 따른 색상 반환 (톤 다운된 색상 사용)
 const getRiskBadgeColor = (riskLevel: string) => {
   switch (riskLevel) {
     case 'high':
-      return 'bg-red-100 text-red-800 border-red-300'
+      return 'bg-red-50 text-red-700 border-red-200' // Destructive 느낌 유지하되 부드럽게
     case 'medium':
-      return 'bg-orange-100 text-orange-800 border-orange-300'
+      return 'bg-amber-50 text-amber-700 border-amber-200' // Warning
     case 'low':
-      return 'bg-green-100 text-green-800 border-green-300'
+      return 'bg-primary/10 text-primary border-primary/20' // Safe
     default:
-      return 'bg-gray-100 text-gray-800 border-gray-300'
+      return 'bg-slate-100 text-slate-700 border-slate-200'
   }
 }
 
@@ -77,7 +77,7 @@ interface AttachmentInfo {
   filename: string
   content_type: string
   size: number
-  data?: string  // Base64 데이터
+  data?: string
 }
 
 interface MaskedEmailData {
@@ -117,19 +117,12 @@ function MaskedTextWithMetadata({ text, decisions, originalText }: {
     return <span>{text}</span>
   }
 
-  // 마스킹된 값들과 해당 결정사항을 매핑
   const decisionsArray = Object.values(decisions).filter(d => d.should_mask && d.masked_value)
 
   if (decisionsArray.length === 0) {
     return <span>{text}</span>
   }
 
-  // 디버깅: decisions 정보 출력
-  console.log('[MaskedTextWithMetadata] Total decisions:', Object.keys(decisions).length)
-  console.log('[MaskedTextWithMetadata] Filtered decisions (should_mask=true):', decisionsArray.length)
-  console.log('[MaskedTextWithMetadata] Has original text:', !!originalText)
-
-  // 모든 마스킹 위치를 찾아서 정렬
   interface MaskMatch {
     start: number
     end: number
@@ -138,79 +131,58 @@ function MaskedTextWithMetadata({ text, decisions, originalText }: {
 
   const matches: MaskMatch[] = []
 
-  // 원본 텍스트가 있으면 원본 순서 기반 매칭
   if (originalText && originalText.length > 0) {
-    console.log('[MaskedTextWithMetadata] Using original text order matching')
-
-    // 1. 각 decision이 원본 텍스트에서 처음 나타나는 위치 찾기
-    interface DecisionWithPosition {
-      decision: PIIDecision
-      originalPosition: number
+    interface MaskPattern {
+      value: string
+      start: number
+      end: number
     }
 
-    const decisionsWithPosition: DecisionWithPosition[] = decisionsArray.map(decision => {
-      const position = originalText.indexOf(decision.value)
-      return { decision, originalPosition: position }
-    }).filter(d => d.originalPosition !== -1) // 원본에서 찾을 수 없는 것 제외
+    const maskPatterns: MaskPattern[] = []
+    let i = 0
+    while (i < text.length) {
+      if (text[i] === '*') {
+        const start = i
+        while (i < text.length && text[i] === '*') {
+          i++
+        }
+        maskPatterns.push({
+          value: text.substring(start, i),
+          start,
+          end: i
+        })
+      } else {
+        i++
+      }
+    }
 
-    // 2. 원본 텍스트에서의 출현 순서대로 정렬
-    decisionsWithPosition.sort((a, b) => a.originalPosition - b.originalPosition)
+    const sortedDecisions = [...decisionsArray].sort((a, b) => {
+      const getIdNumber = (pii_id: string): number => {
+        const match = pii_id.match(/\d+/)
+        return match ? parseInt(match[0]) : 9999
+      }
+      return getIdNumber(a.pii_id) - getIdNumber(b.pii_id)
+    })
 
-    console.log('[MaskedTextWithMetadata] Decisions sorted by original position:',
-      decisionsWithPosition.map(d => ({
-        type: d.decision.type,
-        value: d.decision.value,
-        masked: d.decision.masked_value,
-        pos: d.originalPosition
-      }))
-    )
-
-    // 3. 마스킹된 텍스트에서 순서대로 masked_value 찾아서 매칭
-    let searchIndex = 0
-
-    for (const { decision } of decisionsWithPosition) {
+    let patternIndex = 0
+    for (const decision of sortedDecisions) {
       const maskedValue = decision.masked_value || '***'
-
-      // 현재 위치에서 masked_value를 찾되, 정확히 일치하는지 확인
-      // (별표가 더 길게 이어지지 않는지 체크)
-      let position = searchIndex
       let found = false
-
-      while (position < text.length) {
-        const idx = text.indexOf(maskedValue, position)
-        if (idx === -1) break
-
-        // 매칭된 위치가 정확한지 확인
-        // 1. 앞에 별표가 없는지 확인
-        const charBefore = idx > 0 ? text[idx - 1] : ''
-        // 2. 뒤에 별표가 없는지 확인 (masked_value보다 긴 별표 문자열이 아닌지)
-        const charAfter = idx + maskedValue.length < text.length ? text[idx + maskedValue.length] : ''
-
-        if (charBefore !== '*' && charAfter !== '*') {
-          // 정확히 일치하는 위치 찾음
+      for (let j = patternIndex; j < maskPatterns.length; j++) {
+        const pattern = maskPatterns[j]
+        if (pattern.value === maskedValue) {
           matches.push({
-            start: idx,
-            end: idx + maskedValue.length,
+            start: pattern.start,
+            end: pattern.end,
             decision
           })
-          searchIndex = idx + maskedValue.length
+          patternIndex = j + 1
           found = true
-          console.log(`[MaskedTextWithMetadata] Matched: ${decision.type} "${decision.value}" -> "${maskedValue}" at ${idx}`)
           break
-        } else {
-          // 이 위치는 더 긴 별표 문자열의 일부이므로 다음 위치 검색
-          position = idx + 1
         }
-      }
-
-      if (!found) {
-        console.warn(`[MaskedTextWithMetadata] Could not find exact match for masked value "${maskedValue}" (${decision.type} "${decision.value}")`)
       }
     }
   } else {
-    // 원본 텍스트가 없으면 마스킹된 텍스트만으로 매칭 (fallback)
-    console.log('[MaskedTextWithMetadata] No original text, using fallback matching')
-
     let searchIndex = 0
     for (const decision of decisionsArray) {
       const maskedValue = decision.masked_value || '***'
@@ -227,16 +199,11 @@ function MaskedTextWithMetadata({ text, decisions, originalText }: {
     }
   }
 
-  console.log('[MaskedTextWithMetadata] Total matches:', matches.length)
-
   const filteredMatches = matches
-
-  // 텍스트를 분할하여 렌더링
   const parts: React.ReactNode[] = []
   let lastIndex = 0
 
   filteredMatches.forEach((match, idx) => {
-    // 마스킹 이전 텍스트 추가
     if (match.start > lastIndex) {
       parts.push(
         <span key={`text-${idx}`}>
@@ -245,56 +212,57 @@ function MaskedTextWithMetadata({ text, decisions, originalText }: {
       )
     }
 
-    // 마스킹된 텍스트를 HoverCard로 감싸기
+    // 마스킹 하이라이트 스타일 변경 (Secondary color 활용)
     parts.push(
       <HoverCard key={`masked-${idx}`} openDelay={200} closeDelay={100}>
         <HoverCardTrigger asChild>
-          <span className="cursor-help bg-teal-50 border-b-2 border-primary/50 px-0.5 rounded hover:bg-teal-100 transition-colors">
+          <span className="cursor-help text-primary px-0.5 rounded border-b border-primary/30 transition-colors font-medium" style={{ backgroundColor: 'hsl(168.4 83.8% 78.2% / 0.2)' } as React.CSSProperties} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'hsl(168.4 83.8% 78.2% / 0.3)'}>
             {text.substring(match.start, match.end)}
           </span>
         </HoverCardTrigger>
-        <HoverCardContent className="w-80 z-50" side="top" align="start" sideOffset={5}>
+        <HoverCardContent className="w-80 z-50 border-primary/20" side="top" align="start" sideOffset={5}>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold flex items-center gap-1">
+              <h4 className="text-sm font-semibold flex items-center gap-1 text-slate-800">
                 {getRiskIcon(match.decision.risk_level)}
-                마스킹된 PII 정보
+                PII 상세 정보
               </h4>
-              <Badge className={`text-xs ${getRiskBadgeColor(match.decision.risk_level)}`}>
+              <Badge className={`text-xs ${getRiskBadgeColor(match.decision.risk_level)} shadow-none`}>
                 {match.decision.risk_level.toUpperCase()}
               </Badge>
             </div>
 
-            <div className="space-y-1 text-xs">
+            <div className="space-y-1 text-xs text-slate-600">
               <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground shrink-0">PII 유형:</span>
+                <span className="text-slate-500 shrink-0">PII 유형:</span>
                 <span className="font-medium text-right">{getPIITypeKorean(match.decision.type)}</span>
               </div>
               <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground shrink-0">원본 값:</span>
-                <span className="font-mono text-red-600 text-right break-all">{match.decision.value}</span>
+                <span className="text-slate-500 shrink-0">원본 값:</span>
+                {/* 원본값은 민감하므로 붉은 계열 유지하되 톤다운 */}
+                <span className="font-mono text-red-600/80 text-right break-all">{match.decision.value}</span>
               </div>
               <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground shrink-0">마스킹 값:</span>
-                <span className="font-mono text-primary text-right break-all">{match.decision.masked_value}</span>
+                <span className="text-slate-500 shrink-0">마스킹 값:</span>
+                <span className="font-mono text-primary text-right break-all font-semibold">{match.decision.masked_value}</span>
               </div>
               <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground shrink-0">마스킹 방법:</span>
-                <Badge variant="outline" className="text-xs">
+                <span className="text-slate-500 shrink-0">마스킹 방법:</span>
+                <Badge variant="outline" className="text-[10px] h-5 px-1 bg-slate-50">
                   {match.decision.masking_method === 'full' ? '전체' : '부분'}
                 </Badge>
               </div>
             </div>
 
-            <div className="pt-2 border-t">
-              <p className="text-xs font-medium mb-1">마스킹 이유:</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">{match.decision.reason}</p>
+            <div className="pt-2 border-t border-slate-100">
+              <p className="text-xs font-medium mb-1 text-slate-700">마스킹 이유:</p>
+              <p className="text-xs text-slate-500 leading-relaxed">{match.decision.reason}</p>
             </div>
 
             {match.decision.cited_guidelines && match.decision.cited_guidelines.length > 0 && (
-              <div className="pt-2 border-t">
-                <p className="text-xs font-medium mb-1">적용된 규정:</p>
-                <ul className="text-xs text-muted-foreground space-y-1">
+              <div className="pt-2 border-t border-slate-100">
+                <p className="text-xs font-medium mb-1 text-slate-700">적용된 규정:</p>
+                <ul className="text-xs text-slate-500 space-y-1">
                   {match.decision.cited_guidelines.slice(0, 3).map((guideline, i) => (
                     <li key={i} className="flex items-start gap-1">
                       <span className="text-primary shrink-0">•</span>
@@ -305,9 +273,9 @@ function MaskedTextWithMetadata({ text, decisions, originalText }: {
               </div>
             )}
 
-            <div className="pt-2 border-t flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">신뢰도:</span>
-              <span className="font-medium">{(match.decision.confidence * 100).toFixed(0)}%</span>
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+              <span className="text-slate-500">AI 신뢰도:</span>
+              <span className="font-medium text-primary">{(match.decision.confidence * 100).toFixed(0)}%</span>
             </div>
           </div>
         </HoverCardContent>
@@ -317,7 +285,6 @@ function MaskedTextWithMetadata({ text, decisions, originalText }: {
     lastIndex = match.end
   })
 
-  // 남은 텍스트 추가
   if (lastIndex < text.length) {
     parts.push(
       <span key="text-end">{text.substring(lastIndex)}</span>
@@ -341,7 +308,6 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
   useEffect(() => {
     loadEmailDetails()
     return () => {
-      // Cleanup blob URLs
       originalAttachmentUrls.forEach(url => URL.revokeObjectURL(url))
       maskedAttachmentUrls.forEach(url => URL.revokeObjectURL(url))
     }
@@ -353,20 +319,15 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
     try {
       const token = localStorage.getItem('auth_token')
 
-      // 1. 원본 이메일 데이터 로드
       const emailResponse = await fetch(`${API_BASE_URL}/api/v1/files/original_emails/${emailId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
 
-      if (!emailResponse.ok) {
-        throw new Error('원본 이메일을 불러오는데 실패했습니다.')
-      }
+      if (!emailResponse.ok) throw new Error('원본 이메일을 불러오는데 실패했습니다.')
 
       const emailResult = await emailResponse.json()
       if (emailResult.success && emailResult.data) {
         setOriginalEmail(emailResult.data)
-
-        // 원본 첨부파일 Blob URL 생성
         if (emailResult.data.attachments) {
           const urlMap = new Map<string, string>()
           for (const attachment of emailResult.data.attachments) {
@@ -387,7 +348,6 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
         }
       }
 
-      // 2. 마스킹된 이메일 데이터 로드
       const maskedResponse = await fetch(`${API_BASE_URL}/api/v1/files/masked_emails/${emailId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
@@ -398,7 +358,6 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
           setMaskedEmail(maskedResult.data)
           hasMaskedData = true
 
-          // 마스킹된 첨부파일 Blob URL 생성
           if (maskedResult.data.masked_attachments) {
             const urlMap = new Map<string, string>()
             for (const attachment of maskedResult.data.masked_attachments) {
@@ -418,8 +377,6 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
             setMaskedAttachmentUrls(urlMap)
           }
         }
-      } else {
-        console.log('마스킹된 이메일이 없습니다.')
       }
 
     } catch (error: any) {
@@ -427,7 +384,6 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
       toast.error(error.message || '이메일을 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
-      // 마스킹 데이터가 없으면 원본 보기로 설정
       if (!hasMaskedData) {
         setActiveView('original')
       }
@@ -444,67 +400,80 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
     })
   }
 
-  // HTML을 텍스트로 변환하는 함수
   const htmlToText = (html: string): string => {
     if (!html) return ''
-
-    // 임시 div 엘리먼트 생성
     const tempDiv = document.createElement('div')
     tempDiv.innerHTML = html
-
-    // <br>, <div>, <p> 태그를 줄바꿈으로 변환
     tempDiv.innerHTML = tempDiv.innerHTML
       .replace(/<br\s*\/?>/gi, '\n')
       .replace(/<\/div>/gi, '\n')
       .replace(/<\/p>/gi, '\n\n')
       .replace(/<div>/gi, '')
       .replace(/<p>/gi, '')
-
-    // 텍스트 추출
     return tempDiv.textContent || tempDiv.innerText || ''
   }
 
-  const renderAttachment = (attachment: AttachmentInfo, urlMap: Map<string, string>) => {
+  const renderAttachment = (attachment: AttachmentInfo, urlMap: Map<string, string>, isMasked: boolean = false) => {
     const url = urlMap.get(attachment.filename)
 
     if (!url) {
-      return <div className="text-sm text-gray-500">로딩 중...</div>
+      return <div className="text-sm text-slate-500">로딩 중...</div>
     }
 
     const isImage = attachment.content_type.startsWith('image/')
     const isPDF = attachment.content_type === 'application/pdf'
+    
+    // 첨부파일 박스 스타일
+    const boxStyle = isMasked 
+      ? "p-4 border border-primary/20 rounded bg-secondary/30" 
+      : "p-4 border border-slate-200 rounded bg-slate-50"
+
+    const linkStyle = isMasked 
+      ? "text-primary text-sm font-medium hover:underline underline-offset-4" 
+      : "text-slate-600 text-sm font-medium hover:underline underline-offset-4"
 
     if (isImage) {
       return (
         <img
           src={url}
           alt={`${attachment.filename} 미리보기`}
-          className="max-w-full h-auto border rounded"
+          className="max-w-full h-auto border rounded border-slate-200"
         />
       )
     } else if (isPDF) {
       return (
-        <object
-          data={url}
-          type="application/pdf"
-          className="w-full h-[600px] border rounded"
-        >
-          <p className="text-sm text-gray-500">
-            PDF를 표시할 수 없습니다.
-            <a href={url} download={attachment.filename} className="text-blue-500 underline ml-1">
-              다운로드
+        <div className="space-y-2">
+          <object
+            data={url}
+            type="application/pdf"
+            className="w-full h-[500px] border rounded border-slate-200"
+          >
+            <p className="text-sm text-slate-500">
+              PDF를 미리볼 수 없습니다.
+            </p>
+          </object>
+          <div className="text-right">
+             <a href={url} download={attachment.filename} className={linkStyle}>
+              PDF 다운로드
             </a>
-          </p>
-        </object>
+          </div>
+        </div>
       )
     }
 
     return (
-      <div className="p-4 border rounded bg-gray-50">
-        <p className="text-sm">📄 {attachment.filename}</p>
-        <a href={url} download={attachment.filename} className="text-blue-500 text-sm underline">
-          다운로드
-        </a>
+      <div className={boxStyle}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Paperclip className={`h-4 w-4 ${isMasked ? 'text-primary' : 'text-slate-400'}`} />
+            <span className={`text-sm ${isMasked ? 'text-slate-800' : 'text-slate-600'}`}>
+              {attachment.filename}
+            </span>
+          </div>
+          <a href={url} download={attachment.filename} className={linkStyle}>
+            다운로드
+          </a>
+        </div>
       </div>
     )
   }
@@ -512,9 +481,9 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
   if (loading) {
     return (
       <div className="container mx-auto max-w-7xl p-6">
-        <div className="text-center py-12">
-          <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p className="text-muted-foreground">이메일을 불러오는 중...</p>
+        <div className="text-center py-20">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-slate-500">데이터를 불러오는 중입니다...</p>
         </div>
       </div>
     )
@@ -523,13 +492,16 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
   if (!originalEmail) {
     return (
       <div className="container mx-auto max-w-7xl p-6">
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-red-100 bg-red-50/50">
           <CardContent className="pt-6">
-            <p className="text-red-800 text-center">이메일을 찾을 수 없습니다.</p>
+            <p className="text-red-600 text-center flex items-center justify-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              이메일 데이터를 찾을 수 없습니다.
+            </p>
             {onBack && (
-              <Button onClick={onBack} className="mt-4 mx-auto block">
+              <Button variant="ghost" onClick={onBack} className="mt-4 mx-auto block hover:bg-red-100 text-red-600">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                뒤로 가기
+                목록으로 돌아가기
               </Button>
             )}
           </CardContent>
@@ -540,135 +512,123 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
 
   return (
     <div className="container mx-auto max-w-7xl p-6 space-y-6">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between">
+      {/* 헤더 섹션 */}
+      <div className="flex items-center justify-between pb-4 border-b border-slate-100">
         <div>
-          <h2 className="text-2xl font-semibold">📧 이메일 상세보기</h2>
-          <p className="text-sm text-muted-foreground mt-1">원본과 마스킹 결과를 비교할 수 있습니다</p>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900">상세 분석 리포트</h2>
+          <p className="text-sm text-slate-500 mt-1">원본 데이터와 AI 마스킹 처리 결과를 비교 분석합니다.</p>
         </div>
         {onBack && (
-          <Button variant="outline" onClick={onBack}>
+          <Button variant="outline" onClick={onBack} className="border-slate-200 text-slate-700 hover:bg-slate-50">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            뒤로 가기
+            목록으로
           </Button>
         )}
       </div>
 
-      {/* 이메일 기본 정보 */}
-      <Card className="border-blue-200 bg-blue-50/50">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="text-lg">{originalEmail.subject}</span>
-            {maskedEmail && (
-              <Badge variant="default" className="bg-green-600">
-                마스킹 완료
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <Mail className="h-4 w-4" />
-              <div>
-                <span className="font-medium">발신:</span>{' '}
-                <span className="text-foreground">{originalEmail.from_email}</span>
+      {/* 이메일 메타 정보 카드 (색상 통일: 화이트 베이스 + Primary 강조) */}
+      <Card className="border-slate-200 shadow-sm bg-white">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between">
+            <div className="space-y-1">
+              <CardTitle className="text-xl font-semibold text-slate-900">{originalEmail.subject}</CardTitle>
+              <div className="flex items-center gap-2 text-sm text-slate-500">
+                <Calendar className="h-3.5 w-3.5" />
+                {formatDate(originalEmail.created_at)}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
+            {maskedEmail && (
+              <Badge className="bg-primary hover:bg-primary/90 text-primary-foreground border-transparent px-3 py-1 text-sm font-normal">
+                분석 완료
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8 text-sm pt-2 border-t border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-slate-500">
+                <Mail className="h-4 w-4" />
+              </div>
               <div>
-                <span className="font-medium">수신:</span>{' '}
-                <span className="text-foreground">
+                <span className="block text-xs text-slate-500">발신자</span>
+                <span className="font-medium text-slate-900">{originalEmail.from_email}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-slate-500">
+                <Users className="h-4 w-4" />
+              </div>
+              <div>
+                <span className="block text-xs text-slate-500">수신자</span>
+                <span className="font-medium text-slate-900">
                   {originalEmail.to_emails?.join(', ') || originalEmail.to_email}
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              <div>
-                <span className="font-medium">작성:</span>{' '}
-                <span className="text-foreground">{formatDate(originalEmail.created_at)}</span>
-              </div>
-            </div>
-            {originalEmail.attachments && originalEmail.attachments.length > 0 && (
-              <div className="flex items-center gap-2">
-                <Paperclip className="h-4 w-4" />
-                <div>
-                  <span className="font-medium">첨부파일:</span>{' '}
-                  <span className="text-foreground">{originalEmail.attachments.length}개</span>
-                </div>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* 마스킹 통계 (마스킹된 이메일이 있는 경우) */}
+      {/* 통계 요약 (Primary Color 중심) */}
       {maskedEmail && (
-        <Card className="border-green-200 bg-green-50/30">
-          <CardHeader>
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Eye className="h-4 w-4" />
-              마스킹 정보
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              <div className="text-center p-3 bg-white rounded-lg border">
-                <div className="text-2xl font-bold text-green-600">{maskedEmail.pii_masked_count || 0}</div>
-                <div className="text-xs text-muted-foreground mt-1">마스킹된 PII</div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="border-primary/20 bg-secondary/30 shadow-sm">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-primary uppercase">Masked PII</p>
+                <p className="text-2xl font-bold text-slate-900 mt-1">{maskedEmail.pii_masked_count || 0}<span className="text-sm font-normal text-slate-500 ml-1">건</span></p>
               </div>
-              <div className="text-center p-3 bg-white rounded-lg border">
-                <div className="text-2xl font-bold text-blue-600">
-                  {maskedEmail.masked_attachments?.length || 0}
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">첨부파일</div>
+              <div className="h-10 w-10 rounded-full bg-white flex items-center justify-center text-primary shadow-sm border border-primary/10">
+                <Shield className="h-5 w-5" />
               </div>
-              <div className="text-center p-3 bg-white rounded-lg border">
-                <div className="text-2xl font-bold text-orange-600">
-                  {Object.keys(maskedEmail.masking_decisions || {}).length}
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">적용된 규칙</div>
+            </CardContent>
+          </Card>
+          <Card className="border-slate-200 bg-white shadow-sm">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-slate-500 uppercase">Attachments</p>
+                <p className="text-2xl font-bold text-slate-900 mt-1">{maskedEmail.masked_attachments?.length || 0}<span className="text-sm font-normal text-slate-500 ml-1">개</span></p>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="h-10 w-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 border border-slate-100">
+                <Paperclip className="h-5 w-5" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-slate-200 bg-white shadow-sm">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-slate-500 uppercase">Applied Rules</p>
+                <p className="text-2xl font-bold text-slate-900 mt-1">{Object.keys(maskedEmail.masking_decisions || {}).length}<span className="text-sm font-normal text-slate-500 ml-1">개</span></p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 border border-slate-100">
+                <FileText className="h-5 w-5" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
-      {/* 마스킹 없음 안내 */}
-      {!maskedEmail && (
-        <Card className="border-yellow-200 bg-yellow-50/50">
-          <CardContent className="pt-4 text-center">
-            <p className="text-sm text-muted-foreground">
-              ⚠️ 이 이메일은 마스킹 처리되지 않았습니다. 원본만 확인할 수 있습니다.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 뷰 선택 버튼 */}
+      {/* 뷰 컨트롤러 */}
       {maskedEmail && (
-        <div className="flex gap-2 justify-center">
-          <Button
-            variant={activeView === 'compare' ? 'default' : 'outline'}
-            onClick={() => setActiveView('compare')}
-          >
-            <Eye className="mr-2 h-4 w-4" />
-            비교 보기
-          </Button>
-          <Button
-            variant={activeView === 'original' ? 'default' : 'outline'}
-            onClick={() => setActiveView('original')}
-          >
-            원본만
-          </Button>
-          <Button
-            variant={activeView === 'masked' ? 'default' : 'outline'}
-            onClick={() => setActiveView('masked')}
-          >
-            마스킹만
-          </Button>
+        <div className="flex justify-center py-2">
+          <div className="inline-flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+            {(['compare', 'original', 'masked'] as const).map((view) => (
+              <button
+                key={view}
+                onClick={() => setActiveView(view)}
+                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all duration-200 ${
+                  activeView === view
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                {view === 'compare' && '비교 보기'}
+                {view === 'original' && '원본만 보기'}
+                {view === 'masked' && '결과만 보기'}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -676,21 +636,21 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
       {activeView === 'compare' && maskedEmail && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* 원본 */}
-          <Card className="border-blue-300 shadow-lg">
-            <CardHeader className="bg-blue-50 border-b border-blue-200">
+          <Card className="border-slate-200 shadow-lg">
+            <CardHeader className="bg-slate-50 border-b border-slate-200">
               <CardTitle className="text-base flex items-center gap-2">
-                <EyeOff className="h-5 w-5 text-blue-600" />
+                <EyeOff className="h-5 w-5 text-slate-500" />
                 원본 (마스킹 전)
               </CardTitle>
-              <CardDescription className="text-xs">
+              <CardDescription className="text-xs text-slate-500">
                 실제 전송되지 않은 원본 데이터입니다
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-4 space-y-4">
               {/* 본문 */}
               <div>
-                <h4 className="font-semibold text-sm mb-2">📝 본문</h4>
-                <div className="bg-gray-50 border rounded p-4 text-sm whitespace-pre-wrap max-h-[400px] overflow-y-auto">
+                <h4 className="font-semibold text-sm mb-2 text-slate-700">📝 본문</h4>
+                <div className="bg-slate-50 border border-slate-200 rounded p-4 text-sm whitespace-pre-wrap max-h-[400px] overflow-y-auto text-slate-800">
                   {htmlToText(originalEmail.original_body || originalEmail.body || '')}
                 </div>
               </div>
@@ -698,15 +658,15 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
               {/* 첨부파일 */}
               {originalEmail.attachments && originalEmail.attachments.length > 0 && (
                 <div>
-                  <h4 className="font-semibold text-sm mb-2">
+                  <h4 className="font-semibold text-sm mb-2 text-slate-700">
                     📎 첨부파일 ({originalEmail.attachments.length}개)
                   </h4>
                   <div className="space-y-3">
                     {originalEmail.attachments.map((att, idx) => (
-                      <div key={idx} className="border rounded p-3 bg-white">
+                      <div key={idx} className="border border-slate-200 rounded p-3 bg-white">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium text-sm">{att.filename}</span>
-                          <Badge variant="outline" className="text-xs">{att.content_type}</Badge>
+                          <span className="font-medium text-sm text-slate-700">{att.filename}</span>
+                          <Badge variant="outline" className="text-xs text-slate-500">{att.content_type}</Badge>
                         </div>
                         {renderAttachment(att, originalAttachmentUrls)}
                       </div>
@@ -718,21 +678,20 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
           </Card>
 
           {/* 마스킹 */}
-          <Card className="border-green-300 shadow-lg">
-            <CardHeader className="bg-green-50 border-b border-green-200">
+          <Card className="border-primary/50 shadow-lg bg-secondary/10">
+            <CardHeader style={{ backgroundColor: 'hsl(168.4 83.8% 78.2% / 0.2)' } as React.CSSProperties} className="border-b border-primary/50">
               <CardTitle className="text-base flex items-center gap-2">
-                <Eye className="h-5 w-5 text-green-600" />
+                <Eye className="h-5 w-5 text-primary" />
                 마스킹 결과 (전송됨)
               </CardTitle>
-              <CardDescription className="text-xs">
+              <CardDescription className="text-xs text-slate-600">
                 실제 수신자에게 전송된 마스킹 처리된 데이터입니다
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-4 space-y-4">
               {/* 본문 */}
               <div>
-                <h4 className="font-semibold text-sm mb-2">📝 본문</h4>
-                <div className="bg-green-50 border border-green-200 rounded p-4 text-sm whitespace-pre-wrap max-h-[400px] overflow-y-auto">
+                <div className="bg-white border border-primary/20 rounded p-4 text-sm whitespace-pre-wrap max-h-[400px] overflow-y-auto text-slate-800">
                   <MaskedTextWithMetadata
                     text={htmlToText(maskedEmail.masked_body || '본문이 없습니다')}
                     decisions={maskedEmail.masking_decisions || {}}
@@ -744,15 +703,15 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
               {/* 첨부파일 */}
               {maskedEmail.masked_attachments && maskedEmail.masked_attachments.length > 0 && (
                 <div>
-                  <h4 className="font-semibold text-sm mb-2">
+                  <h4 className="font-semibold text-sm mb-2 text-slate-900">
                     📎 첨부파일 ({maskedEmail.masked_attachments.length}개)
                   </h4>
                   <div className="space-y-3">
                     {maskedEmail.masked_attachments.map((att, idx) => (
-                      <div key={idx} className="border border-green-200 rounded p-3 bg-white">
+                      <div key={idx} className="border border-primary/20 rounded p-3 bg-white">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium text-sm">{att.filename}</span>
-                          <Badge variant="outline" className="text-xs bg-green-50">{att.content_type}</Badge>
+                          <span className="font-medium text-sm text-slate-900">{att.filename}</span>
+                          <Badge variant="outline" className="text-xs bg-secondary text-primary border-primary/20">{att.content_type}</Badge>
                         </div>
                         {renderAttachment(att, maskedAttachmentUrls)}
                       </div>
@@ -767,9 +726,9 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
 
       {/* 원본만 보기 */}
       {activeView === 'original' && (
-        <Card className="border-blue-300">
-          <CardHeader className="bg-blue-50">
-            <CardTitle className="text-sm flex items-center gap-2">
+        <Card className="border-slate-200">
+          <CardHeader className="bg-slate-50 border-b border-slate-100">
+            <CardTitle className="text-sm flex items-center gap-2 text-slate-700">
               <EyeOff className="h-4 w-4" />
               원본 이메일
             </CardTitle>
@@ -777,8 +736,7 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
           <CardContent className="pt-4 space-y-4">
             {/* 본문 */}
             <div>
-              <h4 className="font-semibold mb-2">📝 본문</h4>
-              <div className="bg-gray-50 border rounded p-4 text-sm whitespace-pre-wrap max-h-[600px] overflow-y-auto">
+              <div className="bg-slate-50 border border-slate-200 rounded p-4 text-sm whitespace-pre-wrap max-h-[600px] overflow-y-auto text-slate-800">
                 {htmlToText(originalEmail.original_body || originalEmail.body || '본문이 없습니다')}
               </div>
             </div>
@@ -786,15 +744,15 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
             {/* 첨부파일 */}
             {originalEmail.attachments && originalEmail.attachments.length > 0 && (
               <div>
-                <h4 className="font-semibold mb-2">
+                <h4 className="font-semibold mb-2 text-slate-700">
                   📎 첨부파일 ({originalEmail.attachments.length}개)
                 </h4>
                 <div className="space-y-4">
                   {originalEmail.attachments.map((att, idx) => (
-                    <div key={idx} className="border rounded p-4 bg-white">
+                    <div key={idx} className="border border-slate-200 rounded p-4 bg-white">
                       <div className="flex items-center justify-between mb-3">
-                        <span className="font-medium">{att.filename}</span>
-                        <Badge variant="outline">{att.content_type}</Badge>
+                        <span className="font-medium text-slate-700">{att.filename}</span>
+                        <Badge variant="outline" className="text-slate-500">{att.content_type}</Badge>
                       </div>
                       {renderAttachment(att, originalAttachmentUrls)}
                     </div>
@@ -808,18 +766,18 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
 
       {/* 마스킹만 보기 */}
       {activeView === 'masked' && maskedEmail && (
-        <Card className="border-green-300">
-          <CardHeader className="bg-green-50">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Eye className="h-4 w-4" />
+        <Card className="border-primary/50 shadow-lg bg-secondary/10">
+            <CardHeader style={{ backgroundColor: 'hsl(168.4 83.8% 78.2% / 0.2)' } as React.CSSProperties} className="border-b border-primary/50">
+            <CardTitle className="text-sm flex items-center gap-2 text-primary-dark">
+              <Eye className="h-4 w-4 text-primary" />
               마스킹된 이메일
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-4 space-y-4">
             {/* 본문 */}
             <div>
-              <h4 className="font-semibold mb-2">📝 본문</h4>
-              <div className="bg-green-50 border border-green-200 rounded p-4 text-sm whitespace-pre-wrap max-h-[600px] overflow-y-auto">
+
+              <div className="bg-white border border-primary/20 rounded p-4 text-sm whitespace-pre-wrap max-h-[600px] overflow-y-auto text-slate-800">
                 <MaskedTextWithMetadata
                   text={htmlToText(maskedEmail.masked_body || '본문이 없습니다')}
                   decisions={maskedEmail.masking_decisions || {}}
@@ -831,15 +789,15 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
             {/* 첨부파일 */}
             {maskedEmail.masked_attachments && maskedEmail.masked_attachments.length > 0 && (
               <div>
-                <h4 className="font-semibold mb-2">
+                <h4 className="font-semibold mb-2 text-slate-900">
                   📎 첨부파일 ({maskedEmail.masked_attachments.length}개)
                 </h4>
                 <div className="space-y-4">
                   {maskedEmail.masked_attachments.map((att, idx) => (
-                    <div key={idx} className="border border-green-200 rounded p-4 bg-white">
+                    <div key={idx} className="border border-primary/20 rounded p-4 bg-white">
                       <div className="flex items-center justify-between mb-3">
-                        <span className="font-medium">{att.filename}</span>
-                        <Badge variant="outline" className="bg-green-50">{att.content_type}</Badge>
+                        <span className="font-medium text-slate-900">{att.filename}</span>
+                        <Badge variant="outline" className="bg-secondary text-primary border-primary/20">{att.content_type}</Badge>
                       </div>
                       {renderAttachment(att, maskedAttachmentUrls)}
                     </div>
