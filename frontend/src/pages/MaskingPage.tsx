@@ -577,12 +577,18 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
           const decisionKey = `pii_${index}`
           const matchingDecision = decisions[decisionKey]
 
-          if (matchingDecision && matchingDecision.should_mask) {
-            pii.shouldMask = true
+          if (matchingDecision) {
+            // 마스킹 필요 여부에 관계없이 항상 decision 정보 저장
+            pii.shouldMask = matchingDecision.should_mask
             pii.maskingDecision = matchingDecision as MaskingDecision
-            console.log(`✅ PII ${index} 마스킹 권장:`, pii.value, matchingDecision.reason)
+
+            if (matchingDecision.should_mask) {
+              console.log(`✅ PII ${index} 마스킹 권장:`, pii.value, matchingDecision.reason)
+            } else {
+              console.log(`⚪ PII ${index} 마스킹 불필요:`, pii.value, matchingDecision.reason)
+            }
           } else {
-            console.log(`⚪ PII ${index} 마스킹 불필요:`, pii.value)
+            console.log(`⚠️ PII ${index} 판단 결과 없음:`, pii.value)
           }
         })
 
@@ -1754,8 +1760,8 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
                             )}
                           </div>
 
-                          {/* AI 분석 근거 (마스킹 권장된 경우만) */}
-                          {pii.shouldMask && pii.maskingDecision && (
+                          {/* AI 분석 근거 (모든 경우 표시) */}
+                          {pii.maskingDecision && (
                             <div className="text-xs space-y-1">
                               <p className="text-muted-foreground">
                                 💡 {pii.maskingDecision.reason}

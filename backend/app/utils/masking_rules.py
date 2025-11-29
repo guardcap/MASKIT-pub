@@ -244,6 +244,23 @@ class MaskingRules:
             'full': mask_card_number_full.__func__,
             'partial': mask_card_number_partial.__func__,
         },
+        # 대문자 영어명 매핑 (PII 탐지 모듈 호환성)
+        'person': {
+            'full': mask_name_full.__func__,
+            'partial': mask_name_partial.__func__,
+        },
+        'resident_id': {
+            'full': mask_jumin_full.__func__,
+            'partial': mask_jumin_partial.__func__,
+        },
+        'organization': {
+            'full': mask_company_full.__func__,
+            'partial': mask_company_partial.__func__,
+        },
+        'bank_account': {
+            'full': mask_account_full.__func__,
+            'partial': mask_account_partial.__func__,
+        },
     }
 
     @classmethod

@@ -19,6 +19,7 @@ from pydantic import BaseModel
 
 from app.audit.logger import AuditLogger
 from app.auth.auth_utils import get_current_user
+from app.vectordb.rag_masking import decide_all_pii_with_rag
 
 load_dotenv()
 
@@ -558,9 +559,8 @@ async def analyze_email_with_rag(
 
         print(f"✅ {len(relevant_guides)}개 가이드라인 검색됨")
 
-        # LLM으로 마스킹 결정
-        masking_decisions = await decide_masking_with_llm(
-            request.email_body,
+        # RAG 기반 마스킹 결정
+        masking_decisions = await decide_all_pii_with_rag(
             request.detected_pii,
             request.context,
             relevant_guides
