@@ -524,32 +524,81 @@ async def get_email_detail(
 ):
     """
     이메일 상세 조회 (권한 확인 포함)
+    email_id는 MongoDB ObjectId 또는 커스텀 email_id (email_20251126_161911_a14eeebd 형식) 모두 가능
     """
     try:
+        # 먼저 ObjectId로 시도
+        email = None
         try:
             obj_id = ObjectId(email_id)
+            email = await db.emails.find_one({"_id": obj_id})
         except:
-            raise HTTPException(status_code=400, detail="잘못된 이메일 ID입니다")
-        
-        email = await db.emails.find_one({"_id": obj_id})
-        
+            # ObjectId가 아니면 커스텀 email_id로 조회
+            pass
+
+        # ObjectId로 못 찾았으면 email_id 필드로 조회
+        if not email:
+            # original_emails 컬렉션에서 조회
+            original_email = await db.original_emails.find_one({"email_id": email_id})
+            if original_email:
+                # masked_emails에서도 조회
+                masked_email = await db.masked_emails.find_one({"email_id": email_id})
+
+                # 두 데이터를 합쳐서 반환
+                email = {
+                    "_id": str(original_email.get("_id", "")),
+                    "id": email_id,
+                    "email_id": email_id,
+                    "from_email": original_email.get("from_email"),
+                    "to_email": original_email.get("to_emails", [])[0] if original_email.get("to_emails") else "",
+                    "to_emails": original_email.get("to_emails", []),
+                    "subject": original_email.get("subject"),
+                    "body": original_email.get("original_body"),
+                    "original_body": original_email.get("original_body"),
+                    "masked_body": masked_email.get("masked_body") if masked_email else None,
+                    "attachments": original_email.get("attachments", []),
+                    "masked_attachments": masked_email.get("masked_attachments", []) if masked_email else [],
+                    "masking_decisions": masked_email.get("masking_decisions", {}) if masked_email else {},
+                    "pii_masked_count": masked_email.get("pii_masked_count", 0) if masked_email else 0,
+                    "created_at": original_email.get("created_at"),
+                    "sent_at": original_email.get("created_at"),
+                    "team_name": current_user.get("team_name"),
+                }
+
         if not email:
             raise HTTPException(status_code=404, detail="이메일을 찾을 수 없습니다")
-        
+
+        # 권한 확인
         user_email = current_user["email"]
-        if email.get("from_email") != user_email and email.get("to_email") != user_email:
-            if current_user.get("role") not in ["root_admin", "auditor", "approver"]:
-                raise HTTPException(status_code=403, detail="이메일 조회 권한이 없습니다")
-        
-        if email.get("to_email") == user_email and not email.get("read_at"):
-            await db.emails.update_one(
-                {"_id": obj_id},
-                {"$set": {"read_at": datetime.utcnow()}}
-            )
-            email["read_at"] = datetime.utcnow()
-        
-        email["_id"] = str(email["_id"])
-        email["id"] = str(email["_id"])
+        to_emails = email.get("to_emails", [])
+        if isinstance(to_emails, str):
+            to_emails = [to_emails]
+
+        is_sender = email.get("from_email") == user_email
+        is_receiver = user_email in to_emails or email.get("to_email") == user_email
+        is_admin = current_user.get("role") in ["root_admin", "auditor", "approver"]
+
+        if not (is_sender or is_receiver or is_admin):
+            raise HTTPException(status_code=403, detail="이메일 조회 권한이 없습니다")
+
+        # 읽음 처리 (받은 메일인 경우)
+        if is_receiver and not email.get("read_at"):
+            if isinstance(email.get("_id"), str) and len(email.get("_id", "")) == 24:
+                try:
+                    obj_id = ObjectId(email["_id"])
+                    await db.emails.update_one(
+                        {"_id": obj_id},
+                        {"$set": {"read_at": datetime.utcnow()}}
+                    )
+                    email["read_at"] = datetime.utcnow()
+                except:
+                    pass
+
+        # ID 필드 정규화
+        if "_id" in email and not isinstance(email["_id"], str):
+            email["_id"] = str(email["_id"])
+        if "id" not in email:
+            email["id"] = email.get("email_id") or email.get("_id")
         
         print(f"✅ 메일 상세 조회: {email_id} by {user_email}")
         return email
