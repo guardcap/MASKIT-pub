@@ -170,18 +170,41 @@ function MaskedTextWithMetadata({ text, decisions, originalText }: {
 
     for (const { decision } of decisionsWithPosition) {
       const maskedValue = decision.masked_value || '***'
-      const position = text.indexOf(maskedValue, searchIndex)
 
-      if (position !== -1) {
-        matches.push({
-          start: position,
-          end: position + maskedValue.length,
-          decision
-        })
-        searchIndex = position + maskedValue.length
-        console.log(`[MaskedTextWithMetadata] Matched: ${decision.type} "${decision.value}" -> "${maskedValue}" at ${position}`)
-      } else {
-        console.warn(`[MaskedTextWithMetadata] Could not find masked value "${maskedValue}" for ${decision.type} "${decision.value}"`)
+      // 현재 위치에서 masked_value를 찾되, 정확히 일치하는지 확인
+      // (별표가 더 길게 이어지지 않는지 체크)
+      let position = searchIndex
+      let found = false
+
+      while (position < text.length) {
+        const idx = text.indexOf(maskedValue, position)
+        if (idx === -1) break
+
+        // 매칭된 위치가 정확한지 확인
+        // 1. 앞에 별표가 없는지 확인
+        const charBefore = idx > 0 ? text[idx - 1] : ''
+        // 2. 뒤에 별표가 없는지 확인 (masked_value보다 긴 별표 문자열이 아닌지)
+        const charAfter = idx + maskedValue.length < text.length ? text[idx + maskedValue.length] : ''
+
+        if (charBefore !== '*' && charAfter !== '*') {
+          // 정확히 일치하는 위치 찾음
+          matches.push({
+            start: idx,
+            end: idx + maskedValue.length,
+            decision
+          })
+          searchIndex = idx + maskedValue.length
+          found = true
+          console.log(`[MaskedTextWithMetadata] Matched: ${decision.type} "${decision.value}" -> "${maskedValue}" at ${idx}`)
+          break
+        } else {
+          // 이 위치는 더 긴 별표 문자열의 일부이므로 다음 위치 검색
+          position = idx + 1
+        }
+      }
+
+      if (!found) {
+        console.warn(`[MaskedTextWithMetadata] Could not find exact match for masked value "${maskedValue}" (${decision.type} "${decision.value}")`)
       }
     }
   } else {
