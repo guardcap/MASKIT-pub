@@ -246,7 +246,7 @@ GDPR 조항을 정확히 명시하고, 국내 법률 및 회사 정책은 보조
         llm_response = openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "당신은 한국의 개인정보보호법 전문가입니다. JSON 형식으로만 응답하세요."},
+                {"role": "system", "content": "당신은 한국의 개인정보보호법 전문가입니다. 모든 응답은 반드시 한국어로만 작성하고, JSON 형식으로만 응답하세요. legal_basis와 reason 필드는 반드시 한국어로만 작성해야 합니다."},
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
@@ -307,10 +307,14 @@ GDPR 조항을 정확히 명시하고, 국내 법률 및 회사 정책은 보조
 async def decide_all_pii_with_rag(
     detected_pii: List[Dict[str, str]],
     context: Dict[str, Any],
-    guides: List[Dict[str, Any]]
+    guides: List[Dict[str, Any]],
+    progress_callback=None
 ) -> Dict[str, Any]:
     """
     모든 PII에 대해 RAG 기반 마스킹 결정
+
+    Args:
+        progress_callback: 진행 상황을 전달할 콜백 함수
 
     Returns:
         {
@@ -325,7 +329,10 @@ async def decide_all_pii_with_rag(
         pii_type = pii.get('type', '')
         pii_value = pii.get('value', '')
 
-        print(f"[RAG] PII #{i}: type={pii_type}, value={pii_value[:10]}...")
+        log_msg = f"[RAG] PII #{i+1}/{len(detected_pii)}: type={pii_type}, value={pii_value[:10]}..."
+        print(log_msg)
+        if progress_callback:
+            progress_callback(log_msg)
 
         # RAG 기반 판단
         decision = await decide_masking_with_rag(pii_type, pii_value, context, guides)

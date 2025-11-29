@@ -263,8 +263,9 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
             <Input
               type="email"
               value={fromEmail}
-              onChange={(e) => setFromEmail(e.target.value)}
-              className="max-w-md"
+              readOnly
+              disabled
+              className="max-w-md bg-muted cursor-not-allowed"
               placeholder="your@email.com"
             />
           </div>

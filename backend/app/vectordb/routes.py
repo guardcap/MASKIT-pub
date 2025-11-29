@@ -6,8 +6,9 @@ VectorDB 및 정책 스키마 관리 라우터
 """
 
 from fastapi import APIRouter, HTTPException, Depends, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from typing import List, Optional, Dict, Any
+import asyncio
 from pathlib import Path
 from datetime import datetime
 import json
@@ -20,6 +21,7 @@ from pydantic import BaseModel
 from app.audit.logger import AuditLogger
 from app.auth.auth_utils import get_current_user
 from app.vectordb.rag_masking import decide_all_pii_with_rag
+from app.utils.masking_rules import MaskingRules
 
 load_dotenv()
 
@@ -536,6 +538,114 @@ class RAGAnalysisRequest(BaseModel):
     query: str
 
 
+@router.post("/analyze-stream")
+async def analyze_email_with_rag_stream(
+    request: RAGAnalysisRequest,
+    http_request: Request,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    OpenAI Vector Store 기반 이메일 분석 (스트리밍)
+    """
+    async def generate():
+        progress_logs = []
+
+        def log_progress(message: str):
+            progress_logs.append(message)
+            print(message)
+
+        try:
+            # Vector Store 검색
+            search_query = f"{request.context.get('receiver_type', 'external')} 전송 개인정보 마스킹"
+
+            relevant_guides = await search_with_assistant(search_query, request.context)
+
+            if not relevant_guides:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Vector Store 검색 결과 없음'})}\n\n"
+                return
+
+            # PII 분석 시작
+            total_pii = len(request.detected_pii)
+            yield f"data: {json.dumps({'type': 'total', 'count': total_pii})}\n\n"
+
+            # 각 PII 분석 (진행 상황 스트리밍)
+            from app.vectordb.rag_masking import decide_masking_with_rag
+            from app.utils.masking_rules import MaskingRules
+
+            decisions = {}
+            for i, pii in enumerate(request.detected_pii):
+                pii_type = pii.get('type', '')
+                pii_value = pii.get('value', '')
+
+                # 터미널 로그 출력 (기존 방식)
+                log_progress(f"[RAG] PII #{i+1}/{total_pii}: type={pii_type}, value={pii_value[:10]}...")
+
+                # UI에는 진행률만 전송
+                yield f"data: {json.dumps({'type': 'progress', 'current': i + 1, 'total': total_pii})}\n\n"
+
+                # RAG 분석
+                decision = await decide_masking_with_rag(pii_type, pii_value, request.context, relevant_guides)
+
+                masked_value = None
+                if decision['should_mask']:
+                    try:
+                        masked_value = MaskingRules.apply_masking(pii_value, pii_type.lower(), 'full')
+                    except Exception as e:
+                        print(f"❌ 마스킹 미리보기 실패: {e}")
+                        masked_value = "***"
+
+                decisions[f"pii_{i}"] = {
+                    "type": pii_type,
+                    "value": pii_value,
+                    "should_mask": decision["should_mask"],
+                    "reason": decision.get("reason", ""),
+                    "masked_value": masked_value,
+                    "legal_basis": decision.get("legal_basis", ""),
+                    "cited_guidelines": decision.get("cited_guidelines", []),
+                    "masking_method": decision.get("masking_method", "none"),
+                    "risk_level": (
+                        "high" if pii_type.lower() in ['jumin', 'resident_id', 'account', 'bank_account', 'card_number', 'passport', 'driver_license']
+                        else "medium" if pii_type.lower() in ['person', 'email', 'phone', 'address'] and decision['should_mask']
+                        else "low"
+                    )
+                }
+
+                # 터미널에 판단 완료 로그 출력
+                log_progress(f"✅ PII #{i} 판단 완료: {decision.get('masking_method', 'none')}, 근거: {decision.get('legal_basis', 'N/A')}")
+
+            # 최종 결과 전송 (generate_summary는 이미 같은 파일에 있음)
+            summary = generate_summary(request.context, decisions, relevant_guides)
+
+            cited_guide_texts = set()
+            for decision in decisions.values():
+                if decision.get('cited_guidelines'):
+                    cited_guide_texts.update(decision['cited_guidelines'])
+
+            masked_count = sum(1 for d in decisions.values() if d.get('should_mask', False))
+
+            result = {
+                "type": "complete",
+                "data": {
+                    "masking_decisions": decisions,
+                    "summary": summary,
+                    "relevant_guides": relevant_guides[:5],
+                    "cited_guidelines": list(cited_guide_texts),
+                    "total_guides_found": len(relevant_guides),
+                    "total_cited": len(cited_guide_texts),
+                }
+            }
+
+            yield f"data: {json.dumps(result)}\n\n"
+
+        except Exception as e:
+            print(f"스트리밍 오류: {e}")
+            import traceback
+            traceback.print_exc()
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
 @router.post("/analyze")
 async def analyze_email_with_rag(
     request: RAGAnalysisRequest,
@@ -543,27 +653,46 @@ async def analyze_email_with_rag(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    OpenAI Vector Store 기반 이메일 분석 및 마스킹 결정
+    OpenAI Vector Store 기반 이메일 분석 및 마스킹 결정 (기존 방식)
     """
+    # 진행 상황 로그 수집
+    progress_logs = []
+
+    def log_progress(message: str):
+        progress_logs.append(message)
+        print(message)
+
     try:
         # OpenAI Vector Store에서 관련 가이드라인 검색
         search_query = f"{request.context.get('receiver_type', 'external')} 전송 개인정보 마스킹"
 
-        print(f"📝 OpenAI Vector Store 검색: {search_query}")
+        log_progress(f"📝 Vector Store 검색 쿼리: {search_query}")
 
         relevant_guides = await search_with_assistant(search_query, request.context)
 
         if not relevant_guides:
-            print("⚠️ Vector Store 검색 결과 없음, fallback 사용")
+            log_progress("⚠️ Vector Store 검색 결과 없음, fallback 사용")
             return fallback_analysis(request)
 
-        print(f"✅ {len(relevant_guides)}개 가이드라인 검색됨")
+        log_progress(f"✅ {len(relevant_guides)}개 가이드라인 검색됨")
+
+        # 가이드라인 출처 로깅
+        guide_sources = set()
+        for guide in relevant_guides[:3]:
+            filename = guide.get('filename', '정책 문서')
+            guide_sources.add(filename)
+
+        if guide_sources:
+            log_progress(f"📚 참조 문서: {', '.join(list(guide_sources)[:3])}")
+
+        log_progress(f"🤖 총 {len(request.detected_pii)}개 PII 분석 시작...")
 
         # RAG 기반 마스킹 결정
         masking_decisions = await decide_all_pii_with_rag(
             request.detected_pii,
             request.context,
-            relevant_guides
+            relevant_guides,
+            progress_callback=log_progress
         )
 
         # AI 요약 생성
@@ -577,6 +706,11 @@ async def analyze_email_with_rag(
 
         # 마스킹된 PII 개수 계산
         masked_count = sum(1 for d in masking_decisions.values() if d.get('should_mask', False))
+
+        log_progress(f"✅ 분석 완료: {masked_count}/{len(request.detected_pii)}개 PII 마스킹 권장")
+
+        print(f"📊 총 수집된 로그: {len(progress_logs)}개")
+        print(f"📋 로그 내용: {progress_logs[:3]}...")  # 처음 3개만 출력
 
         # 감사 로그 기록
         await AuditLogger.log_masking_decision(
@@ -598,7 +732,8 @@ async def analyze_email_with_rag(
                 "cited_guidelines": list(cited_guide_texts),  # 실제 인용된 규정 목록
                 "total_guides_found": len(relevant_guides),
                 "total_cited": len(cited_guide_texts),
-                "vector_store_id": VECTOR_STORE_ID
+                "vector_store_id": VECTOR_STORE_ID,
+                "progress_logs": progress_logs  # 진행 상황 로그 추가
             }
         })
 

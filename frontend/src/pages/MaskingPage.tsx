@@ -7,10 +7,23 @@ import { Send } from 'lucide-react'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
-// 스크롤바 숨기기 스타일
+// 스크롤바 숨기기 스타일 + 애니메이션
 const scrollbarHideStyle = `
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-out;
   }
 `
 
@@ -110,6 +123,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
   const [showPIICheckboxList, setShowPIICheckboxList] = useState(false)
   const [aiSummary, setAiSummary] = useState('커스텀 설정을 선택하고 분석을 시작하세요.')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisProgress, setAnalysisProgress] = useState<string>('') // PII 분석 진행률
   const [isSending, setIsSending] = useState(false)
   const [isMasking, setIsMasking] = useState(false)
   const [maskedBody, setMaskedBody] = useState<string>('')
@@ -542,7 +556,8 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
 
       console.log('🔑 토큰 확인:', token ? `${token.substring(0, 20)}...` : 'null')
 
-      const ragResponse = await fetch(`${API_BASE_URL}/api/vectordb/analyze`, {
+      // 스트리밍 방식으로 변경
+      const ragResponse = await fetch(`${API_BASE_URL}/api/vectordb/analyze-stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -563,16 +578,52 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
         throw new Error(errorData.detail || 'RAG 분석 요청 실패')
       }
 
-      const ragResult = await ragResponse.json()
+      // 스트리밍 응답 처리
+      const reader = ragResponse.body?.getReader()
+      const decoder = new TextDecoder()
+      let decisions: Record<string, MaskingDecision> = {}
 
-      if (ragResult.success && ragResult.data) {
-        const decisions = ragResult.data.masking_decisions || {}
-        setMaskingDecisions(decisions)
-        setAiSummary(ragResult.data.summary || '분석이 완료되었습니다.')
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const chunk = decoder.decode(value)
+          const lines = chunk.split('\n\n')
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6))
+
+                if (data.type === 'progress') {
+                  // 실시간 진행률 업데이트
+                  setAnalysisProgress(`${data.current}/${data.total}`)
+                } else if (data.type === 'complete') {
+                  // 분석 완료
+                  decisions = data.data.masking_decisions || {}
+                  setMaskingDecisions(decisions)
+                  setAiSummary(data.data.summary || '분석이 완료되었습니다.')
+                  setAnalysisProgress('') // 완료 후 진행률 초기화
+                } else if (data.type === 'error') {
+                  throw new Error(data.message)
+                }
+              } catch (e) {
+                console.error('스트림 파싱 오류:', e)
+              }
+            }
+          }
+        }
+      }
+
+      console.log('📦 분석 완료')
+
+      if (decisions && Object.keys(decisions).length > 0) {
 
         // ==================== 6단계: RAG 결과를 PII 리스트에 반영 ====================
         // RAG가 마스킹 필요하다고 판단한 PII는 shouldMask = true
         // 백엔드는 pii_0, pii_1, pii_2... 형식의 키를 사용하므로 인덱스 기반 매칭
+        let maskCount = 0
         allPII.forEach((pii, index) => {
           const decisionKey = `pii_${index}`
           const matchingDecision = decisions[decisionKey]
@@ -583,6 +634,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
             pii.maskingDecision = matchingDecision as MaskingDecision
 
             if (matchingDecision.should_mask) {
+              maskCount++
               console.log(`✅ PII ${index} 마스킹 권장:`, pii.value, matchingDecision.reason)
             } else {
               console.log(`⚪ PII ${index} 마스킹 불필요:`, pii.value, matchingDecision.reason)
@@ -595,7 +647,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
         setAllPIIList(allPII)
         setShowPIICheckboxList(true)
 
-        toast.success(`AI 분석 완료! 총 ${allPII.length}개 PII 중 ${allPII.filter(p => p.shouldMask).length}개 마스킹 권장`)
+        toast.success(`AI 분석 완료! 총 ${allPII.length}개 PII 중 ${maskCount}개 마스킹 권장`)
       } else {
         throw new Error('분석 결과가 올바르지 않습니다.')
       }
@@ -604,6 +656,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
       console.error('❌ AI 분석 오류:', error)
       toast.error('AI 분석 중 오류가 발생했습니다.')
       setAiSummary('분석 중 오류가 발생했습니다.')
+      setAnalysisProgress('') // 에러 시 진행률 초기화
     } finally {
       setIsAnalyzing(false)
     }
@@ -1659,8 +1712,13 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
                   AI 분석 진행 중
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground">{aiSummary}</p>
+                {analysisProgress && (
+                  <div className="mt-2 p-2 bg-muted/50 rounded text-center">
+                    <span className="text-lg font-mono font-semibold text-primary">{analysisProgress}</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

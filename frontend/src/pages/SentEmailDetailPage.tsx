@@ -117,7 +117,10 @@ function MaskedTextWithMetadata({ text, decisions, originalText }: {
     return <span>{text}</span>
   }
 
-  const decisionsArray = Object.values(decisions).filter(d => d.should_mask && d.masked_value)
+  // decisions 객체를 배열로 변환하면서 pii_id를 추가
+  const decisionsArray = Object.entries(decisions)
+    .map(([key, value]) => ({ ...value, pii_id: key }))
+    .filter(d => d.should_mask && d.masked_value)
 
   if (decisionsArray.length === 0) {
     return <span>{text}</span>
@@ -157,7 +160,8 @@ function MaskedTextWithMetadata({ text, decisions, originalText }: {
     }
 
     const sortedDecisions = [...decisionsArray].sort((a, b) => {
-      const getIdNumber = (pii_id: string): number => {
+      const getIdNumber = (pii_id: string | undefined): number => {
+        if (!pii_id) return 9999
         const match = pii_id.match(/\d+/)
         return match ? parseInt(match[0]) : 9999
       }
