@@ -25,63 +25,92 @@ router = APIRouter(prefix="/smtp", tags=["SMTP Email"])
 
 @router.post("/send", response_model=EmailSendResponse)
 async def send_email(
-    email_data: EmailSendRequest, # 1. 이 모델에서 smtp_config 필드 제거 (아래 models.py 참고)
+    email_data: EmailSendRequest,
     http_request: Request,
     db: get_database = Depends(),
-    # [수정] current_user: User -> current_user: dict
-    # get_current_user가 Pydantic 모델이 아닌 dict를 반환한다고 가정합니다.
-    current_user: dict = Depends(get_current_user) # 2. 인증된 사용자 정보를 가져옵니다.
+    current_user: dict = Depends(get_current_user)
 ):
     """
     SMTP를 통해 이메일 전송 (인증된 사용자의 SMTP 설정 사용)
-
-    - **from_email**: 발신자 이메일
-    - **to**: 수신자 이메일 (여러 개는 쉼표로 구분)
-    - **subject**: 제목
-    - **body**: 본문 (HTML 지원)
-    - **cc**: 참조 (옵션)
-    - **bcc**: 숨은 참조 (옵션)
     """
     try:
-        print(f"[SMTP Send] ===== 디버깅 시작 =====")
-        print(f"[SMTP Send] 사용자 이메일: {current_user.get('email')}")
+        print("\n" + "="*80)
+        print("📧 [SMTP Send] 이메일 전송 요청 시작")
+        print("="*80)
+        print(f"[SMTP Send] 사용자: {current_user.get('email')}")
+        print(f"[SMTP Send] 발신자: {email_data.from_email}")
+        print(f"[SMTP Send] 수신자: {email_data.to}")
+        print(f"[SMTP Send] 제목: {email_data.subject}")
         print(f"[SMTP Send] use_masked_email: {email_data.use_masked_email}")
         print(f"[SMTP Send] masked_email_id: {email_data.masked_email_id}")
+        print(f"[SMTP Send] 요청의 attachments: {email_data.attachments}")
+        print("="*80 + "\n")
 
-        # 마스킹된 이메일 사용 시 MongoDB에서 첨부파일 가져오기
-        attachments_to_send = email_data.attachments or []
+        # 첨부파일 준비
+        attachments_to_send = []
 
+        # 마스킹된 이메일 사용 시
         if email_data.use_masked_email and email_data.masked_email_id:
-            print(f"[SMTP Send] MongoDB에서 마스킹된 이메일 조회 중...")
+            print(f"[SMTP Send] 🔍 MongoDB에서 마스킹된 이메일 조회 중...")
+            print(f"[SMTP Send] 조회할 email_id: {email_data.masked_email_id}")
+            
             masked_email = await db.masked_emails.find_one({"email_id": email_data.masked_email_id})
 
-            if masked_email and masked_email.get("masked_attachments"):
-                # Base64 첨부파일을 attachments 리스트로 변환
-                attachments_to_send = []
-                for att in masked_email["masked_attachments"]:
-                    attachments_to_send.append({
-                        "filename": att.get("filename"),
-                        "content_type": att.get("content_type"),
-                        "size": att.get("size"),
-                        "data": att.get("data")  # Base64 인코딩된 데이터
-                    })
-                print(f"[SMTP Send] ✅ MongoDB에서 {len(attachments_to_send)}개 마스킹된 첨부파일 로드")
+            if masked_email:
+                print(f"[SMTP Send] ✅ MongoDB 문서 발견")
+                print(f"[SMTP Send] 문서 키: {list(masked_email.keys())}")
+                
+                if masked_email.get("masked_attachments"):
+                    print(f"[SMTP Send] 📎 masked_attachments 필드 존재: {len(masked_email['masked_attachments'])}개")
+                    
+                    for idx, att in enumerate(masked_email["masked_attachments"]):
+                        print(f"\n[SMTP Send] 첨부파일 #{idx}:")
+                        print(f"  - filename: {att.get('filename')}")
+                        print(f"  - content_type: {att.get('content_type')}")
+                        print(f"  - size: {att.get('size')}")
+                        print(f"  - data 존재: {'data' in att}")
+                        print(f"  - data 길이: {len(att.get('data', ''))} chars")
+                        
+                        # 첨부파일 데이터 구조 검증
+                        if not att.get('filename'):
+                            print(f"  ⚠️ filename 없음, 건너뜀")
+                            continue
+                        
+                        if not att.get('data'):
+                            print(f"  ⚠️ data 없음, 건너뜀")
+                            continue
+                        
+                        # Base64 데이터 앞 20자 출력 (디버깅용)
+                        data_preview = att.get('data', '')[:20]
+                        print(f"  - data 미리보기: {data_preview}...")
+                        
+                        attachments_to_send.append({
+                            "filename": att.get("filename"),
+                            "content_type": att.get("content_type", "application/octet-stream"),
+                            "size": att.get("size", 0),
+                            "data": att.get("data")  # Base64 문자열
+                        })
+                    
+                    print(f"\n[SMTP Send] ✅ 총 {len(attachments_to_send)}개 첨부파일 준비 완료")
+                else:
+                    print(f"[SMTP Send] ⚠️ masked_attachments 필드가 없거나 비어있음")
             else:
-                print(f"[SMTP Send] ⚠️ 마스킹된 이메일을 찾을 수 없음: {email_data.masked_email_id}")
+                print(f"[SMTP Send] ❌ MongoDB에서 마스킹된 이메일을 찾을 수 없음")
+                print(f"[SMTP Send] 조회 쿼리: {{'email_id': '{email_data.masked_email_id}'}}")
+                
+        # 원본 첨부파일 사용 시
+        elif email_data.attachments:
+            print(f"[SMTP Send] 📎 원본 첨부파일 사용: {len(email_data.attachments)}개")
+            attachments_to_send = email_data.attachments
 
-        # 3. DB에서 현재 사용자의 SMTP 설정을 가져옵니다.
+        print(f"\n[SMTP Send] 최종 전송할 첨부파일: {len(attachments_to_send)}개")
+
+        # SMTP 설정 로드
         user_smtp_config = current_user.get("smtp_config")
 
-        print(f"[SMTP Send] user_smtp_config: {user_smtp_config}")
-        print(f"[SMTP Send] 기본 SMTP_HOST: {SMTP_HOST}")
-        print(f"[SMTP Send] 기본 SMTP_USER: {SMTP_USER}")
-        print(f"[SMTP Send] 기본 SMTP_PASSWORD 존재: {bool(SMTP_PASSWORD)}")
-
-        # 4. 사용자 설정이 없으면, .env의 기본 설정을 사용합니다.
         if not user_smtp_config or not user_smtp_config.get("smtp_host"):
             print(f"[SMTP Send] ⚠️ 사용자 SMTP 설정이 없어 기본 서버 설정을 사용합니다.")
 
-            # 기본 설정이 제대로 있는지 확인
             if not SMTP_HOST or not SMTP_USER or not SMTP_PASSWORD:
                 print(f"[SMTP Send] ❌ 기본 SMTP 설정도 없습니다!")
                 raise HTTPException(
@@ -99,42 +128,44 @@ async def send_email(
             }
         else:
             print(f"[SMTP Send] ✅ 사용자 저장된 SMTP 설정을 사용합니다.")
-            print(f"[SMTP Send]   - Host: {user_smtp_config.get('smtp_host')}")
-            print(f"[SMTP Send]   - Port: {user_smtp_config.get('smtp_port')}")
-            print(f"[SMTP Send]   - User: {user_smtp_config.get('smtp_user')}")
-            print(f"[SMTP Send]   - Password 존재: {bool(user_smtp_config.get('smtp_password'))}")
             smtp_config = user_smtp_config
 
-        print(f"[SMTP Send] 최종 smtp_config: {dict((k, v if k != 'smtp_password' else '***') for k, v in smtp_config.items())}")
-        print(f"[SMTP Send] ===== 디버깅 끝 =====\n")
+        # 본문 준비 (HTML)
+        bodyHtml = email_data.body.replace('\n', '<br>')
 
-        # 5. SMTP 클라이언트를 통해 메일 전송
+        print(f"\n[SMTP Send] 🚀 SMTP 클라이언트 호출")
+        print(f"[SMTP Send] SMTP Host: {smtp_config.get('smtp_host')}")
+        print(f"[SMTP Send] SMTP Port: {smtp_config.get('smtp_port')}")
+        print(f"[SMTP Send] 전달할 첨부파일: {len(attachments_to_send)}개")
+
+        # SMTP 전송
         result = smtp_client.send_email(
             from_email=email_data.from_email,
             to=email_data.to,
             subject=email_data.subject,
-            body=email_data.body,
+            body=bodyHtml,
             cc=email_data.cc,
             bcc=email_data.bcc,
-            attachments=attachments_to_send,  # MongoDB에서 가져온 마스킹된 첨부파일 또는 원본 첨부파일
-            smtp_config=smtp_config  # 4번에서 결정된 SMTP 설정 전달
+            attachments=attachments_to_send,
+            smtp_config=smtp_config
         )
 
         if not result["success"]:
+            print(f"[SMTP Send] ❌ SMTP 전송 실패: {result['message']}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=result["message"]
             )
 
+        print(f"[SMTP Send] ✅ SMTP 전송 성공")
+
         # MongoDB에 전송 기록 저장
-        # Base64 데이터를 제거한 첨부파일 정보만 저장 (용량 절약)
         attachments_for_db = []
         for att in attachments_to_send:
             attachments_for_db.append({
                 "filename": att.get("filename"),
                 "content_type": att.get("content_type"),
                 "size": att.get("size")
-                # "data" 필드는 제외 (DB 용량 절약)
             })
 
         email_record = {
@@ -146,27 +177,32 @@ async def send_email(
             "original_body": email_data.body,
             "masked_body": None,
             "status": "sent",
-            "attachments": attachments_for_db,  # 실제 전송된 첨부파일 정보
+            "attachments": attachments_for_db,
             "sent_at": result["sent_at"],
             "created_at": get_kst_now(),
             "dlp_verified": False,
             "dlp_token": None,
-            "owner_email": current_user.get("email"), # [추가] 누가 보냈는지 기록
-            "masked_email_id": email_data.masked_email_id if email_data.use_masked_email else None  # [추가] 마스킹된 이메일 ID 저장
+            "owner_email": current_user.get("email"),
+            "masked_email_id": email_data.masked_email_id if email_data.use_masked_email else None
         }
 
         insert_result = await db.emails.insert_one(email_record)
+        print(f"[SMTP Send] 📝 MongoDB 기록 저장 완료: {insert_result.inserted_id}")
 
-        # 감사 로그 기록 (성공)
+        # 감사 로그 기록
         await AuditLogger.log_email_send(
             user_email=current_user.get("email"),
             user_role=current_user.get("role", "user"),
             to_emails=email_data.to.split(',') if isinstance(email_data.to, str) else [email_data.to],
             subject=email_data.subject,
             has_attachments=len(attachments_to_send) > 0,
-            masked_count=0,  # SMTP 전송 단계에서는 마스킹 정보 없음
+            masked_count=0,
             request=http_request,
         )
+
+        print(f"\n{'='*80}")
+        print(f"✅ [SMTP Send] 이메일 전송 완료")
+        print(f"{'='*80}\n")
 
         return EmailSendResponse(
             success=True,
@@ -176,7 +212,6 @@ async def send_email(
         )
 
     except HTTPException as he:
-        # 감사 로그 기록 (실패)
         await AuditLogger.log(
             event_type=AuditEventType.EMAIL_SEND,
             user_email=current_user.get("email"),
@@ -189,10 +224,13 @@ async def send_email(
         )
         raise
     except Exception as e:
+        print(f"\n{'='*80}")
+        print(f"❌ [SMTP Send] 예상치 못한 오류")
+        print(f"{'='*80}")
         import traceback
         traceback.print_exc()
+        print(f"{'='*80}\n")
 
-        # 감사 로그 기록 (실패)
         await AuditLogger.log(
             event_type=AuditEventType.EMAIL_SEND,
             user_email=current_user.get("email"),

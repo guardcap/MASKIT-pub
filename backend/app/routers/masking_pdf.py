@@ -114,34 +114,56 @@ async def save_masked_email(
     마스킹된 이메일을 MongoDB의 masked_emails 컬렉션에 저장
     """
     try:
+        print("\n" + "="*80)
+        print("💾 [Save Masked Email] 마스킹된 이메일 저장 시작")
+        print("="*80)
+        print(f"[Save] email_id: {request.email_id}")
+        print(f"[Save] from_email: {request.from_email}")
+        print(f"[Save] to_emails: {request.to_emails}")
+        print(f"[Save] subject: {request.subject}")
+        print(f"[Save] masked_attachment_filenames: {request.masked_attachment_filenames}")
+        print(f"[Save] original_attachment_filenames: {request.original_attachment_filenames}")
+        print("="*80 + "\n")
+
         # 마스킹된 첨부파일과 원본 첨부파일을 모두 Base64로 읽어서 저장
         masked_attachments_data = []
 
         # 마스킹된 파일 목록을 집합으로 변환 (빠른 검색)
         masked_set = set(request.masked_attachment_filenames)
+        print(f"[Save] 마스킹된 파일 목록: {masked_set}")
 
         # 모든 첨부파일 처리 (원본 파일 목록 기준)
-        for original_filename in request.original_attachment_filenames:
+        for idx, original_filename in enumerate(request.original_attachment_filenames):
+            print(f"\n[Save] 첨부파일 #{idx}: {original_filename}")
+            
             # 마스킹된 파일명 생성
             masked_filename = f"masked_{original_filename}"
+            print(f"[Save] 마스킹 파일명: {masked_filename}")
 
             # 마스킹된 파일이 있으면 그것을 사용, 없으면 원본 사용
             if masked_filename in masked_set:
                 filename_to_use = masked_filename
-                print(f"📦 마스킹된 파일 사용: {masked_filename}")
+                print(f"[Save] ✅ 마스킹된 파일 사용: {masked_filename}")
             else:
                 filename_to_use = original_filename
-                print(f"📄 원본 파일 사용: {original_filename}")
+                print(f"[Save] 📄 원본 파일 사용: {original_filename}")
 
             file_path = os.path.join(UPLOAD_DIR, filename_to_use)
+            print(f"[Save] 파일 경로: {file_path}")
 
             if os.path.exists(file_path):
                 # 파일 읽기
                 with open(file_path, 'rb') as f:
                     file_content = f.read()
+                print(f"[Save] 파일 읽기 성공: {len(file_content)} bytes")
 
                 # Base64 인코딩
                 encoded_content = base64.b64encode(file_content).decode('utf-8')
+                print(f"[Save] Base64 인코딩 완료: {len(encoded_content)} chars")
+                
+                # 인코딩된 데이터 미리보기
+                preview = encoded_content[:30] + "..." if len(encoded_content) > 30 else encoded_content
+                print(f"[Save] Base64 미리보기: {preview}")
 
                 # 파일 확장자로 content_type 추정
                 content_type = "application/octet-stream"
@@ -151,6 +173,8 @@ async def save_masked_email(
                     content_type = "image/jpeg"
                 elif filename_to_use.lower().endswith('.png'):
                     content_type = "image/png"
+                
+                print(f"[Save] content_type: {content_type}")
 
                 masked_attachments_data.append({
                     "filename": filename_to_use,
@@ -159,9 +183,11 @@ async def save_masked_email(
                     "data": encoded_content
                 })
 
-                print(f"✅ 첨부파일 인코딩: {filename_to_use} ({len(file_content)} bytes)")
+                print(f"[Save] ✅ 첨부파일 데이터 추가 완료")
             else:
-                print(f"⚠️ 파일을 찾을 수 없음: {file_path}")
+                print(f"[Save] ⚠️ 파일을 찾을 수 없음: {file_path}")
+
+        print(f"\n[Save] 총 {len(masked_attachments_data)}개 첨부파일 준비 완료")
 
         # MaskedEmailData 객체 생성
         masked_email = MaskedEmailData(
@@ -178,10 +204,31 @@ async def save_masked_email(
             created_at=datetime.utcnow()
         )
 
+        print(f"\n[Save] MongoDB 저장 시작...")
+        print(f"[Save] masked_attachments 개수: {len(masked_email.masked_attachments)}")
+
         # MongoDB에 저장
         result = await db.masked_emails.insert_one(masked_email.model_dump())
 
-        print(f"✅ MongoDB에 마스킹된 이메일 저장 완료: {request.email_id}")
+        print(f"[Save] ✅ MongoDB 저장 완료")
+        print(f"[Save] MongoDB _id: {result.inserted_id}")
+        print(f"[Save] email_id: {request.email_id}")
+
+        # 저장된 데이터 확인 (디버깅)
+        saved_doc = await db.masked_emails.find_one({"email_id": request.email_id})
+        if saved_doc:
+            print(f"[Save] 저장 검증 성공")
+            print(f"[Save] 저장된 문서 키: {list(saved_doc.keys())}")
+            if saved_doc.get("masked_attachments"):
+                print(f"[Save] 저장된 첨부파일 수: {len(saved_doc['masked_attachments'])}")
+            else:
+                print(f"[Save] ⚠️ masked_attachments 필드 없음!")
+        else:
+            print(f"[Save] ❌ 저장 검증 실패: 문서를 찾을 수 없음")
+
+        print(f"\n{'='*80}")
+        print(f"✅ [Save Masked Email] 저장 완료")
+        print(f"{'='*80}\n")
 
         return {
             "success": True,
@@ -192,9 +239,14 @@ async def save_masked_email(
         }
 
     except Exception as e:
-        print(f"❌ 마스킹된 이메일 저장 오류: {e}")
+        print(f"\n{'='*80}")
+        print(f"❌ [Save Masked Email] 저장 실패")
+        print(f"{'='*80}")
+        print(f"오류: {e}")
         import traceback
         traceback.print_exc()
+        print(f"{'='*80}\n")
+        
         raise HTTPException(status_code=500, detail=f"마스킹된 이메일 저장 실패: {str(e)}")
 
 

@@ -1056,10 +1056,65 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
   // 마스킹 적용 및 전송
   const handleSendMaskedEmail = async () => {
     setIsSending(true)
-    toast.loading('이메일 전송 중...', { id: 'sending-email' })
+    toast.loading('이메일 전송 준비 중...', { id: 'sending-email' })
 
     try {
-      // ==================== 이메일 전송 ====================
+      // ==================== 1단계: 마스킹된 이메일 MongoDB 저장 ====================
+      if (emailData.email_id && showMaskedPreview) {
+        try {
+          console.log('📤 마스킹된 이메일 저장 요청:', {
+            email_id: emailData.email_id,
+            masked_attachment_count: maskedAttachmentFilenames.length,
+          })
+
+          // 원본 첨부파일 이름 추출
+          const originalAttachmentFilenames = emailData.attachments.map((att) =>
+            att instanceof File ? att.name : att.filename || ''
+          ).filter(Boolean)
+
+          console.log('⏳ MongoDB 저장 시작...')
+          toast.loading('마스킹된 이메일 저장 중...', { id: 'sending-email' })
+
+          const saveMaskedResponse = await fetch(`${API_BASE_URL}/api/v1/process/masking/save-masked-email`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email_id: emailData.email_id,
+              from_email: emailData.from,
+              to_emails: emailData.to,
+              subject: emailData.subject,
+              masked_body: maskedBody,
+              masked_attachment_filenames: maskedAttachmentFilenames,
+              original_attachment_filenames: originalAttachmentFilenames,
+              masking_decisions: maskingDecisions,
+              pii_masked_count: allPIIList.filter(p => p.shouldMask).length
+            })
+          })
+
+          if (!saveMaskedResponse.ok) {
+            const errorData = await saveMaskedResponse.json()
+            console.error('⚠️ 마스킹된 이메일 저장 실패:', errorData)
+            toast.warning('마스킹 데이터 저장에 실패했습니다. 원본으로 전송합니다.', { id: 'sending-email' })
+            // 저장 실패해도 계속 진행 (원본으로 전송)
+          } else {
+            const saveResult = await saveMaskedResponse.json()
+            console.log('✅ 마스킹된 이메일 MongoDB 저장 성공:', saveResult)
+            
+            // ✅ 저장 완료 후 짧은 대기 시간 (MongoDB 인덱싱 대기)
+            console.log('⏳ MongoDB 인덱싱 대기 중... (500ms)')
+            await new Promise(resolve => setTimeout(resolve, 500))
+            console.log('✅ 대기 완료, SMTP 전송 시작')
+          }
+        } catch (saveError) {
+          console.error('⚠️ 마스킹된 이메일 저장 중 오류:', saveError)
+          toast.warning('마스킹 데이터 저장에 실패했습니다. 원본으로 전송합니다.', { id: 'sending-email' })
+        }
+      }
+
+      // ==================== 2단계: 이메일 전송 ====================
+      toast.loading('이메일 전송 중...', { id: 'sending-email' })
 
       const token = localStorage.getItem('auth_token')
 
@@ -1067,40 +1122,15 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
         throw new Error('인증이 필요합니다. 다시 로그인해주세요.')
       }
 
-      // 첨부파일: 마스킹된 파일이 있으면 그것을 사용, 없으면 원본 사용
-      console.log('📎 원본 첨부파일 데이터:', emailData.attachments)
-      console.log('📎 마스킹된 파일명 목록:', maskedAttachmentFilenames)
-
-      const finalAttachments = emailData.attachments.map((att) => {
-        // File 객체는 .name 속성을 사용
-        const originalFilename = att instanceof File ? att.name : att.filename
-        const maskedFilename = maskedAttachmentFilenames.find(masked =>
-          masked === `masked_${originalFilename}`
-        )
-
-        const attachmentData = {
-          filename: maskedFilename || originalFilename,
-          content_type: (att instanceof File ? att.type : (att as any).content_type) || 'application/octet-stream',
-          size: att.size || 0
-        }
-
-        console.log('📎 첨부파일 매핑:', { original: originalFilename, masked: maskedFilename, final: attachmentData })
-        return attachmentData
-      })
-
-      console.log('📤 SMTP 전송 요청:', {
-        from_email: emailData.from,
-        to: emailData.to.join(','),
-        subject: emailData.subject,
-        attachments: finalAttachments
-      })
+      console.log('📧 SMTP 전송 요청 시작')
+      console.log('  masked_email_id:', emailData.email_id)
+      console.log('  use_masked_email:', showMaskedPreview)
 
       // 본문: 마스킹된 본문이 있으면 사용, 없으면 원본 사용
       const bodyToSend = maskedBody || emailData.body
-      // 줄바꿈을 <br> 태그로 변환 (HTML 이메일 형식)
       const bodyHtml = bodyToSend.replace(/\n/g, '<br>')
 
-      // SMTP 전송 (마스킹된 이메일이 있으면 사용, 없으면 원본 사용)
+      // SMTP 전송
       const smtpResponse = await fetch(`${API_BASE_URL}/api/v1/smtp/send`, {
         method: 'POST',
         headers: {
@@ -1108,12 +1138,12 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          masked_email_id: showMaskedPreview ? emailData.email_id : undefined,  // 마스킹된 경우만 ID 전달
+          masked_email_id: showMaskedPreview ? emailData.email_id : undefined,
           from_email: emailData.from,
           to: emailData.to.join(','),
           subject: emailData.subject,
-          body: bodyHtml,  // HTML 형식으로 변환된 본문
-          use_masked_email: showMaskedPreview,  // 마스킹 여부 플래그
+          body: bodyHtml,
+          use_masked_email: showMaskedPreview,
         }),
       })
 
@@ -1128,8 +1158,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
       const result = await smtpResponse.json()
       console.log('✅ SMTP 전송 성공:', result)
 
-      toast.dismiss('sending-email')
-      toast.success(`이메일 전송 완료!`)
+      toast.success('이메일 전송 완료!')
 
       if (onSendComplete) {
         onSendComplete()
