@@ -115,6 +115,15 @@ export function UserDashboardPage({ onNavigate }: UserDashboardPageProps) {
     }
   }
 
+  // ✅ 이메일 클릭 핸들러 - 보낸 메일은 sent-email-detail로 이동
+  const handleEmailClick = (email: Email) => {
+    if (email.type === 'sent') {
+      onNavigate?.('sent-email-detail', email._id)
+    } else {
+      onNavigate?.('email-detail', email._id)
+    }
+  }
+
   const getTypeBadge = (type: 'sent' | 'received') => {
     if (type === 'sent') {
       return (
@@ -301,7 +310,7 @@ export function UserDashboardPage({ onNavigate }: UserDashboardPageProps) {
                     className={`cursor-pointer ${
                       email.type === 'received' && !email.read ? 'bg-blue-50/30 hover:bg-blue-50/50' : ''
                     }`}
-                    onClick={() => onNavigate?.('email-detail', email._id)}
+                    onClick={() => handleEmailClick(email)}
                   >
                     <TableCell>
                       {email.type === 'received' && !email.read && (
