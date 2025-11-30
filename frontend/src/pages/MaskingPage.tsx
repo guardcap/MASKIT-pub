@@ -632,6 +632,9 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
           const matchingDecision = decisions[decisionKey]
 
           if (matchingDecision) {
+            // ✅ pii_id를 저장 (마스킹 시 maskingDecisions 키와 매칭하기 위함)
+            (pii as any).pii_id = decisionKey
+
             // 마스킹 필요 여부에 관계없이 항상 decision 정보 저장
             pii.shouldMask = matchingDecision.should_mask
             pii.maskingDecision = matchingDecision as MaskingDecision
@@ -802,12 +805,12 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
     setIsMasking(true)
     toast.loading('마스킹 처리 중...', { id: 'masking-only' })
 
+    // 마스킹 결정 복사본 생성 (실제 마스킹 값으로 업데이트하기 위함)
+    const updatedDecisions = { ...maskingDecisions }
+
     try {
       // ==================== 1단계: 이메일 본문 마스킹 ====================
       let tempMaskedBody = emailBodyRef.current?.innerText || emailBodyParagraphs.join('\n')
-
-      // 마스킹 결정 복사본 생성 (실제 마스킹 값으로 업데이트하기 위함)
-      const updatedDecisions = { ...maskingDecisions }
 
       for (const pii of checkedPIIs) {
         if (pii.source === 'regex' || pii.source === 'backend_body') {
@@ -816,9 +819,14 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
           tempMaskedBody = tempMaskedBody.replace(new RegExp(escapeRegex(pii.value), 'g'), masked)
 
           // ✅ 실제 마스킹된 값을 decision에 저장
-          // pii.id는 "pii_0", "pii_1" 같은 형식
-          if (pii.id && updatedDecisions[pii.id]) {
-            updatedDecisions[pii.id].masked_value = masked
+          // pii.pii_id는 "pii_0", "pii_1" 같은 형식 (AI 분석 시 저장됨)
+          const piiId = (pii as any).pii_id
+          if (piiId && updatedDecisions[piiId]) {
+            const oldMaskedValue = updatedDecisions[piiId].masked_value
+            updatedDecisions[piiId].masked_value = masked
+            console.log(`[마스킹 업데이트] ${piiId} (${pii.type}): "${pii.value}" -> "${masked}" (기존: "${oldMaskedValue}")`)
+          } else {
+            console.warn(`[마스킹 실패] pii_id=${piiId}, id=${pii.id} - decision을 찾을 수 없음`)
           }
         }
       }
@@ -1035,7 +1043,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
               masked_body: tempMaskedBody,
               masked_attachment_filenames: tempMaskedAttachments,
               original_attachment_filenames: originalAttachmentFilenames,  // 원본 첨부파일 추가
-              masking_decisions: maskingDecisions,
+              masking_decisions: updatedDecisions, // ✅ 업데이트된 decision 사용
               pii_masked_count: checkedPIIs.length
             })
           })

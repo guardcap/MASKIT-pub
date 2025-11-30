@@ -142,9 +142,12 @@ function MaskedTextWithMetadata({ text, decisions, originalText }: {
   // 콘솔 테이블로 보기 좋게 출력
   console.log('🔍 [DEBUG] Masking Decisions:', debugInfo)
   console.table(debugInfo.decisions)
+  console.log('📝 [DEBUG] 전체 마스킹된 텍스트:', text)
+  console.log('📝 [DEBUG] 텍스트 길이:', text.length)
 
   // 전역 변수로 저장 (브라우저 콘솔에서 window.debugDecisions로 확인 가능)
   ;(window as any).debugDecisions = debugInfo
+  ;(window as any).maskedText = text
 
   if (decisionsArray.length === 0) {
     return <span>{text}</span>
@@ -158,110 +161,67 @@ function MaskedTextWithMetadata({ text, decisions, originalText }: {
 
   const matches: MaskMatch[] = []
 
-  if (originalText && originalText.length > 0) {
-    // Step 1: 원본 텍스트에서 각 PII의 실제 위치를 찾기
-    interface PIIPosition {
-      decision: PIIDecision
-      originalStart: number
-      originalEnd: number
-      originalValue: string
+  // 새로운 접근: 마스킹된 텍스트를 앞에서부터 순회하며 모든 PII 매칭
+  // 원본 텍스트 순서에 의존하지 않음
+
+  // 각 decision의 masked_value로 매핑 생성
+  interface MaskedValueMapping {
+    maskedValue: string
+    decisions: PIIDecision[]  // 같은 masked_value를 가진 여러 decision
+  }
+
+  const maskedValueMap = new Map<string, PIIDecision[]>()
+
+  decisionsArray.forEach((decision) => {
+    const maskedValue = decision.masked_value || '***'
+    const normalizedMaskedValue = maskedValue.replace(/O/g, '*')
+
+    if (!maskedValueMap.has(normalizedMaskedValue)) {
+      maskedValueMap.set(normalizedMaskedValue, [])
     }
+    maskedValueMap.get(normalizedMaskedValue)!.push(decision)
+  })
 
-    const piiPositions: PIIPosition[] = []
+  // 마스킹된 텍스트를 처음부터 스캔하여 모든 마스킹 패턴 찾기
+  let searchIndex = 0
 
-    // 원본 텍스트에서 각 PII 값의 위치를 찾음
-    decisionsArray.forEach((decision) => {
-      const originalValue = decision.value
-      if (!originalValue) return
+  while (searchIndex < text.length) {
+    let foundMatch: { index: number, length: number, decision: PIIDecision } | null = null
 
-      // 정규식 특수문자 이스케이프
-      const escapedValue = originalValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const regex = new RegExp(escapedValue, 'g')
+    // 모든 가능한 masked_value 중에서 현재 위치에서 가장 먼저 나타나는 것 찾기
+    for (const [maskedValue, decisions] of maskedValueMap.entries()) {
+      const foundIndex = text.indexOf(maskedValue, searchIndex)
 
-      let match
-      while ((match = regex.exec(originalText)) !== null) {
-        piiPositions.push({
-          decision,
-          originalStart: match.index,
-          originalEnd: match.index + originalValue.length,
-          originalValue
-        })
-      }
-    })
-
-    // 원본 텍스트 기준으로 위치 정렬
-    piiPositions.sort((a, b) => a.originalStart - b.originalStart)
-
-    // Step 2: 원본과 마스킹된 텍스트를 동시에 순회하며 매핑
-    let originalIdx = 0
-    let maskedIdx = 0
-    let piiIdx = 0
-    let failsafe = 0
-    const MAX_ITERATIONS = originalText.length + text.length // 안전장치
-
-    while (originalIdx < originalText.length && maskedIdx < text.length && piiIdx < piiPositions.length) {
-      // 무한루프 방지
-      if (failsafe++ > MAX_ITERATIONS) {
-        console.error('⚠️ 매칭 알고리즘 무한루프 감지, 중단합니다.')
-        break
-      }
-
-      const currentPII = piiPositions[piiIdx]
-
-      // 다음 PII 위치까지 텍스트가 동일한지 확인
-      if (originalIdx < currentPII.originalStart) {
-        // PII 이전의 일반 텍스트 부분 - 양쪽 텍스트가 동일해야 함
-        const beforePIIOriginal = originalText.substring(originalIdx, currentPII.originalStart)
-        const beforePIIMasked = text.substring(maskedIdx, maskedIdx + beforePIIOriginal.length)
-
-        if (beforePIIOriginal === beforePIIMasked) {
-          // 정상적으로 매칭됨
-          originalIdx = currentPII.originalStart
-          maskedIdx += beforePIIOriginal.length
-        } else {
-          // 텍스트가 다름 - 한 글자씩 진행하되, 너무 많이 벗어나면 포기
-          if (originalIdx - currentPII.originalStart > 100) {
-            console.warn(`⚠️ 매칭 포기: ${currentPII.decision.pii_id} - 텍스트 불일치가 너무 큼`)
-            piiIdx++
-            continue
-          }
-          originalIdx++
-          maskedIdx++
-          continue
-        }
-      }
-
-      // 현재 PII 위치에 도달
-      if (originalIdx === currentPII.originalStart) {
-        const maskedValue = currentPII.decision.masked_value || '***'
-        // O -> * 변환 (백엔드 버그 workaround)
-        const normalizedMaskedValue = maskedValue.replace(/O/g, '*')
-
-        // 마스킹된 텍스트에서 해당 위치에 마스킹 값이 있는지 확인
-        const maskedPart = text.substring(maskedIdx, maskedIdx + normalizedMaskedValue.length)
-
-        if (maskedPart === normalizedMaskedValue ||
-            maskedPart.startsWith('*') || // 별표로 시작하면 마스킹된 값일 가능성 높음
-            normalizedMaskedValue.startsWith('*')) {
-
-          // 매칭 성공
-          matches.push({
-            start: maskedIdx,
-            end: maskedIdx + normalizedMaskedValue.length,
-            decision: currentPII.decision
+      if (foundIndex !== -1) {
+        // 더 앞에 있는 매칭을 찾았거나, 첫 매칭인 경우
+        if (!foundMatch || foundIndex < foundMatch.index) {
+          // 이 masked_value에 해당하는 decision 중 아직 사용하지 않은 첫 번째 것 사용
+          const availableDecision = decisions.find(d => {
+            // 이미 매칭된 decision은 제외
+            return !matches.some(m => m.decision.pii_id === d.pii_id)
           })
 
-          // 인덱스 이동
-          originalIdx = currentPII.originalEnd
-          maskedIdx += normalizedMaskedValue.length
-          piiIdx++
-        } else {
-          console.warn(`⚠️ 매칭 실패: ${currentPII.decision.pii_id} (${currentPII.originalValue}) - 위치 불일치`)
-          // 실패한 PII는 건너뛰고 다음으로
-          originalIdx = currentPII.originalEnd
-          piiIdx++
+          if (availableDecision) {
+            foundMatch = {
+              index: foundIndex,
+              length: maskedValue.length,
+              decision: availableDecision
+            }
+          }
         }
       }
+    }
+
+    if (foundMatch) {
+      matches.push({
+        start: foundMatch.index,
+        end: foundMatch.index + foundMatch.length,
+        decision: foundMatch.decision
+      })
+      searchIndex = foundMatch.index + foundMatch.length
+    } else {
+      // 더 이상 매칭할 것이 없음
+      break
     }
   }
 
