@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { ModernAppLayout } from '@/components/ModernAppLayout'
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
-import { PolicyDashboardPage } from '@/pages/PolicyDashboardPage'
 import { PolicyListPage } from '@/pages/PolicyListPage'
 import { PolicyAddPage } from '@/pages/PolicyAddPage'
 import { PolicyDetailPage } from '@/pages/PolicyDetailPage'
@@ -20,7 +19,7 @@ import DecisionLogsPage from '@/pages/DecisionLogsPage'
 import UserManagementPage from '@/pages/UserManagementPage'
 import EntityManagementPage from '@/pages/EntityManagementPage'
 import RootDashboardPage from '@/pages/RootDashboardPage'
-import { Home, FileText, Shield, Users, Plus, List, Mail, Send, User, Inbox, MailOpen } from 'lucide-react'
+import { Home, FileText, Shield, Users, Plus, Mail, User, Inbox, MailOpen } from 'lucide-react'
 
 type Page = 'login' | 'register' | 'main'
 
@@ -139,18 +138,6 @@ function App() {
     if (userRole === 'policy_admin') {
       baseMenu.push(
         {
-          id: 'policy-dashboard',
-          label: '정책 대시보드',
-          icon: <Shield className="h-4 w-4" />,
-          onClick: () => setCurrentView('policy-dashboard'),
-        },
-        {
-          id: 'policy-list',
-          label: '정책 목록',
-          icon: <List className="h-4 w-4" />,
-          onClick: () => setCurrentView('policy-list'),
-        },
-        {
           id: 'policy-add',
           label: '정책 추가',
           icon: <Plus className="h-4 w-4" />,
@@ -243,7 +230,16 @@ function App() {
               }}
             />
           )}
-          {(!user?.userRole || (user?.userRole !== 'root_admin' && user?.userRole !== 'auditor')) && (
+          {user?.userRole === 'policy_admin' && (
+            <PolicyListPage
+              onAddPolicy={() => setCurrentView('policy-add')}
+              onViewPolicy={(id) => {
+                setSelectedPolicyId(id)
+                setCurrentView('policy-detail')
+              }}
+            />
+          )}
+          {(!user?.userRole || (user?.userRole !== 'root_admin' && user?.userRole !== 'auditor' && user?.userRole !== 'policy_admin')) && (
             <UserDashboardPage
               onNavigate={(view, emailId) => {
                 setCurrentView(view)
@@ -254,20 +250,6 @@ function App() {
             />
           )}
         </>
-      )}
-
-      {currentView === 'policy-dashboard' && (
-        <PolicyDashboardPage onNavigate={setCurrentView} />
-      )}
-
-      {currentView === 'policy-list' && (
-        <PolicyListPage
-          onAddPolicy={() => setCurrentView('policy-add')}
-          onViewPolicy={(id) => {
-            setSelectedPolicyId(id)
-            setCurrentView('policy-detail')
-          }}
-        />
       )}
 
       {currentView === 'policy-detail' && selectedPolicyId && (
