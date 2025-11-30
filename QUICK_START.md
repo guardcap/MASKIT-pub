@@ -26,8 +26,8 @@ Create `.env` file in project root:
 # Backend
 BACKEND_HOST=0.0.0.0
 BACKEND_PORT=8000
-MONGODB_URI=mongodb+srv://maskit:basakbasak@cluster0.bpbrvcu.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
-DATABASE_NAME=maskit
+MONGODB_URI=your-mongodb-connection-string-here
+DATABASE_NAME=your-database-name
 SECRET_KEY=your-secret-key-here-minimum-32-characters
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=1440

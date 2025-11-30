@@ -27,13 +27,13 @@ Frontend와 Backend가 완전히 연동되어 있으며, 다음 흐름으로 동
 현재 활성화된 SMTP 설정:
 
 ```bash
-# Mailplug SMTP (현재 설정)
+# Mailplug SMTP 설정 예시
 SMTP_HOST=smtp.mailplug.co.kr
 SMTP_PORT=465
 SMTP_USE_TLS=false
 SMTP_USE_SSL=true
-SMTP_USER=yes0823bs@swu.ac.kr
-SMTP_PASSWORD=EweE4k^^oYu:eF0$91<q
+SMTP_USER=your-email@example.com
+SMTP_PASSWORD=your-password-here
 ```
 
 ### 다른 SMTP 서버 사용 시
