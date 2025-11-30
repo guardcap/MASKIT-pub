@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "B_policies.schema.json",
+  "title": "B Policy (atomic rule sentence)",
+  "type": "object",
+  "required": ["schema_version","title","policy_id","entity_type","tags","paraphrases","CRITICAL_score","OPEN_score"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "$ref": "common.json#/$defs/SchemaVersion" },
+    "title": { "type": "string" },
+    "policy_id": { "$ref": "common.json#/$defs/ID" },
+    "entity_type": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "tags": { "$ref": "common.json#/$defs/Tags" },
+    "paraphrases": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "CRITICAL_score": { "$ref": "common.json#/$defs/Score" },
+    "OPEN_score": { "$ref": "common.json#/$defs/Score" }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "A_cases.schema.json",
+  "title": "A Case (before/after + score)",
+  "type": "object",
+  "required": ["schema_version","case_id","category","channel","task_type","before_text","after_text","CRITICAL_score","OPEN_score"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "$ref": "common.json#/$defs/SchemaVersion" },
+    "case_id": { "$ref": "common.json#/$defs/ID" },
+    "category": { "$ref": "common.json#/$defs/Category" },
+    "channel": { "$ref": "common.json#/$defs/Channel" },
+    "task_type": { "type": "string" },
+    "before_text": { "type": "string" },
+    "after_text": { "type": "string" },
+    "CRITICAL_score": { "$ref": "common.json#/$defs/Score" },
+    "OPEN_score": { "$ref": "common.json#/$defs/Score" }
+  }
+}

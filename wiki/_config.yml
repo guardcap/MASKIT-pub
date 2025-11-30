@@ -1,0 +1,12 @@
+title: MASKIT
+description: "MASKIT : DLP 및 데이터 마스킹 솔루션"
+theme: just-the-docs
+
+url: https://6kitty.github.io/MASKIT-docs
+
+aux_links:
+  Template Repository: https://github.com/6kitty/MASKIT-docs
+
+plugins:
+  - jekyll-feed
+  - just-the-docs

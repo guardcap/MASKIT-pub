@@ -1,0 +1,143 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Masking Decision",
+  "description": "LLM이 반환하는 PII별 마스킹 결정",
+  "type": "object",
+  "required": ["email_id", "decisions", "summary"],
+  "properties": {
+    "email_id": {
+      "type": "string",
+      "description": "이메일 고유 식별자"
+    },
+    "decisions": {
+      "type": "object",
+      "description": "PII별 마스킹 결정 (키: pii_id)",
+      "patternProperties": {
+        "^pii_\\d+$": {
+          "$ref": "#/definitions/PIIMaskingDecision"
+        }
+      }
+    },
+    "summary": {
+      "type": "string",
+      "description": "마스킹 결정 요약 (사람이 읽을 수 있는 형태)"
+    },
+    "relevant_guidelines": {
+      "type": "array",
+      "description": "참고한 가이드라인 목록",
+      "items": {
+        "$ref": "#/definitions/RelevantGuideline"
+      }
+    },
+    "analysis_metadata": {
+      "$ref": "#/definitions/AnalysisMetadata"
+    }
+  },
+  "definitions": {
+    "PIIMaskingDecision": {
+      "type": "object",
+      "required": ["pii_id", "type", "value", "should_mask", "masking_method", "reason"],
+      "properties": {
+        "pii_id": {
+          "type": "string",
+          "description": "PII 고유 식별자"
+        },
+        "type": {
+          "type": "string",
+          "description": "개인정보 유형"
+        },
+        "value": {
+          "type": "string",
+          "description": "원본 값"
+        },
+        "should_mask": {
+          "type": "boolean",
+          "description": "마스킹 필요 여부"
+        },
+        "masking_method": {
+          "type": "string",
+          "enum": ["full", "partial", "hash", "none", "redact"],
+          "description": "마스킹 방법: full(완전 마스킹), partial(부분 마스킹), hash(해시), none(마스킹 안함), redact(삭제)"
+        },
+        "masked_value": {
+          "type": "string",
+          "description": "마스킹된 값 (미리보기)"
+        },
+        "reason": {
+          "type": "string",
+          "description": "마스킹 결정 사유"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "결정 신뢰도 (0~1)"
+        },
+        "guideline_ids": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "참고한 가이드라인 ID 목록"
+        },
+        "risk_level": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"],
+          "description": "마스킹하지 않을 경우 위험도"
+        }
+      }
+    },
+    "RelevantGuideline": {
+      "type": "object",
+      "required": ["guide_id", "relevance_score"],
+      "properties": {
+        "guide_id": {
+          "type": "string",
+          "description": "가이드라인 고유 ID"
+        },
+        "scenario": {
+          "type": "string",
+          "description": "가이드라인 시나리오"
+        },
+        "directive": {
+          "type": "string",
+          "description": "실행 가능한 지시문"
+        },
+        "relevance_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "관련성 점수 (코사인 유사도)"
+        },
+        "source": {
+          "type": "string",
+          "description": "출처 (법령명, 규정명 등)"
+        }
+      }
+    },
+    "AnalysisMetadata": {
+      "type": "object",
+      "properties": {
+        "analyzed_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "분석 시각"
+        },
+        "llm_model": {
+          "type": "string",
+          "description": "사용된 LLM 모델명"
+        },
+        "vectordb_query": {
+          "type": "string",
+          "description": "VectorDB 검색에 사용된 쿼리"
+        },
+        "processing_time_ms": {
+          "type": "integer",
+          "description": "처리 시간 (밀리초)"
+        },
+        "total_guidelines_searched": {
+          "type": "integer",
+          "description": "검색된 가이드라인 개수"
+        }
+      }
+    }
+  }
+}

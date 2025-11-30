@@ -1,0 +1,14 @@
+The text '{text}' appears in the sentence '{sentence}'.
+A recognizer proposed a single entity candidate:
+
+{candidate}
+
+The recognizer's confidence score is {score} (higher means more confident).
+Decide if this candidate truly matches the text IN CONTEXT.
+
+Rules:
+- If it matches, respond with the candidate's entity type.
+- If it does NOT match, respond with UNKNOWN.
+
+Respond ONLY in this exact format:
+[SELECTED_ENTITY: ENTITY_NAME]

@@ -1,0 +1,12 @@
+The text '{text}' appears in the sentence '{sentence}' and has been detected as multiple possible entity types:
+
+{entity_candidates}
+
+Please select the most appropriate entity type for this text from the list above.
+
+Only respond in this exact format:
+[SELECTED_ENTITY: ENTITY_NAME]
+
+Example:
+If you choose DOMAIN, respond exactly like this:
+[SELECTED_ENTITY: DOMAIN]

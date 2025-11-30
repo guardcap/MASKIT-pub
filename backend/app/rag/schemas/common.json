@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "common.json",
+  "title": "Common Definitions",
+  "type": "object",
+  "$defs": {
+    "SchemaVersion": { "type": "string", "pattern": "^v?\\d+(?:\\.\\d+)?$" },
+    "ID": { "type": "string", "minLength": 3 },
+    "Category": { "type": "string", "enum": ["사내", "사외"] },
+    "Channel": { "type": "string", "enum": ["WEB","EMAIL","PRESS","SNS","PRINT"] },
+    "Audience": { "type": "string", "enum": ["PUBLIC","CUSTOMER","EMPLOYEE","PARTNER"] },
+    "Effect": { "type": "string", "enum": ["FORBID","PARTIAL","ALLOW","CONDITIONAL"] },
+    "Action": { "type": "string", "enum": ["keep","mask_full","mask_partial","block"] },
+    "LegalPriority": { "type": "string", "enum": ["LAW_OVER_POLICY","POLICY_OVER_LAW"] },
+    "EntityRule": {
+      "type": "object",
+      "required": ["entity_type","action"],
+      "additionalProperties": false,
+      "properties": {
+        "entity_type": { "type": "string" },
+        "action": { "$ref": "#/$defs/Action" },
+        "params": { "type": "object", "default": {} }
+      }
+    },
+    "EvidenceRef": {
+      "type": "object",
+      "required": ["source","ref_id","reason"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "type": "string", "enum": ["A","B","C"] },
+        "ref_id": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    },
+    "Tags": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "MetaOpen": { 
+      "type": "object", 
+      "default": {}, 
+      "description": "자유 확장용"
+    },
+    "ISODate": { "type": "string", "format": "date" },
+    "ISOTimestamp": { "type": "string", "format": "date-time" }
+  }
+}

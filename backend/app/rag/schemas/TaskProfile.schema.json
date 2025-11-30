@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "TaskProfile.schema.json",
+  "title": "TaskProfile",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "task_id",
+    "category",
+    "audience",
+    "channel",
+    "legal_priority",
+    "task_type"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "$ref": "common.json#/$defs/SchemaVersion" },
+    "task_id": { "$ref": "common.json#/$defs/ID" },
+    "category": { "$ref": "common.json#/$defs/Category" },
+    "audience": { "$ref": "common.json#/$defs/Audience" },
+    "channel": { "$ref": "common.json#/$defs/Channel" },
+    "purpose": { "type":"string", "enum":["ANNOUNCEMENT","HR_MOVE","WINNER_NOTICE","PRESS_RELEASE","OTHER"], "default":"OTHER" },
+    "purpose_freeform": { "type":["string","null"] },
+    "legal_priority": { "$ref": "common.json#/$defs/LegalPriority" },
+    "task_type": {
+      "type": "string",
+      "description": "사람이 직관적으로 이해할 수 있는 한국어 자연어 태스크명"
+    },
+    "retention_days": { "type":["integer","null"], "minimum":0 },
+    "attachments_allowed": { "type":"array","items":{"type":"string"},"default":[] },
+    "expected_personal_fields": {
+      "type":"array",
+      "items": {
+        "type":"object",
+        "required":["field","policy"],
+        "additionalProperties": false,
+        "properties": {
+          "field":{"type":"string"},
+          "policy":{"$ref":"common.json#/$defs/Action"},
+          "format":{"type":"object","default":{}}
+        }
+      },
+      "default":[]
+    },
+    "confidence": { "type":"number","minimum":0,"maximum":1 },
+    "notes": { "type":["string","null"] },
+    "meta": { "$ref": "common.json#/$defs/MetaOpen" }
+  }
+}

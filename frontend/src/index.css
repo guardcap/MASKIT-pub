@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 215 27% 17%; /* 아주 짙은 슬레이트 그레이로 가독성 강화 */
+    
+    --card: 0 0% 100%;
+    --card-foreground: 215 27% 17%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 27% 17%;
+    
+    /* 수정된 Primary 색상 */
+    --primary: 174.7 83.9% 31.6%;
+    --primary-foreground: 210 40% 98%;
+    
+    /* Primary와 어울리는 부드러운 민트/그레이 톤 */
+    --secondary: 174 30% 96%;
+    --secondary-foreground: 174.7 83.9% 31.6%;
+    
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    
+    /* Hover 등 상호작용 시 사용할 색상 */
+    --accent: 174 30% 96%;
+    --accent-foreground: 174.7 83.9% 31.6%;
+    
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    
+    /* 기존 주황색 Ring을 Primary 색상으로 변경하여 통일감 부여 */
+    --ring: 174.7 83.9% 31.6%; 
+    
+    --radius: 0.5rem;
+    
+    /* 차트 색상: Teal을 기준으로 한 조화로운 배색 */
+    --chart-1: 174.7 83.9% 31.6%; /* Primary와 동일 */
+    --chart-2: 160 60% 45%;       /* 조금 더 녹색에 가까운 색 */
+    --chart-3: 190 70% 40%;       /* 조금 더 파란색에 가까운 색 */
+    --chart-4: 35 90% 60%;        /* 보색 포인트 (앰버/골드) */
+    --chart-5: 260 50% 60%;       /* 강조용 (소프트 퍼플) */
+    
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 174.7 83.9% 31.6%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 174 30% 95%;
+    --sidebar-accent-foreground: 174.7 83.9% 31.6%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 20.5 90.2% 48.2%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 20.5 90.2% 48.2%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+  }
+}
