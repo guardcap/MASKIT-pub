@@ -123,8 +123,9 @@ export default function DecisionLogsPage() {
     if (eventType.includes('entity')) return <Database className="w-4 h-4" />;
     // ✅ 엔티티/정책 아이콘
     if (eventType.includes('policy')) return <FileText className="w-4 h-4" />;
+    if (eventType.includes('user')) return <User className="w-4 h-4" />;
     if (eventType.includes('settings') || eventType.includes('env')) return <Settings className="w-4 h-4" />;
-    if (eventType.includes('vector_store') || eventType.includes('policy')) return <FileText className="w-4 h-4" />;
+    if (eventType.includes('vector_store')) return <FileText className="w-4 h-4" />;
     if (eventType.includes('login') || eventType.includes('auth')) return <User className="w-4 h-4" />;
     return <Eye className="w-4 h-4" />;
   };
@@ -154,6 +155,9 @@ export default function DecisionLogsPage() {
       'policy_upload': '정책 업로드',
       'policy_update': '정책 수정',
       'policy_delete': '정책 삭제',
+      // ✅ 사용자 관리 관련
+      'user_role_change': '사용자 권한 변경',
+      'user_delete': '사용자 삭제',
 
       'settings_update': '설정 변경',
       'env_change': '환경변수 변경',
@@ -271,6 +275,8 @@ export default function DecisionLogsPage() {
                   <SelectItem value="policy_upload">정책 업로드</SelectItem>
                   <SelectItem value="policy_update">정책 수정</SelectItem>
                   <SelectItem value="policy_delete">정책 삭제</SelectItem>
+                  <SelectItem value="user_role_change">사용자 권한 변경</SelectItem>
+                  <SelectItem value="user_delete">사용자 삭제</SelectItem>
                   <SelectItem value="settings_update">설정 변경</SelectItem>
                   <SelectItem value="vector_store_sync">Vector Store 동기화</SelectItem>
                 </SelectContent>

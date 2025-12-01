@@ -137,11 +137,15 @@ export default function UserManagementPage() {
       return;
     }
 
+    // 이전 권한 찾기
+    const targetUser = users.find(u => u.email === email);
+    const oldRole = targetUser?.role;
+
     setActionLoading(email);
     setRoleChangeDialogOpen(false);
 
     try {
-      console.log('\n🔄 권한 변경 시도:', { email, newRole });
+      console.log('\n🔄 권한 변경 시도:', { email, oldRole, newRole });
 
       const response = await fetch(`${API_BASE}/api/users/${encodeURIComponent(email)}/role`, {
         method: 'PATCH',
@@ -163,6 +167,34 @@ export default function UserManagementPage() {
       const result = await response.json();
       console.log('✅ 권한 변경 결과:', result);
 
+      // 감사 로그 기록
+      try {
+        await fetch(`${API_BASE}/api/audit/logs`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            event_type: 'user_role_change',
+            severity: 'info',
+            action: `사용자 권한 변경: ${email}`,
+            resource_type: 'user',
+            resource_id: email,
+            details: {
+              target_user: email,
+              old_role: oldRole,
+              new_role: newRole,
+              changed_by: currentUser?.email
+            },
+            success: true
+          })
+        });
+        console.log('📝 감사 로그 기록 완료');
+      } catch (logError) {
+        console.warn('⚠️ 감사 로그 기록 실패 (권한 변경은 성공):', logError);
+      }
+
       toast.success(`${email}의 권한이 "${roleNames[newRole]}"(으)로 변경되었습니다`);
 
       // 목록 새로고침
@@ -170,6 +202,35 @@ export default function UserManagementPage() {
 
     } catch (error: any) {
       console.error('❌ 권한 변경 오류:', error);
+
+      // 실패 시에도 감사 로그 기록
+      try {
+        await fetch(`${API_BASE}/api/audit/logs`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            event_type: 'user_role_change',
+            severity: 'error',
+            action: `사용자 권한 변경 실패: ${email}`,
+            resource_type: 'user',
+            resource_id: email,
+            details: {
+              target_user: email,
+              old_role: oldRole,
+              new_role: newRole,
+              changed_by: currentUser?.email
+            },
+            success: false,
+            error_message: error.message
+          })
+        });
+      } catch (logError) {
+        console.warn('⚠️ 실패 감사 로그 기록 실패:', logError);
+      }
+
       toast.error(error.message || '권한 변경에 실패했습니다');
     } finally {
       setActionLoading(null);

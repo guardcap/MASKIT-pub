@@ -46,6 +46,10 @@ class AuditEventType(str, Enum):
     PERMISSION_DENIED = "permission_denied"
     ROLE_CHANGE = "role_change"
 
+    # 사용자 관리 관련
+    USER_ROLE_CHANGE = "user_role_change"
+    USER_DELETE = "user_delete"
+
 
 class AuditSeverity(str, Enum):
     """감사 로그 심각도"""

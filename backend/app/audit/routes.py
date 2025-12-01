@@ -1,10 +1,11 @@
 """
 감사 로그 API 라우터
 """
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from fastapi.responses import JSONResponse
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
+from pydantic import BaseModel
 
 from app.database.mongodb import get_db
 from app.auth.auth_utils import get_current_user, get_current_auditor
@@ -12,9 +13,77 @@ from .models import AuditEventType, AuditSeverity, AuditLogResponse
 
 router = APIRouter(prefix="/api/audit", tags=["Audit Logs"])
 
+
+class CreateAuditLogRequest(BaseModel):
+    """감사 로그 생성 요청"""
+    event_type: str
+    severity: str
+    action: str
+    resource_type: Optional[str] = None
+    resource_id: Optional[str] = None
+    details: Dict[str, Any] = {}
+    success: bool = True
+    error_message: Optional[str] = None
+
 def get_kst_now():
     """한국 표준시(KST) 반환"""
     return datetime.utcnow() + timedelta(hours=9)
+
+
+@router.post("/logs")
+async def create_audit_log(
+    log_data: CreateAuditLogRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db = Depends(get_db)
+):
+    """
+    감사 로그 생성
+
+    - 사용자의 활동을 기록합니다
+    - 인증된 사용자만 호출 가능
+    """
+    try:
+        # 클라이언트 IP 가져오기
+        client_ip = request.client.host if request.client else "unknown"
+
+        # 감사 로그 문서 생성
+        audit_log = {
+            "timestamp": get_kst_now(),
+            "event_type": log_data.event_type,
+            "severity": log_data.severity,
+            "user_email": current_user["email"],
+            "user_role": current_user.get("role", "user"),
+            "action": log_data.action,
+            "resource_type": log_data.resource_type,
+            "resource_id": log_data.resource_id,
+            "details": log_data.details,
+            "ip_address": client_ip,
+            "user_agent": request.headers.get("user-agent"),
+            "success": log_data.success,
+            "error_message": log_data.error_message
+        }
+
+        # MongoDB에 저장
+        result = await db.audit_logs.insert_one(audit_log)
+
+        print(f"✅ 감사 로그 생성: {log_data.event_type} - {current_user['email']}")
+
+        return JSONResponse({
+            "success": True,
+            "data": {
+                "log_id": str(result.inserted_id),
+                "timestamp": audit_log["timestamp"].isoformat()
+            }
+        })
+
+    except Exception as e:
+        print(f"❌ 감사 로그 생성 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"감사 로그 생성 실패: {str(e)}")
+
+
 @router.get("/logs")
 async def get_audit_logs(
     page: int = Query(1, ge=1),
