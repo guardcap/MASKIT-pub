@@ -42,7 +42,10 @@ async def upload_email(
     for attachment in attachments:
         if attachment and attachment.filename:
             # 첨부파일 읽기
+            file_path = os.path.join(UPLOAD_DIR, attachment.filename)
             file_content = await attachment.read()
+            with open(file_path, 'wb') as f:
+                f.write(file_content)
 
             # MongoDB에 저장할 첨부파일 데이터 준비 (Base64 인코딩)
             attachment_data = AttachmentData(
