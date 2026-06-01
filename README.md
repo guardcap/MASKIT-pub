@@ -11,9 +11,9 @@
 > **서울여자대학교 정보보호학과 종단형 PBL 프로젝트 (팀: 헨젤과 그레텔)** <br/>
 > **개발기간: 2025.03 ~ 2025.12**
 
-## 오픈소스 URL
+## 목업 사이트
 
-> GitHub : [https://github.com/guardcap/MASKIT-pub](https://github.com/guardcap/MASKIT-pub)
+> Site : [https://guardcap.github.io/maskit-landing-page/](https://guardcap.github.io/maskit-landing-page/)
 
 ## 팀 소개
 
@@ -56,40 +56,6 @@ MASKIT은 RAG 기반 AI가 개인정보보호법, GDPR 등 법령 및 사내 정
 - System Admin / Policy Admin / Auditor / User 4단계 역할 분리
 - JWT 기반 인증, 최소 권한 원칙 적용
 - 전체 활동 감사 로그 기록
-
-## 시작 가이드
-
-### Requirements
-
-- [Node.js 18+](https://nodejs.org/)
-- [Python 3.11+](https://www.python.org/)
-- [MongoDB](https://www.mongodb.com/)
-- [OpenAI API Key](https://platform.openai.com/)
-- [Naver Clova OCR API Key](https://api.ncloud-docs.com/docs/ai-application-service-ocr)
-
-### Installation
-
-```bash
-git clone https://github.com/guardcap/MASKIT-pub.git
-cd MASKIT-pub
-```
-
-#### Backend
-
-```bash
-cd backend
-pip install -r requirements.txt
-cp .env.example .env # .env 파일 설정
-uvicorn app.main:app --reload
-```
-
-#### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
 
 ---
 
@@ -188,4 +154,39 @@ maskit/
 
 ```
 
+---
+
+## 시작 가이드
+
+### Requirements
+
+- [Node.js 18+](https://nodejs.org/)
+- [Python 3.11+](https://www.python.org/)
+- [MongoDB](https://www.mongodb.com/)
+- [OpenAI API Key](https://platform.openai.com/)
+- [Naver Clova OCR API Key](https://api.ncloud-docs.com/docs/ai-application-service-ocr)
+
+### Installation
+
+```bash
+git clone https://github.com/guardcap/MASKIT-pub.git
+cd MASKIT-pub
+```
+
+#### Backend
+
+```bash
+cd backend
+pip install -r requirements.txt
+cp .env.example .env # .env 파일 설정
+uvicorn app.main:app --reload
+```
+
+#### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
